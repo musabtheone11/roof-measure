@@ -92,40 +92,72 @@ function roofrDiagram(scope, mode, W, H, allShades) {
   const pad = 50;
   const sc = Math.min((W - 2 * pad) / Math.max(maxX - minX, 1), (H - 2 * pad) / Math.max(maxY - minY, 1));
   const ox = pad + ((W - 2 * pad) - (maxX - minX) * sc) / 2, oy = pad + ((H - 2 * pad) - (maxY - minY) * sc) / 2;
-  const P = (p) => { const q = xy(p); return { x: ox + (q.x - minX) * sc, y: oy + (q.y - minY) * sc }; };
+  // snap corners that are within ~1 ft (2-10 px) of each other to one shared point, so facet outlines and
+  // ridge/hip/valley lines meet exactly instead of leaving hairline gaps, kinks or overshoots at the joints
+  const snapTol = Math.min(10, Math.max(2, 1.0 * sc)), snapPts = [];
+  const P = (p) => {
+    const q = xy(p), r = { x: ox + (q.x - minX) * sc, y: oy + (q.y - minY) * sc };
+    for (const s of snapPts) if (Math.abs(s.x - r.x) <= snapTol && Math.abs(s.y - r.y) <= snapTol && Math.hypot(s.x - r.x, s.y - r.y) <= snapTol) return s;
+    snapPts.push(r); return r;
+  };
   const pitchRank = {}; (allShades || scope.pitches).forEach((p, i) => { pitchRank[p] = i; });
   const ptsStr = (path) => path.map(P).map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="Inter, Segoe UI, Arial, sans-serif"><rect width="${W}" height="${H}" fill="#fff"/>`;
   for (const x of scope.facets) {
     const fill = mode === 'lengths' ? 'none' : FACET_SHADES[(pitchRank[x.f.pitch] || 0) % FACET_SHADES.length];
-    s += `<polygon points="${ptsStr(x.m.path)}" fill="${fill}" stroke="${mode === 'lengths' ? '#9fb3c8' : '#4a9bd9'}" stroke-width="${mode === 'lengths' ? 0.6 : 1}" stroke-linejoin="round"/>`;
+    s += `<polygon points="${ptsStr(x.m.path)}" fill="${fill}" stroke="${mode === 'lengths' ? '#9fb3c8' : '#4a9bd9'}" stroke-width="${mode === 'lengths' ? 0.6 : 1}" stroke-linejoin="miter" stroke-miterlimit="4"/>`;
   }
   for (const x of scope.cutouts) s += `<polygon points="${ptsStr(x.m.path)}" fill="#fff" stroke="#4a9bd9" stroke-width="1" stroke-dasharray="4 3"/>`;
   const text = (x, y, str, size, fill, rot = 0, weight = 'normal') => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${size}" text-anchor="middle" dominant-baseline="middle" fill="${fill}" font-weight="${weight}" transform="rotate(${rot.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})">${esc(str)}</text>`;
   const cx = ox + (maxX - minX) * sc / 2, cy = oy + (maxY - minY) * sc / 2;
   if (mode === 'lengths') {
-    for (const { e, m } of scope.edges) {
+    // where two lines lie on the same stretch (wall flashing along a rake, a hip traced twice) draw it once:
+    // the flashing (dashed) line wins, otherwise the first one traced
+    const segKey = (A, B) => { const i = snapPts.indexOf(A), j = snapPts.indexOf(B); return i < j ? i + '-' + j : j + '-' + i; };
+    const owner = new Map();
+    scope.edges.forEach(({ e, m }, ei) => {
+      const dashed = !!EDGE_TYPES[e.type].dashed;
+      for (let i = 1; i < m.path.length; i++) {
+        const A = P(m.path[i - 1]), B = P(m.path[i]); if (A === B) continue;
+        const k = segKey(A, B), cur = owner.get(k);
+        if (!cur || (dashed && !cur.dashed)) owner.set(k, { ei, dashed });
+      }
+    });
+    const owns = (ei, a, b) => { const A = P(a), B = P(b); if (A === B) return false; const o = owner.get(segKey(A, B)); return !!o && o.ei === ei; };
+    scope.edges.forEach(({ e, m }, ei) => {
       const t = EDGE_TYPES[e.type];
-      s += `<polyline points="${ptsStr(m.path)}" fill="none" stroke="${t.color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ${t.dashed ? 'stroke-dasharray="3 3"' : ''}/>`;
-    }
+      let run = [];
+      const flush = () => { if (run.length > 1) s += `<polyline points="${run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="${t.color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="4" ${t.dashed ? 'stroke-dasharray="3 3"' : ''}/>`; run = []; };
+      for (let i = 1; i < m.path.length; i++) {
+        if (!owns(ei, m.path[i - 1], m.path[i])) { flush(); continue; }
+        if (!run.length) run.push(P(m.path[i - 1]));
+        run.push(P(m.path[i]));
+      }
+      flush();
+    });
     const edgePaths = scope.edges.map((x) => x.m.path);
+    const placed = [];                                   // label centres already used: never stack two numbers
     const label = (a, b, ft, fill) => {
       if (ft < 3) return '';
       const A = P(a), B = P(b);
+      if (A === B) return '';
+      const mx0 = (A.x + B.x) / 2, my0 = (A.y + B.y) / 2;
+      if (placed.some((q) => Math.hypot(q.x - mx0, q.y - my0) < 9)) return '';
+      placed.push({ x: mx0, y: my0 });
       let ang = Math.atan2(B.y - A.y, B.x - A.x) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
       let nx = -(B.y - A.y), ny = B.x - A.x; const L = Math.hypot(nx, ny) || 1; nx /= L; ny /= L;
       const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
       if ((mx - cx) * nx + (my - cy) * ny < 0) { nx = -nx; ny = -ny; }
       return text(mx + nx * 8, my + ny * 8, String(ftUp(ft)), 8.5, fill, ang);
     };
-    for (const { m } of scope.edges) for (let i = 1; i < m.path.length; i++) s += label(m.path[i - 1], m.path[i], segFt(m.path[i - 1], m.path[i]) * m.factor, '#333');
+    scope.edges.forEach(({ m }, ei) => { for (let i = 1; i < m.path.length; i++) if (owns(ei, m.path[i - 1], m.path[i])) s += label(m.path[i - 1], m.path[i], segFt(m.path[i - 1], m.path[i]) * m.factor, '#333'); });
     for (const x of scope.facets) for (let i = 0; i < x.m.path.length; i++) {
       const a = x.m.path[i], b = x.m.path[(i + 1) % x.m.path.length];
       if (coveredByEdge(a, b, edgePaths)) continue;
       s += label(a, b, segFt(a, b), '#888');
     }
   } else {
-    for (const { e, m } of scope.edges) s += `<polyline points="${ptsStr(m.path)}" fill="none" stroke="#4a9bd9" stroke-width="1" stroke-linejoin="round"/>`;
+    for (const { e, m } of scope.edges) s += `<polyline points="${ptsStr(m.path)}" fill="none" stroke="#4a9bd9" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4"/>`;
     for (const x of scope.facets) {
       const c = P(centroid(x.m.path));
       if (mode === 'areas') {
@@ -382,7 +414,47 @@ async function downloadReport() {
   download(name, doc, 'text/html');
 }
 
-// real PDF file: each letter page is rendered to an image (html2canvas) and placed on a PDF page (jsPDF)
+// Each letter page: text, tables and photos are rendered to an image (html2canvas: PNG for crisp text, JPEG only on
+// pages with a photo), then every roof diagram is drawn on top as true vector lines (svg2pdf), so edges stay sharp
+// at any zoom and when printed.
+function svgForPDF(svg) {
+  const c = svg.cloneNode(true);
+  c.setAttribute('font-family', 'helvetica');
+  c.querySelectorAll('text').forEach((t) => {
+    t.setAttribute('font-family', 'helvetica');
+    if (t.getAttribute('dominant-baseline') === 'middle') {     // svg2pdf ignores dominant-baseline: shift to the baseline by hand
+      t.removeAttribute('dominant-baseline');
+      t.setAttribute('y', (parseFloat(t.getAttribute('y')) + 0.35 * parseFloat(t.getAttribute('font-size') || 10)).toFixed(2));
+    }
+  });
+  return c;
+}
+async function pagesToPDF(pages) {
+  const pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait', compress: true });
+  const vector = typeof pdf.svg === 'function';
+  for (let i = 0; i < pages.length; i++) {
+    toast(`Building PDF... page ${i + 1} of ${pages.length}`);
+    const pg = pages[i], pr = pg.getBoundingClientRect(), k = 8.5 / pr.width;    // px -> inches
+    const svgs = vector ? [...pg.querySelectorAll('.diagram svg')] : [];
+    const boxes = svgs.map((s) => { const r = s.getBoundingClientRect(); return { x: (r.left - pr.left) * k, y: (r.top - pr.top) * k, w: r.width * k, h: r.height * k }; });
+    svgs.forEach((s) => { s.style.visibility = 'hidden'; });
+    const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    svgs.forEach((s) => { s.style.visibility = ''; });
+    if (i) pdf.addPage('letter', 'portrait');
+    const photo = !!pg.querySelector('img');
+    pdf.addImage(c.toDataURL(photo ? 'image/jpeg' : 'image/png', 0.95), photo ? 'JPEG' : 'PNG', 0, 0, 8.5, 11, undefined, photo ? 'FAST' : 'MEDIUM');
+    for (let j = 0; j < svgs.length; j++) {
+      const b = boxes[j];
+      try { await pdf.svg(svgForPDF(svgs[j]), { x: b.x, y: b.y, width: b.w, height: b.h }); }
+      catch (e) {  // vector drawing failed: fall back to a sharp bitmap of that diagram
+        console.warn('vector diagram failed', e);
+        const dc = await window.html2canvas(svgs[j], { scale: 4, backgroundColor: '#ffffff', logging: false });
+        pdf.addImage(dc.toDataURL('image/png'), 'PNG', b.x, b.y, b.w, b.h);
+      }
+    }
+  }
+  return pdf;
+}
 async function downloadPDF() {
   if (!window.jspdf || !window.html2canvas) throw new Error('PDF library did not load; check the internet connection');
   toast('Building PDF...');
@@ -397,14 +469,8 @@ async function downloadPDF() {
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) { /* ignore */ } }
     const imgs = [...host.querySelectorAll('img')].filter((i) => !i.complete);
     await Promise.race([Promise.all(imgs.map((i) => new Promise((r) => { i.onload = i.onerror = r; }))), new Promise((r) => setTimeout(r, 5000))]);
-    const pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait', compress: true });
-    const pages = [...host.querySelectorAll('.rp-page')];
-    for (let i = 0; i < pages.length; i++) {
-      toast(`Building PDF... page ${i + 1} of ${pages.length}`);
-      const c = await window.html2canvas(pages[i], { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
-      if (i) pdf.addPage('letter', 'portrait');
-      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 8.5, 11, undefined, 'FAST');
-    }
+    const pdf = await pagesToPDF([...host.querySelectorAll('.rp-page')]);
+    const pages = { length: pdf.getNumberOfPages() };
     pdf.setProperties({ title: 'Roof Report - ' + (state.address || ''), author: company.name, creator: 'Roof Measure' });
     const name = fileBase() + '_Roof_Report.pdf';
     const blob = pdf.output('blob');
