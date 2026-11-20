@@ -408,10 +408,8 @@ async function downloadReport() {
   const body = satSrc ? html : html.replace(`<img class="cover-img" src="${satForPrint}" alt="">`, '<div class="empty" style="margin-top:.5in">Satellite image not embedded</div>');
   const doc = standaloneDoc(body);
   const name = fileBase() + '_Roof_Report.html';
-  if (location.protocol.startsWith('http') && location.hostname === 'localhost') {
-    try { const r = await fetch('/save?name=' + encodeURIComponent(name), { method: 'POST', body: doc }).then((x) => x.json()); if (r.saved) { toast('Saved to reports folder: ' + name); return; } } catch (e) { /* fall through to a browser download */ }
-  }
-  download(name, doc, 'text/html');
+  const saved = await deliverFile(new Blob([doc], { type: 'text/html' }), name);
+  toast('Ready: ' + name + (saved ? '; copy saved in the reports folder' : ''));
 }
 
 // Each letter page: text, tables and photos are rendered to an image (html2canvas: PNG for crisp text, JPEG only on
@@ -435,13 +433,13 @@ async function pagesToPDF(pages) {
   for (let i = 0; i < pages.length; i++) {
     toast(`Building PDF... page ${i + 1} of ${pages.length}`);
     const pg = pages[i], pr = pg.getBoundingClientRect(), k = 8.5 / pr.width;    // px -> inches
-    const svgs = vector ? [...pg.querySelectorAll('.diagram svg')] : [];
+    const svgs = vector ? [...pg.querySelectorAll('.diagram svg, .sketch svg')] : [];
     const boxes = svgs.map((s) => { const r = s.getBoundingClientRect(); return { x: (r.left - pr.left) * k, y: (r.top - pr.top) * k, w: r.width * k, h: r.height * k }; });
     svgs.forEach((s) => { s.style.visibility = 'hidden'; });
     const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false });
     svgs.forEach((s) => { s.style.visibility = ''; });
     if (i) pdf.addPage('letter', 'portrait');
-    const photo = !!pg.querySelector('img');
+    const photo = !!pg.querySelector('img.cover-img');
     pdf.addImage(c.toDataURL(photo ? 'image/jpeg' : 'image/png', 0.95), photo ? 'JPEG' : 'PNG', 0, 0, 8.5, 11, undefined, photo ? 'FAST' : 'MEDIUM');
     for (let j = 0; j < svgs.length; j++) {
       const b = boxes[j];
@@ -455,32 +453,83 @@ async function pagesToPDF(pages) {
   }
   return pdf;
 }
-async function downloadPDF() {
-  if (!window.jspdf || !window.html2canvas) throw new Error('PDF library did not load; check the internet connection');
-  toast('Building PDF...');
-  const { html, satSrc, satForPrint } = await buildReportHTML();
-  // like the HTML download: never put the API key into a file that gets shared
-  const body = satSrc ? html : html.replace(`<img class="cover-img" src="${satForPrint}" alt="">`, '<div class="empty" style="margin-top:.5in">Satellite image unavailable</div>');
-  const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;background:#fff;z-index:-1';
-  host.innerHTML = `<style>${REPORT_CSS} .rp-page { margin: 0 !important; box-shadow: none !important; }</style><div class="rp">${body}</div>`;
+// Save a file on the computer that has the portal open (browser download). On the local server a copy also goes
+// into the reports folder, but the download always happens too.
+async function deliverFile(blob, name) {
+  let saved = false;
+  if (location.hostname === "localhost") {
+    try { const r = await fetch("/save?name=" + encodeURIComponent(name), { method: "POST", body: blob }).then((x) => x.json()); saved = !!r.saved; } catch (_) { /* download anyway */ }
+  }
+  const url = URL.createObjectURL(blob);
+  const go = () => { const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  // Chrome only trusts a download that follows a click closely. A report takes several seconds to build, so when the
+  // click has "expired" show a Save button: that fresh click is never blocked as an unwanted automatic download.
+  if (navigator.userActivation && !navigator.userActivation.isActive) showReadyBar(name, go, () => URL.revokeObjectURL(url));
+  else { go(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+  return saved;
+}
+function showReadyBar(name, go, done) {
+  const old = document.getElementById("dlReady"); if (old) old.remove();
+  const bar = document.createElement("div");
+  bar.id = "dlReady";
+  bar.style.cssText = "position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:12px;background:#1d2128;color:#e8eaed;border:1px solid #ff7a00;border-radius:10px;padding:10px 12px 10px 16px;box-shadow:0 8px 28px rgba(0,0,0,.5);font:14px 'Segoe UI',system-ui,sans-serif;max-width:calc(100vw - 32px)";
+  bar.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#10003; <b>${esc(name)}</b> is ready</span>`;
+  const save = document.createElement("button");
+  save.className = "primary"; save.textContent = "Save PDF"; save.id = "dlReadySave";
+  if (!/\.pdf$/i.test(name)) save.textContent = "Save file";
+  const close = document.createElement("button");
+  close.textContent = "✕"; close.title = "Close"; close.style.padding = "6px 10px";
+  const finish = () => { bar.remove(); setTimeout(done, 60000); };
+  save.onclick = () => { go(); finish(); };
+  close.onclick = finish;
+  bar.append(save, close);
+  document.body.appendChild(bar);
+  save.focus();
+}
+// html -> multi-page PDF (roof report pages .rp-page and estimate pages .xm-page, in document order)
+async function htmlToPDF(html, title) {
+  if (!window.jspdf || !window.html2canvas) throw new Error("PDF library did not load; check the internet connection");
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-10000px;top:0;width:8.5in;background:#fff;z-index:-1";
+  host.innerHTML = `<style>${REPORT_CSS} .rp-page, .xm-page { margin: 0 !important; box-shadow: none !important; }</style><div class="rp">${html}</div>`;
   document.body.appendChild(host);
   try {
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) { /* ignore */ } }
-    const imgs = [...host.querySelectorAll('img')].filter((i) => !i.complete);
+    const imgs = [...host.querySelectorAll("img")].filter((i) => !i.complete);
     await Promise.race([Promise.all(imgs.map((i) => new Promise((r) => { i.onload = i.onerror = r; }))), new Promise((r) => setTimeout(r, 5000))]);
-    const pdf = await pagesToPDF([...host.querySelectorAll('.rp-page')]);
-    const pages = { length: pdf.getNumberOfPages() };
-    pdf.setProperties({ title: 'Roof Report - ' + (state.address || ''), author: company.name, creator: 'Roof Measure' });
-    const name = fileBase() + '_Roof_Report.pdf';
-    const blob = pdf.output('blob');
-    if (location.hostname === 'localhost') {
-      try { const r = await fetch('/save?name=' + encodeURIComponent(name), { method: 'POST', body: blob }).then((x) => x.json()); if (r.saved) toast('PDF saved to the reports folder and downloaded'); } catch (_) { /* download below anyway */ }
-    }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    if (location.hostname !== 'localhost') toast(`PDF downloaded: ${name} (${pages.length} pages)`);
+    const pdf = await pagesToPDF([...host.querySelectorAll(".rp-page, .xm-page")]);
+    pdf.setProperties({ title, author: company.name, creator: "Roof Measure" });
+    return pdf;
   } finally { host.remove(); }
+}
+// what: "report" (roof report; adds the estimate when "Add to end of roof report" is ticked), "both", or "estimate"
+async function downloadPDF(what = "report") {
+  const wantEst = what === "both" || what === "estimate";
+  if (wantEst) {
+    if (typeof xmEnsureRoof !== "function" || typeof xmBuildHTML !== "function") throw new Error("The estimate module is not loaded");
+    if (!await xmEnsureRoof()) return;
+  }
+  toast("Building PDF...");
+  let html, title, name;
+  if (what === "estimate") {
+    html = xmBuildHTML().html;
+    title = "Estimate - " + (state.address || ""); name = fileBase() + "_Estimate.pdf";
+  } else {
+    const hasXm = typeof xm !== "undefined";
+    const prev = hasXm ? xm.appendToReport : false;
+    if (hasXm && what === "both") xm.appendToReport = true;
+    let res;
+    try { res = await buildReportHTML(); } finally { if (hasXm) xm.appendToReport = prev; }
+    // never put the API key into a file that gets shared
+    html = res.satSrc ? res.html : res.html.replace(`<img class="cover-img" src="${res.satForPrint}" alt="">`, "<div class=\"empty\" style=\"margin-top:.5in\">Satellite image unavailable</div>");
+    const both = what === "both" || (hasXm && xm.appendToReport && state.facets.length);
+    title = (both ? "Roof Report and Estimate - " : "Roof Report - ") + (state.address || "");
+    name = fileBase() + (both ? "_Roof_Report_and_Estimate.pdf" : "_Roof_Report.pdf");
+  }
+  const pdf = await htmlToPDF(html, title);
+  const n = pdf.getNumberOfPages();
+  const saved = await deliverFile(pdf.output("blob"), name);
+  toast(`Ready: ${name} (${n} pages)${saved ? "; copy saved in the reports folder" : ""}`);
 }
 
 // ------------------------------------------------------------------ wiring (runs after app.js)
@@ -499,7 +548,11 @@ async function downloadPDF() {
   const run = (fn, btn) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace()) await fn(); } finally { b.disabled = false; } };
   $('#btnReport').onclick = run(printReport, '#btnReport');
   $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML');
-  if ($('#btnReportPDF')) $('#btnReportPDF').onclick = run(async () => { try { await downloadPDF(); } catch (e) { toast('PDF failed: ' + e.message, true); } }, '#btnReportPDF');
+  const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => { try { await downloadPDF(what); } catch (e) { toast('PDF failed: ' + e.message, true); } }, id); };
+  pdfBtn('#btnReportPDF', 'report');
+  pdfBtn('#btnReportBoth', 'both');
+  pdfBtn('#btnXmPDF', 'estimate');
+  pdfBtn('#btnXmBoth', 'both');
   for (const k of Object.keys(COMPANY_DEFAULT)) {
     const el = $('#co_' + k); if (!el) continue;
     el.value = company[k] || '';

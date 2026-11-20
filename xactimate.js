@@ -404,9 +404,7 @@ async function xmDownload() {
   const { html } = xmBuildHTML();
   const doc = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(xmEstName())}</title><style>body{margin:0;background:#555}.xm-page{margin:16px auto;box-shadow:0 2px 12px rgba(0,0,0,.4)}@media print{body{background:#fff}.xm-page{margin:0;box-shadow:none}.pbtn{display:none}}.pbtn{position:fixed;top:10px;right:10px;background:#1d3b5c;color:#fff;border:0;border-radius:6px;padding:10px 16px;font:600 14px Arial;cursor:pointer;z-index:9}</style></head><body><button class="pbtn" onclick="window.print()">Print / Save as PDF</button>${html}</body></html>`;
   const name = fileBase() + '_Estimate.html';
-  if (location.protocol.startsWith('http') && location.hostname === 'localhost') {
-    try { const r = await fetch('/save?name=' + encodeURIComponent(name), { method: 'POST', body: doc }).then((x) => x.json()); if (r.saved) { toast('Saved to reports folder: ' + name); return; } } catch (_) { /* browser download */ }
-  }
+  if (typeof deliverFile === 'function') { const saved = await deliverFile(new Blob([doc], { type: 'text/html' }), name); toast('Ready: ' + name + (saved ? '; copy saved in the reports folder' : '')); return; }
   download(name, doc, 'text/html');
 }
 
