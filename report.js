@@ -461,7 +461,12 @@ async function deliverFile(blob, name) {
     try { const r = await fetch("/save?name=" + encodeURIComponent(name), { method: "POST", body: blob }).then((x) => x.json()); saved = !!r.saved; } catch (_) { /* download anyway */ }
   }
   const url = URL.createObjectURL(blob);
-  const go = () => { const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  // download it (lands in the browser's download folder and shows in its downloads list) and, for a PDF, also open it
+  // in a new tab so it is on screen straight away
+  const go = () => {
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    if (blob.type === "application/pdf") { try { window.open(url, "_blank"); } catch (_) { /* pop-up blocked: the download still happened */ } }
+  };
   // Chrome only trusts a download that follows a click closely. A report takes several seconds to build, so when the
   // click has "expired" show a Save button: that fresh click is never blocked as an unwanted automatic download.
   if (navigator.userActivation && !navigator.userActivation.isActive) showReadyBar(name, go, () => URL.revokeObjectURL(url));
