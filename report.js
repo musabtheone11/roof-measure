@@ -191,7 +191,7 @@ const REPORT_CSS = `
 .rp .diagram svg { width: 100%; height: 100%; display: block; }
 .rp .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; margin-top: 22px; font-size: 12px; color: #333; }
 .rp .legend span::before { content: ""; display: inline-block; width: 18px; height: 4px; background: var(--c); margin-right: 12px; vertical-align: middle; border-radius: 2px; }
-.rp .legend span.dashed::before { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px); }
+.rp .legend span.dashed::before { background: none; height: 0; border-top: 4px dashed var(--c); border-radius: 0; }
 .rp .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-top: 22px; font-size: 12.5px; color: #333; }
 .rp .note { font-size: 10px; color: #444; margin-top: 10px; line-height: 1.45; }
 .rp .foot { display: flex; justify-content: space-between; font-size: 8.5px; color: #555; margin-top: 10px; }
@@ -296,6 +296,40 @@ function materialsPage(R, n) {
     <div class="note">These calculations are estimates and are not guaranteed. Always double check calculations before ordering materials. Estimates are based off of the total pitched area (i.e., flat area is excluded).</div><div style="flex:1"></div>`, n);
 }
 
+// roof heights & access (Google's roof height model, via the drone panel's measurement)
+const LADDERS = [16, 20, 24, 28, 32, 36, 40];
+function heightsPage(R, info, n) {
+  const h = info.heights, M = 3.28084;
+  const eave = h.eave * M, ridge = h.ridge * M, trees = Math.max(h.ringObst || 0, h.nearObst || 0) * M;
+  const stories = eave < 14 ? 1 : eave < 24 ? 2 : 3;
+  // extension ladder: reach 3 ft above the gutter at a 4:1 angle (length ~ 1.03 x height), next standard size up
+  const need = (eave + 3) * 1.03, ladder = LADDERS.find((l) => l >= need);
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  const pl = info.plan;
+  return page(`${head(R, 'Roof heights &amp; access')}
+    <div class="two" style="margin-top:18px">
+      <div><div class="sec">Heights</div><table class="kv">
+        ${row('Gutter (eave) height', `${fmt(eave)} ft`)}
+        ${row('Ridge / highest point', `${fmt(ridge)} ft`)}
+        ${row('Roof rise (gutter to ridge)', `${fmt(Math.max(0, ridge - eave))} ft`)}
+        ${row('Stories (estimated)', stories === 3 ? '3+' : stories)}
+      </table></div>
+      <div><div class="sec">Access &amp; safety</div><table class="kv">
+        ${row('Ladder to reach the gutter', ladder ? `${ladder} ft extension ladder` : 'Over 40 ft: lift or roof access required')}
+        ${row('Tallest trees / structures near the roof', trees > 1 ? `${fmt(trees)} ft` : 'None found')}
+        ${row('Trees above the ridge', trees > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No')}
+        ${row('Steep-roof equipment', R.t && R.t.predominant >= 8 ? 'Yes: predominant pitch ' + pitchLabel(R.t.predominant) : 'Not expected')}
+      </table></div>
+    </div>
+    ${pl ? `<div class="sec">Drone inspection flight</div><table class="kv">
+      ${row('Photos planned', `${pl.photos} (${pl.nadir} overhead, ${pl.photos - pl.nadir} angled)`)}
+      ${row('Flight altitudes above take-off', `${fmt(pl.gridAlt * M)} ft grid · ${fmt(pl.orbitAlt * M)} ft loop`)}
+      ${row('Estimated flight time', `${Math.floor(pl.secs / 60)} min ${Math.round(pl.secs % 60)} s`)}
+    </table>` : ''}
+    <div class="note">Heights are measured from Google's 3D roof height model and are relative to the ground beside the house. They are estimates (typically within about 1 ft) and should be confirmed on site. Ladder size assumes a 4:1 setup angle and 3 ft of ladder above the gutter.</div>
+    <div style="flex:1"></div>`, n);
+}
+
 // ------------------------------------------------------------------ build / print / download
 async function buildReportHTML() {
   // permit history / roof age (city permit records, year built); a failed lookup never blocks the report
@@ -312,6 +346,9 @@ async function buildReportHTML() {
     pages.push((n) => structurePage(R, R.t, n, 'Report summary'));
   }
   if (typeof permitReportPage === 'function' && state.location) pages.push((n) => page(permitReportPage(head(R, 'Permit history &amp; roof age')), n));
+  let dInfo = null;
+  if (window.__drone && window.__drone.reportInfo) { try { dInfo = await window.__drone.reportInfo(); } catch (_) { dInfo = null; } }
+  if (dInfo && dInfo.heights) pages.push((n) => heightsPage(R, dInfo, n));
   pages.push((n) => materialsPage(R, n));
   const html = pages.map((fn, i) => fn(i + 1)).join('');
   return { html, R, satSrc, satForPrint };
@@ -345,6 +382,41 @@ async function downloadReport() {
   download(name, doc, 'text/html');
 }
 
+// real PDF file: each letter page is rendered to an image (html2canvas) and placed on a PDF page (jsPDF)
+async function downloadPDF() {
+  if (!window.jspdf || !window.html2canvas) throw new Error('PDF library did not load; check the internet connection');
+  toast('Building PDF...');
+  const { html, satSrc, satForPrint } = await buildReportHTML();
+  // like the HTML download: never put the API key into a file that gets shared
+  const body = satSrc ? html : html.replace(`<img class="cover-img" src="${satForPrint}" alt="">`, '<div class="empty" style="margin-top:.5in">Satellite image unavailable</div>');
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;background:#fff;z-index:-1';
+  host.innerHTML = `<style>${REPORT_CSS} .rp-page { margin: 0 !important; box-shadow: none !important; }</style><div class="rp">${body}</div>`;
+  document.body.appendChild(host);
+  try {
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) { /* ignore */ } }
+    const imgs = [...host.querySelectorAll('img')].filter((i) => !i.complete);
+    await Promise.race([Promise.all(imgs.map((i) => new Promise((r) => { i.onload = i.onerror = r; }))), new Promise((r) => setTimeout(r, 5000))]);
+    const pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait', compress: true });
+    const pages = [...host.querySelectorAll('.rp-page')];
+    for (let i = 0; i < pages.length; i++) {
+      toast(`Building PDF... page ${i + 1} of ${pages.length}`);
+      const c = await window.html2canvas(pages[i], { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      if (i) pdf.addPage('letter', 'portrait');
+      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 8.5, 11, undefined, 'FAST');
+    }
+    pdf.setProperties({ title: 'Roof Report - ' + (state.address || ''), author: company.name, creator: 'Roof Measure' });
+    const name = fileBase() + '_Roof_Report.pdf';
+    const blob = pdf.output('blob');
+    if (location.hostname === 'localhost') {
+      try { const r = await fetch('/save?name=' + encodeURIComponent(name), { method: 'POST', body: blob }).then((x) => x.json()); if (r.saved) toast('PDF saved to the reports folder and downloaded'); } catch (_) { /* download below anyway */ }
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    if (location.hostname !== 'localhost') toast(`PDF downloaded: ${name} (${pages.length} pages)`);
+  } finally { host.remove(); }
+}
+
 // ------------------------------------------------------------------ wiring (runs after app.js)
 (function wireReport() {
   if (!document.querySelector('link[href*="fonts.googleapis.com/css2?family=Inter"]')) document.head.insertAdjacentHTML('beforeend', FONT_LINK);
@@ -361,6 +433,7 @@ async function downloadReport() {
   const run = (fn, btn) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace()) await fn(); } finally { b.disabled = false; } };
   $('#btnReport').onclick = run(printReport, '#btnReport');
   $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML');
+  if ($('#btnReportPDF')) $('#btnReportPDF').onclick = run(async () => { try { await downloadPDF(); } catch (e) { toast('PDF failed: ' + e.message, true); } }, '#btnReportPDF');
   for (const k of Object.keys(COMPANY_DEFAULT)) {
     const el = $('#co_' + k); if (!el) continue;
     el.value = company[k] || '';

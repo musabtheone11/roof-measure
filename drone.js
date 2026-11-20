@@ -414,5 +414,12 @@
     render();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
-  window.__drone = { computePlan, measureHeights, kmzGeneric, litchiCsv, replan };
+  // for the roof report: measured heights (metres above the ground next to the house) and the current flight plan
+  async function reportInfo() {
+    let h = D.heightsFor === locKey() ? D.heights : null;
+    if (!h && state.solar) { try { h = await measureHeights(false); } catch (_) { h = null; } }
+    const p = D.plan && D.heightsFor === locKey() ? D.plan : null;
+    return { heights: h, plan: p ? { photos: p.wps.length, nadir: p.wps.filter((w) => w.kind === 'nadir').length, orbitAlt: p.orbitAlt, gridAlt: p.gridAlt, secs: p.secs } : null };
+  }
+  window.__drone = { computePlan, measureHeights, kmzGeneric, litchiCsv, replan, reportInfo };
 })();

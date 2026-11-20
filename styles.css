@@ -142,7 +142,7 @@ details.help ol { padding-left: 18px; line-height: 1.5; margin: 6px 0; }
 .modebar .mode { flex: 1; border: 0; border-radius: 0; background: var(--panel2); color: var(--muted); padding: 8px 0; font-weight: 600; }
 .modebar .mode.on { background: var(--accent); color: #111; }
 body:not(.mode-com) .com-only { display: none; }
-body.mode-com #panelAuto, body.mode-com #panelTrace, body.mode-com #panelSummary, body.mode-com #btnReport, body.mode-com #btnReportHTML, body.mode-com #toolbar { display: none; }
+body.mode-com #panelAuto, body.mode-com #panelTrace, body.mode-com #panelSummary, body.mode-com #btnReport, body.mode-com #btnReportPDF, body.mode-com #btnReportHTML, body.mode-com #toolbar { display: none; }
 .out table.mini { margin-top: 6px; font-size: 12px; }
 .out .kv { font-size: 14px; margin-bottom: 4px; }
 
