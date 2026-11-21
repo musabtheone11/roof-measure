@@ -97,3 +97,15 @@ test('safeUrl allows only http(s) links', () => {
   assert.equal(L.safeUrl('https://jaxepics.coj.net/x'), 'https://jaxepics.coj.net/x');
   assert.equal(L.safeUrl('javascript:alert(1)'), ''); assert.equal(L.safeUrl(' JavaScript:alert(1)'), ''); assert.equal(L.safeUrl('data:text/html,x'), ''); assert.equal(L.safeUrl(''), '');
 });
+test('real St. Johns descriptions: reroof with squares and overlays are full, small square counts and repairs are partial', () => {
+  const S = (work) => ({ type: 'Building Permit', work, status: 'Completed', source: 'SJC_WATS' });
+  assert.equal(L.permitScope(S('REROOF: REMOVE/REPLACE 64 SQUARES')), 'full');
+  assert.equal(L.permitScope(S('METAL OVER SHINGLE')), 'full');
+  assert.equal(L.permitScope(S('REPLACE 5 SQ')), 'partial');
+  assert.equal(L.permitScope(S('ROOF REPAIR 3 SQUARES')), 'partial');
+  assert.equal(L.permitScope(S('METAL ACCENT ROOF ON NEW SFH')), 'unknown');
+});
+test('a completed permit of unknown scope gets its own review reason', () => {
+  const r = L.classify({ permits: [P({ work: 'METAL ACCENT ROOF', issued: '2015-10-21', finaled: '2016-03-04', status: 'Completed', source: 'SJC_WATS' })], yearBuilt: 1990, coverage: 'full_history', coverageFrom: 1970 }, { minYears: 8, now });
+  assert.equal(r.age_band, 'needs_review'); assert.equal(r.review_reason, 'newer_permit_scope_unknown');
+});

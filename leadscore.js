@@ -32,18 +32,22 @@
   // ------------------------------------------------------------ permit scope
   const VOID = /void|withdr|cancel|denied|reject/i;
   const EXCLUDED = /shed|detached|garage|carport|pool|screen|enclosure|accessory|barn|gazebo|pergola/i;
-  const PARTIAL = /repair|patch|partial|leak|replace (\d+ )?sq|\d+ ?sq\b|section|soffit|fascia|gutter|skylight/i;
+  // order matters: repair words beat replacement words; replacement words beat square counts ("REROOF: REMOVE/REPLACE 64 SQUARES" is a full reroof)
+  const REPAIR = /repair|patch|partial|leak/i;
+  const PARTIAL = /^\s*replace \d+ ?sq|\b\d+ ?sq(uares?)?\b|section|soffit|fascia|gutter|skylight/i;
   const AMBIGUOUS = /repair\s*\/\s*replace/i;   // Clay's work class "Residential Roof Repair/Replacement" covers both
-  const FULL = /re[- ]?roof|roof over existing|tear ?off|replace(ment)?|new roof|recover/i;
+  const FULL = /re[- ]?roof|roof over existing|\bover (existing|shingles?)\b|overlay|tear ?off|replace(ment)?|new roof|recover/i;
   const NOT_DONE = /expired|stopped|active|review|pending|correction|issued|open|incomplete|not final/i;
   const DONE = /^\s*(final(ed|ized)?|complete(d)?|closed)\b/i;   // anchored: "Incomplete" and "Not Final" are not completions
   function permitScope(p) {
     const work = p.work || '', type = p.type || '', structure = p.structure || '';
     if (EXCLUDED.test(structure) || EXCLUDED.test(work)) return 'excluded';
     if (AMBIGUOUS.test(work)) return 'unknown';
-    if (PARTIAL.test(work)) return 'partial';
+    if (REPAIR.test(work)) return 'partial';
+    if (/^\s*replace \d+ ?sq/i.test(work)) return 'partial';   // "replace 5 sq": a section, not the roof
     // the permit type only counts when it names a replacement on its own (Clay's "Repair/Replacement" type covers both)
     if (FULL.test(work) || (FULL.test(type) && !AMBIGUOUS.test(type) && !/^roof(ing)? permit$/i.test(type.trim()))) return 'full';
+    if (PARTIAL.test(work)) return 'partial';
     // older City of Jacksonville roofing permits carry no work type; roofing permits then were for replacements
     if (!work.trim() && /roof/i.test(type) && p.source === 'COJ_INDEX') { const d = isoDate(p.issued); if (d && d < '2007-01-01') return 'full'; }
     return 'unknown';
@@ -61,12 +65,12 @@
     const latestIssued = byIssued[0] || null;
     let latestCompleted = null, completedDate = null, completedNote = null;
     for (const p of live) { const c = completion(p); if (c && (!completedDate || c.date > completedDate)) { latestCompleted = p; completedDate = c.date; completedNote = c.note || null; } }
-    const newerUnverified = live.some((p) => {
-      const s = permitScope(p); if (s !== 'full' && s !== 'unknown') return false;
-      if (completion(p)) return false;
-      const iss = isoDate(p.issued); return !!iss && (!completedDate || iss > completedDate);
-    });
-    return { latestIssued, latestCompleted, completedDate, completedNote, newerUnverified };
+    const newer = (p) => { const iss = isoDate(p.issued); return !!iss && (!completedDate || iss > completedDate); };
+    // issued after the last completed replacement and not finished (full or unclear scope)
+    const newerUnverified = live.some((p) => { const s = permitScope(p); return (s === 'full' || s === 'unknown') && !completion(p) && !DONE.test(p.status || '') && newer(p); });
+    // finished, but the description doesn't say whether the whole roof was replaced
+    const newerScopeUnknown = live.some((p) => permitScope(p) === 'unknown' && DONE.test(p.status || '') && newer(p));
+    return { latestIssued, latestCompleted, completedDate, completedNote, newerUnverified, newerScopeUnknown };
   }
 
   // ------------------------------------------------------------ classification
@@ -91,11 +95,12 @@
       notes: S.completedNote ? [S.completedNote] : [] };
     if (S.latestCompleted) {
       out.age_basis = 'completed_permit'; out.estimated_roof_age = wholeYears(S.completedDate, now);
-      if (S.newerUnverified) { out.review_reason = 'newer_permit_unverified'; out.permit_number = S.latestIssued.number; out.permit_status = S.latestIssued.status; return out; }
+      if (S.newerUnverified || S.newerScopeUnknown) { out.review_reason = S.newerUnverified ? 'newer_permit_unverified' : 'newer_permit_scope_unknown'; out.permit_number = S.latestIssued.number; out.permit_status = S.latestIssued.status; return out; }
       out.age_band = bandOf(out.estimated_roof_age, min); return out;
     }
     if (input.coverage === 'error') { out.review_reason = 'permit_lookup_error'; return out; }
     if (S.newerUnverified) { out.review_reason = 'newer_permit_unverified'; return out; }
+    if (S.newerScopeUnknown) { out.review_reason = 'newer_permit_scope_unknown'; return out; }
     if (input.coverage === 'none') { out.review_reason = 'no_permit_coverage'; if (input.yearBuilt) { out.age_basis = 'year_built'; out.estimated_roof_age = now.getFullYear() - input.yearBuilt; } return out; }
     if (!input.yearBuilt) { out.review_reason = 'no_year_built'; return out; }
     out.age_basis = 'year_built'; out.estimated_roof_age = now.getFullYear() - input.yearBuilt; out.review_reason = 'possibly_original';
