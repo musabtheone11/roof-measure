@@ -41,8 +41,8 @@ test('coj live results merge over the index by permit number', async () => {
 });
 test('clay harvest indexes roofing permits by short parcel number', async () => {
   const page = JSON.parse(fx('clay_search.json'));
-  const fetchFn = async () => ({ ok: true, json: async () => ({ ...page, Result: { ...page.Result, TotalPages: 1 } }) });
-  const idx = await clay.harvest({ fetchFn });
+  const fetchFn = async () => ({ ok: true, json: async () => ({ ...page, Result: { ...page.Result, TotalPages: 1, TotalFound: page.Result.EntityResults.length } }) });   // fixture was captured from the capped "ROOF" search
+  const idx = await clay.harvest({ fetchFn, keywords: ['ROOF'] });
   assert.equal(clay.shortParcel('30-05-25-010702-000-00'), '010702-000-00');
   const r = clay.lookup(row({ parcel_id: '17-04-26-022387-000-00' }), idx);
   assert.equal(r.permits.length, 1);
@@ -58,12 +58,12 @@ test('clay harvest keeps the first page count when a later page reports none, an
     const p = JSON.parse(opt.body).PageNumber;
     if (p === 2 && calls === 2) return { ok: true, json: async () => ({ Result: { EntityResults: [], TotalPages: 0 } }) };   // flaky empty page
     return { ok: true, json: async () => ({ Result: { EntityResults: [one(p)], TotalPages: p === 1 ? 3 : 0 } }) }; };
-  const h = await clay.harvest({ fetchFn, retryMs: 0 });
+  const h = await clay.harvest({ fetchFn, retryMs: 0, keywords: ['ROOF'] });
   assert.equal(h.pages, 3); assert.equal(h.count, 3); assert.ok(h.index['MP-3']);
 });
 test('clay harvest throws if a page stays empty', async () => {
   const fetchFn = async (url, opt) => ({ ok: true, json: async () => ({ Result: { EntityResults: JSON.parse(opt.body).PageNumber === 1 ? [{ CaseNumber: 'ROOF-1', MainParcel: 'A', CaseType: 'Roof' }] : [], TotalPages: 2 } }) });
-  await assert.rejects(clay.harvest({ fetchFn, retryMs: 0 }), /page 2/);
+  await assert.rejects(clay.harvest({ fetchFn, retryMs: 0, keywords: ['ROOF'] }), /page 2/);
 });
 test('st johns parses the results list and reroof detail', async () => {
   const list = stjohns.parseResults(fx('wats_result.html'));
@@ -102,5 +102,20 @@ test('coj live check failure throws so the row is retried', async () => {
 });
 test('clay harvest throws when page 1 is empty instead of caching nothing', async () => {
   const fetchFn = async () => ({ ok: true, json: async () => ({ Result: { EntityResults: [], TotalPages: 0 } }) });
-  await assert.rejects(clay.harvest({ fetchFn, retryMs: 0 }), /page 1|no roofing permits/i);
+  await assert.rejects(clay.harvest({ fetchFn, retryMs: 0, keywords: ['ROOF'] }), /no roofing permits/i);
+});
+test('clay monthly keywords: one search per month since Jan 2023, empty months allowed, duplicates merged', async () => {
+  assert.deepEqual(clay.monthKeywords(new Date('2023-03-15')), ['ROOF0123', 'ROOF0223', 'ROOF0323']);
+  const seen = [];
+  const rec = (n, mp) => ({ CaseNumber: n, MainParcel: mp, CaseType: 'Roofing Permit', Description: 'Re roof', CaseStatus: 'Complete', IssueDate: '2023-01-05T00:00:00' });
+  const fetchFn = async (url, opt) => { const b = JSON.parse(opt.body); seen.push(b.Keyword);
+    const res = { ROOF0123: [rec('ROOF0123-1', 'A'), rec('ROOF0223-9', 'B')], ROOF0223: [rec('ROOF0223-9', 'B')], ROOF0323: [] }[b.Keyword];
+    return { ok: true, json: async () => ({ Result: { EntityResults: res, TotalPages: res.length ? 1 : 0, TotalFound: res.length } }) }; };
+  const h = await clay.harvest({ fetchFn, retryMs: 0, keywords: ['ROOF0123', 'ROOF0223', 'ROOF0323'] });
+  assert.deepEqual(seen, ['ROOF0123', 'ROOF0223', 'ROOF0323']);
+  assert.equal(h.count, 2); assert.equal(h.index.B.length, 1);
+});
+test('clay harvest refuses a keyword that hits the 10,000-result cap', async () => {
+  const fetchFn = async () => ({ ok: true, json: async () => ({ Result: { EntityResults: [{ CaseNumber: 'ROOF-1', MainParcel: 'A', CaseType: 'Roof' }], TotalPages: 140, TotalFound: 13926 } }) });
+  await assert.rejects(clay.harvest({ fetchFn, retryMs: 0, keywords: ['ROOF'] }), /10,000/);
 });
