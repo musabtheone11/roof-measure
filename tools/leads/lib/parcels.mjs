@@ -9,17 +9,23 @@ export const ZIP_COUNTY = {
   32080: 65, 32081: 65, 32092: 65, 32259: 65,                     // St. Johns
 };
 const FIELDS = 'PARCEL_ID,DOR_UC,PHY_ADDR1,PHY_CITY,PHY_ZIPCD,OWN_NAME,OWN_ADDR1,OWN_ADDR2,OWN_CITY,OWN_STATE,OWN_ZIPCD,ACT_YR_BLT,EFF_YR_BLT,NO_BULDNG,TAX_AUTH_C';
-const PAGE = 2000;
+const PAGE = 1000;   // 2,000-record pages with shapes time out (HTTP 504) on busy ZIPs
 
 // every feature in the ZIP, single family (DOR use code 001) only; DOR_UC cannot go in the where clause (the layer rejects it)
-export async function fetchZipParcels(zip, coNo, { fetchFn = fetch, onPage } = {}) {
+export async function fetchZipParcels(zip, coNo, { fetchFn = fetch, onPage, retryMs = 3000, tries = 4 } = {}) {
   const out = [];
   for (let offset = 0; ; offset += PAGE) {
     const q = new URLSearchParams({ where: `CO_NO=${coNo} AND PHY_ZIPCD=${zip}`, outFields: FIELDS, returnGeometry: 'true', outSR: '4326',
       resultRecordCount: String(PAGE), resultOffset: String(offset), orderByFields: 'OBJECTID', f: 'json' });
-    const r = await fetchFn(PARCEL_URL + '?' + q);
-    if (!r.ok) throw new Error(`parcel layer HTTP ${r.status}`);
-    const j = await r.json(); if (j.error) throw new Error('parcel layer: ' + (j.error.message || 'query failed'));
+    let j;
+    for (let k = 1; ; k++) {   // retry this page only, so one timeout doesn't restart the ZIP
+      try {
+        const r = await fetchFn(PARCEL_URL + '?' + q);
+        if (!r.ok) throw new Error(`parcel layer HTTP ${r.status}`);
+        j = await r.json(); if (j.error) throw new Error('parcel layer: ' + (j.error.message || 'query failed'));
+        break;
+      } catch (e) { if (k >= tries) throw e; await new Promise((res) => setTimeout(res, retryMs * k)); }
+    }
     const feats = j.features || [];
     out.push(...feats.filter((f) => f.attributes && f.attributes.DOR_UC === '001'));
     if (onPage) onPage({ offset, count: feats.length });

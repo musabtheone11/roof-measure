@@ -45,7 +45,13 @@ test('fetchZipParcels pages and keeps single family only', async () => {
     return { ok: true, json: async () => ({ features: first ? page.features : [feat({ PARCEL_ID: 'X9' })], exceededTransferLimit: first }) };
   };
   const f = await fetchZipParcels('32068', 20, { fetchFn });
-  assert.deepEqual(offsets, ['0', '2000']);
+  assert.deepEqual(offsets, ['0', '1000']);
   assert.ok(f.every((x) => x.attributes.DOR_UC === '001'));
   assert.equal(f.length, 4);   // 3 single family in the fixture page + 1 on page 2
+});
+test('fetchZipParcels retries a page that times out', async () => {
+  let n = 0;
+  const fetchFn = async () => { n++; if (n === 1) return { ok: false, status: 504 }; return { ok: true, json: async () => ({ features: page.features, exceededTransferLimit: false }) }; };
+  const f = await fetchZipParcels('32068', 20, { fetchFn, retryMs: 0 });
+  assert.equal(n, 2); assert.equal(f.length, 3);
 });

@@ -5,3 +5,5 @@ tools/leads/leads.config.json
 leads-pilot.log
 leads-data-inv/
 leads-inv.log
+leads-data-rates/
+leads-rates.log
