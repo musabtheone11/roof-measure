@@ -36,22 +36,24 @@ test('dedupe by parcel id and by normalized address', () => {
   const out = dedupe([a, b, c, d]);
   assert.equal(out.duplicates, 2); assert.deepEqual(out.rows.map((r) => r.parcel_id), ['P1', 'P3']);
 });
-test('fetchZipParcels pages and keeps single family only', async () => {
-  const offsets = [];
-  const fetchFn = async (url) => {
-    const u = new URL(url); offsets.push(u.searchParams.get('resultOffset'));
-    assert.equal(u.searchParams.get('where'), 'CO_NO=20 AND PHY_ZIPCD=32068');
-    const first = u.searchParams.get('resultOffset') === '0';
-    return { ok: true, json: async () => ({ features: first ? page.features : [feat({ PARCEL_ID: 'X9' })], exceededTransferLimit: first }) };
+test('fetchZipParcels gets the id list, then records in chunks of 500, single family only', async () => {
+  const ids = Array.from({ length: 1200 }, (_, i) => i + 1); const chunks = [];
+  const fetchFn = async (url, opt) => {
+    if (!opt) { const u = new URL(url); assert.equal(u.searchParams.get('where'), 'CO_NO=20 AND PHY_ZIPCD=32068'); assert.equal(u.searchParams.get('returnIdsOnly'), 'true');
+      return { ok: true, json: async () => ({ objectIds: ids }) }; }
+    const b = new URLSearchParams(opt.body); const got = b.get('objectIds').split(','); chunks.push(got.length);
+    assert.equal(opt.method, 'POST'); assert.ok(!b.get('orderByFields'));
+    return { ok: true, json: async () => ({ features: chunks.length === 1 ? page.features : [feat({ PARCEL_ID: 'X' + chunks.length })] }) };
   };
   const f = await fetchZipParcels('32068', 20, { fetchFn });
-  assert.deepEqual(offsets, ['0', '1000']);
+  assert.deepEqual(chunks, [500, 500, 200]);
   assert.ok(f.every((x) => x.attributes.DOR_UC === '001'));
-  assert.equal(f.length, 4);   // 3 single family in the fixture page + 1 on page 2
+  assert.equal(f.length, 5);   // 3 single family in the fixture chunk + 1 in each later chunk
 });
-test('fetchZipParcels retries a page that times out', async () => {
+test('fetchZipParcels retries a chunk that times out', async () => {
   let n = 0;
-  const fetchFn = async () => { n++; if (n === 1) return { ok: false, status: 504 }; return { ok: true, json: async () => ({ features: page.features, exceededTransferLimit: false }) }; };
+  const fetchFn = async (url, opt) => { if (!opt) return { ok: true, json: async () => ({ objectIds: [1, 2, 3] }) };
+    n++; if (n === 1) return { ok: false, status: 504 }; return { ok: true, json: async () => ({ features: page.features }) }; };
   const f = await fetchZipParcels('32068', 20, { fetchFn, retryMs: 0 });
   assert.equal(n, 2); assert.equal(f.length, 3);
 });
