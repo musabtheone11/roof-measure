@@ -170,3 +170,8 @@ body.picking #crosshair { display: block; }
 #xmPrices table.xmp td, #xmPrices table.xmp th { padding: 2px 3px; text-align: left; border-bottom: 1px solid var(--border); }
 #xmPrices table.xmp input { width: 72px; padding: 2px 4px; }
 #panelDrone .grid2 label.chk { flex-direction: row; align-items: center; gap: 6px; }
+
+/* lead report links (leadopen.js) */
+.lead-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 50; background: #1f6feb; color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 13px; max-width: 90vw; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.lead-banner.err { background: #b42318; }
+@media print { .lead-banner { display: none; } }

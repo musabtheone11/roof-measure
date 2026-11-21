@@ -257,6 +257,7 @@ function coverPage(R, satSrc, n) {
   return page(`<h1>Roof Report</h1>
     <div class="cover-row"><div class="l">Prepared by ${esc(company.name)}</div><div class="r">${sqftUp(total)} sqft<br>${facets} facets<br>Predominant pitch ${pitch == null ? '-' : pitch === 0 ? 'Flat' : pitchLabel(pitch)}</div></div>
     <div class="addr">${esc(state.address || '')}</div>
+    ${typeof leadCoverLine === 'function' ? leadCoverLine() : ''}
     ${typeof permitCoverLine === 'function' ? permitCoverLine() : ''}
     ${satSrc ? `<img class="cover-img" src="${satSrc}" alt="">` : '<div class="empty" style="margin-top:.5in">Satellite image unavailable</div>'}
     <div class="cap">${imagery}</div><div style="flex:1"></div>`, n);
