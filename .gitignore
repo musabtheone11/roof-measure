@@ -3,3 +3,5 @@ leads-data/
 tools/leads/leads.config.json
 .claude/
 leads-pilot.log
+leads-data-inv/
+leads-inv.log
