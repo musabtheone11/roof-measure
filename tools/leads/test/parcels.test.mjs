@@ -35,6 +35,7 @@ test('dedupe by parcel id and by normalized address', () => {
   const d = toParcelRow(feat({ PARCEL_ID: 'P3', PHY_ADDR1: '12 OAK DR' }), '32068');
   const out = dedupe([a, b, c, d]);
   assert.equal(out.duplicates, 2); assert.deepEqual(out.rows.map((r) => r.parcel_id), ['P1', 'P3']);
+  assert.equal(out.sameParcel, 1); assert.equal(out.sharedAddress, 1);
 });
 test('fetchZipParcels gets the id list, then records in chunks of 500, single family only', async () => {
   const ids = Array.from({ length: 1200 }, (_, i) => i + 1); const chunks = [];

@@ -54,11 +54,14 @@ export function toParcelRow(f, zip) {
     year_built: a.ACT_YR_BLT > 1800 ? a.ACT_YR_BLT : null, buildings: a.NO_BULDNG || null, tax_auth: clean(a.TAX_AUTH_C), centroid, ring };
 }
 export function dedupe(rows) {
-  const ids = new Set(), addrs = new Set(); const out = []; let duplicates = 0;
+  // sameParcel: one parcel split into several shapes; sharedAddress: different parcels on one street address (townhome rows),
+  // kept as one row per the spec's dedupe rule but counted so the coverage report shows them
+  const ids = new Set(), addrs = new Set(); const out = []; let sameParcel = 0, sharedAddress = 0;
   for (const r of rows) {
     const ak = normAddr(r.property_address) + '|' + r.zip;
-    if (ids.has(r.parcel_id) || addrs.has(ak)) { duplicates++; continue; }
+    if (ids.has(r.parcel_id)) { sameParcel++; continue; }
+    if (addrs.has(ak)) { sharedAddress++; continue; }
     ids.add(r.parcel_id); addrs.add(ak); out.push(r);
   }
-  return { rows: out, duplicates };
+  return { rows: out, duplicates: sameParcel + sharedAddress, sameParcel, sharedAddress };
 }

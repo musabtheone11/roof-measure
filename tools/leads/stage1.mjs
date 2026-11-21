@@ -33,8 +33,8 @@ async function inventory(zip, coNo, deps, zdir) {
   const feats = await deps.fetchParcels(zip, coNo);
   const conv = feats.map((f) => toParcelRow(f, zip));
   const unresolved = conv.filter((r) => r.unresolved);
-  const { rows, duplicates } = dedupe(conv.filter((r) => !r.unresolved));
-  const inv = { zip, inventoried: feats.length, unresolved: unresolved.length, unresolved_ids: unresolved.map((r) => `${r.parcel_id}:${r.reason}`), duplicates, rows };
+  const { rows, duplicates, sameParcel, sharedAddress } = dedupe(conv.filter((r) => !r.unresolved));
+  const inv = { zip, inventoried: feats.length, unresolved: unresolved.length, unresolved_ids: unresolved.map((r) => `${r.parcel_id}:${r.reason}`), duplicates, same_parcel: sameParcel, shared_address: sharedAddress, rows };
   writeJSONAtomic(pf, inv);
   return inv;
 }
@@ -88,7 +88,7 @@ export async function runZip(zip, cfg, deps) {
   const min = cfg.band_min_years === 7 ? 7 : 8; const ids = new Set(rows.map((r) => r.parcel_id));
   const res = [...done.values()].filter((r) => ids.has(r.parcel_id));
   const cnt = (f) => res.filter(f).length;
-  const stats = { zip, county: coNo, inventoried: inv.inventoried, unresolved: inv.unresolved, duplicates: inv.duplicates, single_family_addresses: inv.rows.length,
+  const stats = { zip, county: coNo, inventoried: inv.inventoried, unresolved: inv.unresolved, duplicates: inv.duplicates, duplicate_same_parcel: inv.same_parcel ?? null, shared_address_merged: inv.shared_address ?? null, single_family_addresses: inv.rows.length,
     sample: cfg.sample || null, screened: res.length, band_15plus: cnt((r) => r.age_band === '15+'), band_10_15: cnt((r) => r.age_band === '10-15'),
     band_min_10: cnt((r) => r.age_band === `${min}-10`), needs_review: cnt((r) => r.age_band === 'needs_review'), screened_out_recent: cnt((r) => r.age_band === 'screened_out_recent'),
     errors: cnt((r) => r.status === 'error'), permit_coverage: {}, review_reasons: {}, with_phone: cnt((r) => r.phone) };
