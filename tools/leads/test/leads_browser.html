@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Leads tab checks</title></head>
+<body>
+<pre id="out">running...</pre>
+<script>
+  // stubs for the app globals leads.js uses
+  const $ = (s) => document.querySelector(s);
+  function toast() {}
+  async function fetchSolar() { throw new Error('stub not set'); }
+</script>
+<script src="../../../leadscore.js"></script>
+<script src="../../../leads.js"></script>
+<script>
+(async () => {
+  const lines = []; let fails = 0;
+  const ok = (name, cond, extra) => { lines.push((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : ' ' + JSON.stringify(extra))); if (!cond) fails++; };
+  const sq = (x, y, d) => [[x, y], [x + d, y], [x + d, y + d], [x, y + d], [x, y]];
+  const ring = sq(-81.9, 30.0, 0.0004);   // about 40 m square
+  const row = (o) => ({ parcel_id: 'P1', property_address: '1 OAK DR', zip: '32068', age_band: '15+', lat: '30.0002', lng: '-81.8998', ring_json: JSON.stringify(ring), evidence: 'e30', ...o });
+  const solar = (lat, lng, extra) => async () => ({ name: 'buildings/x', center: { latitude: lat, longitude: lng }, imageryDate: { year: 2024, month: 3, day: 7 }, imageryQuality: 'HIGH', ...extra });
+  const err = (status, msg) => async () => { const e = new Error(msg || 'HTTP ' + status); e.status = status; throw e; };
+
+  ok('pointInRing inside', LeadsTab.pointInRing([-81.8998, 30.0002], ring));
+  ok('pointInRing outside', !LeadsTab.pointInRing([-81.8, 30.0002], ring));
+
+  let r = await LeadsTab.checkLeadRow(row(), { solar: solar(30.0002, -81.8998) });
+  ok('inside parcel -> ok', r.report_status === 'ok' && r.imagery_date === '2024-03-07' && r.match_lat === 30.0002, r);
+  r = await LeadsTab.checkLeadRow(row(), { solar: solar(30.0002, -81.8990) });
+  ok('outside parcel -> wrong_building', r.report_status === 'wrong_building', r);
+  r = await LeadsTab.checkLeadRow(row(), { solar: err(404, 'No Solar API coverage') });
+  ok('404 -> no_imagery', r.report_status === 'no_imagery', r);
+  r = await LeadsTab.checkLeadRow(row(), { solar: solar(30.0002, -81.8998, { imageryQuality: 'LOW' }) });
+  ok('LOW quality -> ok with note', r.report_status === 'ok' && /low_quality_imagery/.test(r.notes), r);
+  r = await LeadsTab.checkLeadRow(row(), { solar: err(500, 'backend') });
+  ok('500 -> api_error', /^api_error/.test(r.report_status), r);
+  let fatal = null; try { await LeadsTab.checkLeadRow(row(), { solar: err(403, 'API key not valid') }); } catch (e) { fatal = e; }
+  ok('403 rejects as fatal', fatal && fatal.fatal === true, fatal && fatal.message);
+
+  const link = LeadsTab.leadLink(row(), { match_lat: 30.0002, match_lng: -81.8998 });
+  ok('link has lead/lat/lng/addr/ev', /[?&]lead=P1/.test(link) && /lat=30.0002/.test(link) && /lng=-81.8998/.test(link) && /addr=/.test(link) && /ev=e30/.test(link), link);
+  ok('link has no key', !/key/i.test(link), link);
+  ok('link base', link.startsWith('https://musabtheone11.github.io/roof-measure/?'), link);
+
+  // batch: fatal on the 3rd checked row stops the run; rerun skips ok rows
+  const rows = [1, 2, 3, 4, 5].map((i) => row({ parcel_id: 'B' + i })).concat([row({ parcel_id: 'R1', age_band: 'needs_review' })]);
+  const store = LeadsTab.memoryStore();
+  let n = 0;
+  const s1 = await LeadsTab.runLeadBatch(rows, { store, check: async (x) => { n++; if (n === 3) { const e = new Error('quota'); e.fatal = true; throw e; } return { report_status: 'ok', imagery_date: '2024-01-01', match_lat: 30, match_lng: -81, notes: '' }; } });
+  ok('batch stops on fatal', s1.stopped && s1.ok === 2 && (await store.get('B4')) == null, s1);
+  let calls = 0;
+  const s2 = await LeadsTab.runLeadBatch(rows, { store, check: async () => { calls++; return { report_status: 'ok', imagery_date: '', match_lat: 30, match_lng: -81, notes: '' }; } });
+  ok('rerun checks only rows not ok', calls === 3 && s2.ok === 5, { calls, s2 });
+  ok('needs_review rows are not checked', (await store.get('R1')) == null);
+
+  const files = await LeadsTab.exportLeadCSVs(rows, store, 8);
+  ok('export file names', JSON.stringify(Object.keys(files).sort()) === JSON.stringify(['leads_10to15.csv', 'leads_15plus.csv', 'leads_8to10.csv', 'leads_all.csv', 'leads_needs_review.csv']), Object.keys(files));
+  const all = LeadsCore.parseCSV(files['leads_all.csv']);
+  ok('export columns', Object.keys(all[0]).join(',') === LeadsCore.COLUMNS.join(','), Object.keys(all[0]));
+  ok('needs_review exported not_eligible without link', all.find((x) => x.parcel_id === 'R1').report_status === 'not_eligible' && !all.find((x) => x.parcel_id === 'R1').roof_report_link);
+  ok('ok rows get link', /lead=B1/.test(all.find((x) => x.parcel_id === 'B1').roof_report_link));
+  ok('15plus file has 5 rows', LeadsCore.parseCSV(files['leads_15plus.csv']).length === 5);
+  const f7 = await LeadsTab.exportLeadCSVs(rows, store, 7);
+  ok('min 7 file name', 'leads_7to10.csv' in f7, Object.keys(f7));
+
+  lines.push(fails ? `${fails} FAILED` : 'ALL PASS');
+  $('#out').textContent = lines.join('\n'); window.__results = { fails, lines };
+})().catch((e) => { document.querySelector('#out').textContent = 'ERROR ' + (e.stack || e); window.__results = { fails: -1, error: String(e) }; });
+</script>
+</body></html>

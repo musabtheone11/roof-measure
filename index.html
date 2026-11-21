@@ -16,7 +16,21 @@
       </div>
       <button id="btnNew" class="ghost small" title="Clear everything and start a new roof">New roof</button>
     </header>
-    <nav class="modebar"><button id="modeRes" class="mode on" title="Houses: pitched roofs, Roofr-style report">Residential</button><button id="modeCom" class="mode" title="Commercial buildings: flat / low-slope roofs, commercial report">Commercial</button></nav>
+    <nav class="modebar"><button id="modeRes" class="mode on" title="Houses: pitched roofs, Roofr-style report">Residential</button><button id="modeCom" class="mode" title="Commercial buildings: flat / low-slope roofs, commercial report">Commercial</button><button id="modeLead" class="mode" title="Lead lists: roof-age bands and report links for many addresses">Leads</button></nav>
+
+    <!-- LEADS (Stage 2 of the lead workflow; see tools/leads/README.md) -->
+    <details class="panel lead-only" id="panelLeads" open>
+      <summary>Lead list: roof reports</summary>
+      <div class="body">
+        <p class="muted">Load <b>stage1.csv</b> from the Stage 1 script. Start checks each home in an age band against Google's building for that parcel and saves progress, so you can pause, reload and resume. Export writes the CRM files with report links. Links open the report in a browser where your API key is saved.</p>
+        <label>Stage 1 file <input type="file" id="leadFile" accept=".csv,text/csv"></label>
+        <div class="row"><label>Rows per update <input type="number" id="leadBatch" value="25" min="1" max="500" style="width:70px"></label>
+          <label>Youngest band starts at <select id="leadMin"><option value="8" selected>8 years</option><option value="7">7 years</option></select></label></div>
+        <div class="row"><button id="leadStart">Start / resume</button><button id="leadPause" class="ghost">Pause</button><button id="leadExport" class="ghost">Export CSVs</button></div>
+        <div id="leadProgress" class="muted"></div>
+        <table class="mini" id="leadTable"></table>
+      </div>
+    </details>
 
     <!-- SETUP -->
     <details class="panel" id="panelSetup" open>
@@ -400,5 +414,6 @@
 <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js"></script>
 <script src="drone.js"></script>
 <script src="leadopen.js"></script>
+<script src="leads.js"></script>
 </body>
 </html>
