@@ -95,3 +95,12 @@ test('permitScope handles real description spellings', () => {
   assert.equal(L.permitScope(P('roof over 13sq metal roof')), 'partial');
   assert.equal(L.permitScope(P('Residential Roof Repair/Replacement')), 'unknown');
 });
+// final review fixes
+test('coj live check failure throws so the row is retried', async () => {
+  const fetchFn = async () => { throw new Error('ECONNRESET'); };
+  await assert.rejects(coj.lookup(row({ parcel_id: '1652794575R' }), { live: true, fetchFn }), /ECONNRESET|JAXEPICS/);
+});
+test('clay harvest throws when page 1 is empty instead of caching nothing', async () => {
+  const fetchFn = async () => ({ ok: true, json: async () => ({ Result: { EntityResults: [], TotalPages: 0 } }) });
+  await assert.rejects(clay.harvest({ fetchFn, retryMs: 0 }), /page 1|no roofing permits/i);
+});

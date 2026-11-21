@@ -25,7 +25,7 @@ export async function harvest({ fetchFn = fetch, onPage, retryMs = 3000, tries =
         const r = await fetchFn(URL_, { method: 'POST', headers: HEADERS, body: JSON.stringify(body(page)) });
         if (!r.ok) throw new Error('Clay EnerGov HTTP ' + r.status);
         const j = await r.json(); res = j.Result || {};
-        if (page === 1) pages = res.TotalPages || 0;   // the page count comes from page 1 only
+        if (page === 1) { pages = res.TotalPages || 0; if (!pages || !(res.EntityResults || []).length) throw new Error('Clay EnerGov page 1 came back empty (no roofing permits)'); }   // the page count comes from page 1 only
         if (!(res.EntityResults || []).length && page <= pages) throw new Error(`Clay EnerGov page ${page} of ${pages} came back empty`);
         break;
       } catch (e) { if (k >= tries) throw e; await new Promise((ok) => setTimeout(ok, retryMs * k)); }

@@ -12,6 +12,9 @@ const BANDS = (min) => ['15+', '10-15', `${min}-10`];
 const EXTRA = ['lat', 'lng', 'ring_json', 'evidence'];
 
 // ------------------------------------------------------------ checkpoint files
+// write to a temp file and rename, so a kill mid-write never leaves invalid JSON that blocks the next run
+export function writeJSONAtomic(file, value, pretty = false) { const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(value, null, pretty ? 2 : 0)); fs.renameSync(tmp, file); }
+function writeTextAtomic(file, text) { const tmp = file + '.tmp'; fs.writeFileSync(tmp, text); fs.renameSync(tmp, file); }
 export function loadResults(file) {
   const m = new Map(); if (!fs.existsSync(file)) return m;
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) { if (!line.trim()) continue; try { const r = JSON.parse(line); if (r && r.parcel_id) m.set(r.parcel_id, r); } catch (_) { /* partial line from a crash */ } }
@@ -32,7 +35,7 @@ async function inventory(zip, coNo, deps, zdir) {
   const unresolved = conv.filter((r) => r.unresolved);
   const { rows, duplicates } = dedupe(conv.filter((r) => !r.unresolved));
   const inv = { zip, inventoried: feats.length, unresolved: unresolved.length, unresolved_ids: unresolved.map((r) => `${r.parcel_id}:${r.reason}`), duplicates, rows };
-  fs.writeFileSync(pf, JSON.stringify(inv));
+  writeJSONAtomic(pf, inv);
   return inv;
 }
 
@@ -90,7 +93,7 @@ export async function runZip(zip, cfg, deps) {
     band_min_10: cnt((r) => r.age_band === `${min}-10`), needs_review: cnt((r) => r.age_band === 'needs_review'), screened_out_recent: cnt((r) => r.age_band === 'screened_out_recent'),
     errors: cnt((r) => r.status === 'error'), permit_coverage: {}, review_reasons: {}, with_phone: cnt((r) => r.phone) };
   for (const r of res) { stats.permit_coverage[r.permit_coverage] = (stats.permit_coverage[r.permit_coverage] || 0) + 1; if (r.review_reason) stats.review_reasons[r.review_reason] = (stats.review_reasons[r.review_reason] || 0) + 1; }
-  fs.writeFileSync(path.join(zdir, 'stats.json'), JSON.stringify(stats, null, 2));
+  writeJSONAtomic(path.join(zdir, 'stats.json'), stats, true);
   return stats;
 }
 
@@ -107,8 +110,8 @@ export function writeOutputs(outDir, zips) {
         notes: [...new Set(r.notes || [])].join('; ') + (r.error ? (r.notes && r.notes.length ? '; ' : '') + 'error: ' + r.error : ''), ring_json: JSON.stringify(r.ring || []) });
     }
   }
-  fs.writeFileSync(path.join(outDir, 'stage1.csv'), L.toCSV(all, [...L.COLUMNS, ...EXTRA]));
-  fs.writeFileSync(path.join(outDir, 'coverage.json'), JSON.stringify(coverage, null, 2));
+  writeTextAtomic(path.join(outDir, 'stage1.csv'), L.toCSV(all, [...L.COLUMNS, ...EXTRA]));
+  writeJSONAtomic(path.join(outDir, 'coverage.json'), coverage, true);
   return { rows: all.length, coverage };
 }
 
@@ -124,7 +127,7 @@ function args(argv) {
   }
   return a;
 }
-async function cached(file, refresh, make) { if (!refresh && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8')); const v = await make(); fs.writeFileSync(file, JSON.stringify(v)); return v; }
+async function cached(file, refresh, make) { if (!refresh && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8')); const v = await make(); writeJSONAtomic(file, v); return v; }
 async function retrying(fn, tries = 3) { for (let k = 1; ; k++) { try { return await fn(); } catch (e) { if (k >= tries) throw e; await new Promise((r) => setTimeout(r, 1500 * k)); } } }
 
 async function main() {

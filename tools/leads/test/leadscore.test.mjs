@@ -77,3 +77,23 @@ test('CSV round trip with commas, quotes, newlines', () => {
   assert.deepEqual(L.parseCSV(L.toCSV(rows, ['a', 'b', 'c'])), rows);
 });
 test('COLUMNS order', () => { assert.equal(L.COLUMNS[0], 'age_band'); assert.equal(L.COLUMNS.length, 25); assert.equal(L.COLUMNS[10], 'roof_report_link'); });
+// final review fixes
+test('Clay repair/replacement type does not make a vague description a full replacement', () => {
+  const T = 'Clay County - Roofing Permit - Residential Roof Repair/Replacement';
+  for (const w of ['Install shingles', 'Roof', '30 squares shingles']) assert.notEqual(L.permitScope({ type: T, work: w, source: 'CLAY' }), 'full', w);
+  assert.equal(L.permitScope({ type: T, work: 'REROOF', source: 'CLAY' }), 'full');
+});
+test('Incomplete or Not Final status is not a completion', () => {
+  for (const s of ['Incomplete', 'Not Final', 'Completion Pending']) {
+    const r = L.classify({ permits: [P({ issued: '2005-01-01', status: s })], yearBuilt: 1990, coverage: 'full_history', coverageFrom: 1985 }, { minYears: 8, now });
+    assert.equal(r.age_band, 'needs_review', s);
+  }
+  for (const s of ['Finalized', 'Finalized-NIF', 'Complete', 'Completed', 'Closed']) {
+    const r = L.classify({ permits: [P({ issued: '2005-01-01', finaled: '2005-02-01', status: s })], yearBuilt: 1990, coverage: 'full_history', coverageFrom: 1985 }, { minYears: 8, now });
+    assert.equal(r.age_band, '15+', s);
+  }
+});
+test('safeUrl allows only http(s) links', () => {
+  assert.equal(L.safeUrl('https://jaxepics.coj.net/x'), 'https://jaxepics.coj.net/x');
+  assert.equal(L.safeUrl('javascript:alert(1)'), ''); assert.equal(L.safeUrl(' JavaScript:alert(1)'), ''); assert.equal(L.safeUrl('data:text/html,x'), ''); assert.equal(L.safeUrl(''), '');
+});

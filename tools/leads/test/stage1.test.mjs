@@ -69,3 +69,11 @@ test('writeOutputs builds stage1.csv with the column order and evidence', async 
   assert.ok(JSON.parse(r.ring_json).length >= 4);
   assert.ok(fs.existsSync(path.join(dir, 'coverage.json')));
 });
+// final review fixes
+import { writeJSONAtomic } from '../stage1.mjs';
+test('writeJSONAtomic writes valid JSON and leaves no temp file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leads-s1-'));
+  const f = path.join(dir, 'x.json'); writeJSONAtomic(f, { a: 1 });
+  assert.deepEqual(JSON.parse(fs.readFileSync(f, 'utf8')), { a: 1 });
+  assert.deepEqual(fs.readdirSync(dir), ['x.json']);
+});

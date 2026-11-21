@@ -36,8 +36,8 @@ export async function lookup(row, { live: useLive = true, fetchFn = fetch } = {}
   const re = reOf(row.parcel_id); if (!re) throw new Error('no Duval RE number in parcel id ' + row.parcel_id);
   const permits = fromIndex(re.replace(' ', '')); const notes = [];
   if (useLive) {
-    try { const have = new Map(permits.map((p, i) => [p.number, i])); for (const p of await live(re, fetchFn)) { if (have.has(p.number)) permits[have.get(p.number)] = p; else permits.push(p); } }
-    catch (e) { notes.push('live_city_check_failed'); }
+    // a failed live check throws: the row is marked error and retried on the next run, instead of keeping a band the city may contradict
+    const have = new Map(permits.map((p, i) => [p.number, i])); for (const p of await live(re, fetchFn)) { if (have.has(p.number)) permits[have.get(p.number)] = p; else permits.push(p); }
   }
   return { permits, notes, source_link: `${SITE}/Search/SearchResults?SearchTerm=${encodeURIComponent(re)}`, through: indexMeta().through };
 }

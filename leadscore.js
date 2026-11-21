@@ -35,13 +35,15 @@
   const PARTIAL = /repair|patch|partial|leak|replace (\d+ )?sq|\d+ ?sq\b|section|soffit|fascia|gutter|skylight/i;
   const AMBIGUOUS = /repair\s*\/\s*replace/i;   // Clay's work class "Residential Roof Repair/Replacement" covers both
   const FULL = /re[- ]?roof|roof over existing|tear ?off|replace(ment)?|new roof|recover/i;
-  const NOT_DONE = /expired|stopped|active|review|pending|correction|issued|open/i;
+  const NOT_DONE = /expired|stopped|active|review|pending|correction|issued|open|incomplete|not final/i;
+  const DONE = /^\s*(final(ed|ized)?|complete(d)?|closed)\b/i;   // anchored: "Incomplete" and "Not Final" are not completions
   function permitScope(p) {
     const work = p.work || '', type = p.type || '', structure = p.structure || '';
     if (EXCLUDED.test(structure) || EXCLUDED.test(work)) return 'excluded';
     if (AMBIGUOUS.test(work)) return 'unknown';
     if (PARTIAL.test(work)) return 'partial';
-    if (FULL.test(work) || (FULL.test(type) && !/^roof(ing)? permit$/i.test(type.trim()))) return 'full';
+    // the permit type only counts when it names a replacement on its own (Clay's "Repair/Replacement" type covers both)
+    if (FULL.test(work) || (FULL.test(type) && !AMBIGUOUS.test(type) && !/^roof(ing)? permit$/i.test(type.trim()))) return 'full';
     // older City of Jacksonville roofing permits carry no work type; roofing permits then were for replacements
     if (!work.trim() && /roof/i.test(type) && p.source === 'COJ_INDEX') { const d = isoDate(p.issued); if (d && d < '2007-01-01') return 'full'; }
     return 'unknown';
@@ -49,7 +51,7 @@
   function completion(p) {
     if (permitScope(p) !== 'full' || VOID.test(p.status || '')) return null;
     const fin = isoDate(p.finaled), iss = isoDate(p.issued);
-    if (/final|complete|closed/i.test(p.status || '')) return fin ? { date: fin } : (iss ? { date: iss, note: 'completion_date_from_issue' } : null);
+    if (DONE.test(p.status || '')) return fin ? { date: fin } : (iss ? { date: iss, note: 'completion_date_from_issue' } : null);
     if (fin && !NOT_DONE.test(p.status || '')) return { date: fin };
     return null;
   }
@@ -136,6 +138,9 @@
     return recs.filter((r) => r.length > 1 || r[0] !== '').map((r) => Object.fromEntries(head.map((h, i) => [h, r[i] == null ? '' : r[i]])));
   }
 
-  const api = { COLUMNS, isoDate, normAddr, permitScope, summarizePermits, classify, encodeEvidence, decodeEvidence, toCSV, parseCSV };
+  // only plain web links go into report pages (a crafted link must not carry javascript: or data: URLs)
+  const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '');
+
+  const api = { safeUrl, COLUMNS, isoDate, normAddr, permitScope, summarizePermits, classify, encodeEvidence, decodeEvidence, toCSV, parseCSV };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.LeadsCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

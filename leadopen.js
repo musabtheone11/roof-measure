@@ -13,7 +13,8 @@ window.leadContext = (function () {
 
 // permit data for the report, built from the evidence in the link (the public page cannot query Clay or St. Johns live)
 function leadPermitData(address) {
-  const ev = leadContext.evidence || {};
+  const ev = { ...(leadContext.evidence || {}) };
+  ev.src = LeadsCore.safeUrl(ev.src);   // links come from the URL, so only plain https/http links reach the page
   const permits = [];
   if (ev.n) permits.push({ number: ev.n, type: 'Roofing Permit', use: '', structure: '', work: ev.b === 'completed_permit' ? 'Full roof replacement (completed)' : 'Roof permit',
     status: ev.s || '', submitted: null, issued: ev.b === 'completed_permit' ? (ev.c || ev.i) : (ev.i || null), finaled: ev.c || null, link: ev.src || '', roof: true });
@@ -54,7 +55,8 @@ function leadCoverLine() {
     })();
   };
   if (!state.key) { banner.textContent = 'Save your Google Maps API key in this browser first (Settings panel), then open the link again.'; banner.classList.add('err'); return; }
-  if (window.map) { start(); return; }   // Maps already loaded before this script ran
+  // app.js declares `let map`, which is not a window property; check the binding itself (Maps may have loaded before this script ran)
+  if (typeof map !== 'undefined' && map) { start(); return; }
   const origInit = window.initMap;
   window.initMap = function () { origInit.apply(this, arguments); start(); };
 })();

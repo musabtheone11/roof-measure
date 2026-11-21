@@ -10,6 +10,8 @@
 </script>
 <script src="../../../leadscore.js"></script>
 <script src="../../../leads.js"></script>
+<script>function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }</script>
+<script src="../../../leadopen.js"></script>
 <script>
 (async () => {
   const lines = []; let fails = 0;
@@ -36,6 +38,13 @@
   let fatal = null; try { await LeadsTab.checkLeadRow(row(), { solar: err(403, 'API key not valid') }); } catch (e) { fatal = e; }
   ok('403 rejects as fatal', fatal && fatal.fatal === true, fatal && fatal.message);
 
+  fatal = null; try { await LeadsTab.checkLeadRow(row(), { solar: err(400, 'API key not valid. Please pass a valid API key.') }); } catch (e) { fatal = e; }
+  ok('400 invalid key rejects as fatal', fatal && fatal.fatal === true, fatal && fatal.message);
+  fatal = null; try { await LeadsTab.checkLeadRow(row(), { solar: async () => { throw new TypeError('Failed to fetch'); } }); } catch (e) { fatal = e; }
+  ok('network failure rejects as fatal', fatal && fatal.fatal === true, fatal && fatal.message);
+  r = await LeadsTab.checkLeadRow(row({ notes: 'multi_building' }), { solar: solar(30.0002, -81.8998) });
+  ok('multi-building parcel -> check_building, no ok', r.report_status === 'check_building', r);
+
   const link = LeadsTab.leadLink(row(), { match_lat: 30.0002, match_lng: -81.8998 });
   ok('link has lead/lat/lng/addr/ev', /[?&]lead=P1/.test(link) && /lat=30.0002/.test(link) && /lng=-81.8998/.test(link) && /addr=/.test(link) && /ev=e30/.test(link), link);
   ok('link has no key', !/key/i.test(link), link);
@@ -61,6 +70,13 @@
   ok('15plus file has 5 rows', LeadsCore.parseCSV(files['leads_15plus.csv']).length === 5);
   const f7 = await LeadsTab.exportLeadCSVs(rows, store, 7);
   ok('min 7 file name', 'leads_7to10.csv' in f7, Object.keys(f7));
+
+  window.leadContext = { parcel: 'P1', addr: '1 OAK DR', lat: 30, lng: -81, evidence: { b: 'completed_permit', n: 'R-1', c: '2009-04-01', cov: 'full_history', src: 'javascript:alert(1)' } };
+  let pd = leadPermitData('1 OAK DR');
+  ok('javascript: evidence link is dropped', pd.portal === null && pd.permits[0].link === '', pd);
+  leadContext.evidence.src = 'https://jaxepics.coj.net/Permit/View/25008F';
+  pd = leadPermitData('1 OAK DR');
+  ok('https evidence link is kept', pd.portal && pd.portal.url === leadContext.evidence.src && pd.permits[0].link === leadContext.evidence.src, pd);
 
   lines.push(fails ? `${fails} FAILED` : 'ALL PASS');
   $('#out').textContent = lines.join('\n'); window.__results = { fails, lines };

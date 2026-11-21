@@ -30,7 +30,11 @@ const LeadsTab = (function () {
     let b;
     try { b = await solar(lat, lng); }
     catch (e) {
-      if (e.status === 401 || e.status === 403 || e.status === 429) { const f = new Error(e.message || 'Google refused the request'); f.fatal = true; f.status = e.status; throw f; }
+      // stop the run (don't burn through every row) for key, quota or connection problems; Google reports a bad key as HTTP 400
+      const keyProblem = e.status === 400 && /api key|permission|billing|not authorized|disabled/i.test(e.message || '');
+      if (e.status === 401 || e.status === 403 || e.status === 429 || keyProblem || e instanceof TypeError) {
+        const f = new Error(e instanceof TypeError ? 'No connection to Google (' + e.message + ')' : (e.message || 'Google refused the request')); f.fatal = true; f.status = e.status; throw f;
+      }
       if (e.status === 404) return { report_status: 'no_imagery', imagery_date: '', match_lat: null, match_lng: null, notes: '' };
       return { report_status: 'api_error: ' + String(e.message || e).slice(0, 120), imagery_date: '', match_lat: null, match_lng: null, notes: '' };
     }
@@ -41,7 +45,10 @@ const LeadsTab = (function () {
     const d = distM(lat, lng, c.latitude, c.longitude);
     const okMatch = inside && d <= MAX_DIST_M;
     if (!okMatch) notes.push(`building ${Math.round(d)} m from parcel centre${inside ? '' : ', outside the parcel'}`);
-    return { report_status: okMatch ? 'ok' : 'wrong_building', imagery_date: isoOf(b.imageryDate), match_lat: +c.latitude.toFixed(6), match_lng: +c.longitude.toFixed(6), notes: notes.join('; ') };
+    // several buildings on the parcel: Google's closest building may be a garage or shed, so no link until someone confirms it
+    const multi = /multi_building/.test(row.notes || '');
+    if (okMatch && multi) notes.push('several buildings on this parcel: open the house in the Residential tab to confirm');
+    return { report_status: okMatch ? (multi ? 'check_building' : 'ok') : 'wrong_building', imagery_date: isoOf(b.imageryDate), match_lat: +c.latitude.toFixed(6), match_lng: +c.longitude.toFixed(6), notes: notes.join('; ') };
   }
 
   function leadLink(row, match) {
