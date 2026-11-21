@@ -1,0 +1,15 @@
+{
+  "zips": ["32003", "32043", "32065", "32068", "32073", "32080", "32081", "32092", "32211", "32224", "32225", "32246", "32277", "32259"],
+  "band_min_years": 8,
+  "sample": null,
+  "concurrency": 2,
+  "price_building_insights": 0.01,
+  "price_data_layers": 0.075,
+  "contacts": [
+    {
+      "file": "leads-data/contacts/crm_export.csv",
+      "name": "Diversity CRM",
+      "columns": { "parcel_id": "Parcel ID", "address": "Street", "zip": "Zip", "last_name": "Last Name", "phone": "Phone", "opt_out": "Do Not Call", "consent": "Consent", "outreach_status": "Status" }
+    }
+  ]
+}
