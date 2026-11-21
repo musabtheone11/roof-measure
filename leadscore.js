@@ -32,12 +32,14 @@
   // ------------------------------------------------------------ permit scope
   const VOID = /void|withdr|cancel|denied|reject/i;
   const EXCLUDED = /shed|detached|garage|carport|pool|screen|enclosure|accessory|barn|gazebo|pergola/i;
-  const PARTIAL = /repair|patch|partial|leak|replace (\d+ )?sq|section|soffit|fascia|gutter|skylight/i;
-  const FULL = /re-?roof|reroof|roof over existing|tear ?off|replace(ment)?|new roof|recover/i;
+  const PARTIAL = /repair|patch|partial|leak|replace (\d+ )?sq|\d+ ?sq\b|section|soffit|fascia|gutter|skylight/i;
+  const AMBIGUOUS = /repair\s*\/\s*replace/i;   // Clay's work class "Residential Roof Repair/Replacement" covers both
+  const FULL = /re[- ]?roof|roof over existing|tear ?off|replace(ment)?|new roof|recover/i;
   const NOT_DONE = /expired|stopped|active|review|pending|correction|issued|open/i;
   function permitScope(p) {
     const work = p.work || '', type = p.type || '', structure = p.structure || '';
     if (EXCLUDED.test(structure) || EXCLUDED.test(work)) return 'excluded';
+    if (AMBIGUOUS.test(work)) return 'unknown';
     if (PARTIAL.test(work)) return 'partial';
     if (FULL.test(work) || (FULL.test(type) && !/^roof(ing)? permit$/i.test(type.trim()))) return 'full';
     // older City of Jacksonville roofing permits carry no work type; roofing permits then were for replacements
