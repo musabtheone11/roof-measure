@@ -16,12 +16,20 @@ export const shortParcel = (id) => String(id).split('-').slice(3).join('-');
 const SITE = 'https://claycountyfl-energovpub.tylerhost.net/apps/selfservice#/permit/';
 
 // returns { index: {shortParcel: Permit[]}, count, pages }
-export async function harvest({ fetchFn = fetch, onPage } = {}) {
+export async function harvest({ fetchFn = fetch, onPage, retryMs = 3000, tries = 4 } = {}) {
   const index = {}; let pages = 1, count = 0;
   for (let page = 1; page <= pages; page++) {
-    const r = await fetchFn(URL_, { method: 'POST', headers: HEADERS, body: JSON.stringify(body(page)) });
-    if (!r.ok) throw new Error('Clay EnerGov HTTP ' + r.status);
-    const j = await r.json(); const res = j.Result || {}; pages = res.TotalPages || 0;
+    let res;
+    for (let k = 1; ; k++) {   // a later page can come back empty with TotalPages 0: retry it instead of ending the download early
+      try {
+        const r = await fetchFn(URL_, { method: 'POST', headers: HEADERS, body: JSON.stringify(body(page)) });
+        if (!r.ok) throw new Error('Clay EnerGov HTTP ' + r.status);
+        const j = await r.json(); res = j.Result || {};
+        if (page === 1) pages = res.TotalPages || 0;   // the page count comes from page 1 only
+        if (!(res.EntityResults || []).length && page <= pages) throw new Error(`Clay EnerGov page ${page} of ${pages} came back empty`);
+        break;
+      } catch (e) { if (k >= tries) throw e; await new Promise((ok) => setTimeout(ok, retryMs * k)); }
+    }
     for (const x of res.EntityResults || []) {
       if (!/^ROOF/i.test(x.CaseNumber || '') && !/roof/i.test(x.CaseType || '')) continue;
       const key = String(x.MainParcel || '').trim(); if (!key) continue;

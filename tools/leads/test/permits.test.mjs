@@ -50,6 +50,21 @@ test('clay harvest indexes roofing permits by short parcel number', async () => 
   assert.equal(L.permitScope(p), 'full');
   assert.equal(clay.lookup(row({ parcel_id: '17-04-26-999999-000-00' }), idx).permits.length, 0);
 });
+test('clay harvest keeps the first page count when a later page reports none, and retries empty pages', async () => {
+  const page = JSON.parse(fx('clay_search.json'));
+  const one = (i) => ({ ...page.Result.EntityResults[2], CaseNumber: 'ROOF-' + i, MainParcel: 'MP-' + i });
+  let calls = 0;
+  const fetchFn = async (url, opt) => { calls++;
+    const p = JSON.parse(opt.body).PageNumber;
+    if (p === 2 && calls === 2) return { ok: true, json: async () => ({ Result: { EntityResults: [], TotalPages: 0 } }) };   // flaky empty page
+    return { ok: true, json: async () => ({ Result: { EntityResults: [one(p)], TotalPages: p === 1 ? 3 : 0 } }) }; };
+  const h = await clay.harvest({ fetchFn, retryMs: 0 });
+  assert.equal(h.pages, 3); assert.equal(h.count, 3); assert.ok(h.index['MP-3']);
+});
+test('clay harvest throws if a page stays empty', async () => {
+  const fetchFn = async (url, opt) => ({ ok: true, json: async () => ({ Result: { EntityResults: JSON.parse(opt.body).PageNumber === 1 ? [{ CaseNumber: 'ROOF-1', MainParcel: 'A', CaseType: 'Roof' }] : [], TotalPages: 2 } }) });
+  await assert.rejects(clay.harvest({ fetchFn, retryMs: 0 }), /page 2/);
+});
 test('st johns parses the results list and reroof detail', async () => {
   const list = stjohns.parseResults(fx('wats_result.html'));
   assert.equal(list.length, 6);
