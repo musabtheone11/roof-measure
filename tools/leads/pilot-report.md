@@ -5,7 +5,7 @@
 - **Stage 1, ZIP 32068:** the first 50 single-family parcels by parcel ID, as a repeatable sample.
 - **Stage 1 rate samples:** 25 homes in 32224 (Duval) and 25 in 32259 (St. Johns). 32068 had no age-band homes to test Stage 2 and the cost estimate with, so these were added.
 - **Home count, all 14 ZIPs:** the inventory only, with no permit lookups.
-- **Stage 2 (Google building check and report links): not run yet.** This browser has no saved Google key, and I don't enter keys. The 22 age-band rows are ready in `leads-data/pilot_stage1.csv`.
+- **Stage 2 (Google building check and report links), Nov 22:** ran in the Leads tab on all 22 age-band homes from the samples (32068 had none), with the key you saved.
 
 ## Results
 
@@ -15,7 +15,9 @@
 | 32224 (Duval) | 25 | 10 | 3 | 0 | 7 (6 possibly original, 1 newer permit of unclear scope) | 5 |
 | 32259 (St. Johns) | 25 | 0 | 4 | 5 | 9 (6 possibly original, 2 unclear scope, 1 newer permit not finished) | 7 |
 
-Pilot CSVs in the final column order are in `leads-data/pilot/`: `leads_all.csv` (82 rows), `leads_15plus.csv` (10), `leads_10to15.csv` (7), `leads_8to10.csv` (5) and `leads_needs_review.csv` (60). Report links and statuses fill in once Stage 2 runs.
+Pilot CSVs in the final column order are in `leads-data/pilot/`: `leads_all.csv` (82 rows), `leads_15plus.csv` (10), `leads_10to15.csv` (7), `leads_8to10.csv` (5) and `leads_needs_review.csv` (60).
+
+**Stage 2 result:** 21 of 22 `ok` with a report link; 1 `wrong_building` (111 Cypress Landing: Google's nearest building is the house at 110, 22 m away and outside the parcel, so no link). Needs review rows are `not_eligible`. Google's imagery for all 22 homes is from January 2016, so a roof replaced after that still looks like the old roof in the photo. The measurements are still right, because the roof's shape doesn't change.
 
 ## Match checks on sample rows
 
@@ -26,7 +28,8 @@ Pilot CSVs in the final column order are in `leads-data/pilot/`: `leads_all.csv`
 | Address to permit, Jacksonville (live city search vs the list) | 6 | 6 match |
 | Address to owner, Clay (county parcel map: owner and mailing address) | 6 | 6 match |
 | Address to owner, Duval (Property Appraiser record) | 6 | 4 match. 1 sold after the state's roll date (appraiser shows a new owner). 1 appraiser page came back blank. |
-| Address to report (Google building on the parcel, report opens on the right house) | 0 | Not run: needs the Google key in the browser |
+| Address to report: Google's matched building, reverse-geocoded, vs the listed address | 21 | 20 same address. 110 Cypress Landing comes back as "110 Popolee Exd": same number and inside the right parcel, likely Google's street naming; look before calling. |
+| Report link opens and builds (14245 Drakes Point Dr) | 1 | Map pinned on the house, 5 roof planes auto-traced (1,689 sq ft, mostly 6/12), parcel number and measurement date on the cover, permit R-09-318879 as roof-age evidence |
 
 Fixes made because of these checks:
 
@@ -77,7 +80,7 @@ Prices are from Google's pay-as-you-go page (read Nov 20, 2026); volume discount
 
 ## Needed from you
 
-1. **Google key in the browser for Stage 2.** Open Roof Measure (desktop server or the GitHub page), paste the key in the Property panel and Save. Then go to Leads, load `leads-data/pilot_stage1.csv`, press Start, and press Export when it finishes. Or paste the key in this session's browser pane and I'll run it.
+1. **Report links point at the GitHub page.** They only work once this branch is merged and pushed (which updates the live site), and in a browser where the key is saved on that site.
 2. **Phone sources.** A CSV export from the CRM or lead providers, with parcel ID or street address and ZIP, owner last name, phone, and any opt-out or consent columns.
 3. **Clay County records request** for roofing permits before 2023, if you want Clay leads.
 4. **Townhome rows:** keep one row per address (current) or one row per parcel.
