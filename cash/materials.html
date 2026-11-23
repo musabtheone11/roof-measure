@@ -1,0 +1,594 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Materials - Premier Roofing</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/js/splide.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/css/splide.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;family=Merriweather:wght@400;700&amp;display=swap" rel="stylesheet"/>
+    
+    <style>
+        :root {
+            --slate-blue: #2C3E50;
+            --warm-charcoal: #34495E;
+            --copper-orange: #E67E22;
+            --sage-green: #27AE60;
+            --light-gray: #F8F9FA;
+            --border-gray: #E9ECEF;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        
+        .hero-bg {
+            background: linear-gradient(135deg, var(--slate-blue) 0%, var(--warm-charcoal) 100%);
+        }
+        
+        .material-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .material-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .material-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        
+        .material-card:hover .material-image {
+            transform: scale(1.05);
+        }
+        
+        .spec-badge {
+            background: var(--copper-orange);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .comparison-table {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .footer-section {
+            background: var(--warm-charcoal);
+            color: white;
+            padding: 2rem 0;
+            margin-top: 3rem;
+        }
+        
+        .color-swatch {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .color-swatch:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        
+        .warranty-badge {
+            background: var(--sage-green);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            display: inline-block;
+            margin: 0.25rem;
+        }
+    </style>
+<script src="https://www.kimi.com/sdk-seed.js" defer="" data-kimi-disable-watermark="false" data-kimi-analytics="false"></script></head>
+<body>
+    <!-- Navigation -->
+    <nav class="hero-bg text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <img src="resources/diversity-logo-with-bg.pdf" alt="Diversity Roofing" class="h-12 w-auto"/>
+                <div>
+                    <h1 class="text-xl font-bold">Premier Roofing</h1>
+                    <p class="text-sm opacity-90">Premium Materials</p>
+                </div>
+            </div>
+            <div class="flex space-x-4">
+                <a class="nav-link" href="index.html">Estimate</a>
+                <a class="nav-link" href="diversity-template-fixed.html">Your Template</a>
+                <a class="nav-link" href="diversity-template-customer.html">Customer Template</a>
+                <a class="nav-link" href="policy-scanner.html">Policy Scanner</a>
+                <a class="nav-link bg-white bg-opacity-20" href="materials.html">Materials</a>
+                <a class="nav-link" href="credentials.html">Credentials</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header Section -->
+    <div class="hero-bg text-white py-12">
+        <div class="container mx-auto px-4 text-center">
+            <h2 class="text-4xl font-bold mb-4">Premium Roofing Materials</h2>
+            <p class="text-xl opacity-90">Choose from our selection of industry-leading roofing materials</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8">
+        
+        <!-- Material Categories -->
+        <div class="mb-12">
+            <h3 class="text-2xl font-bold mb-6 text-center text-gray-800">Architectural Shingles</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                <!-- Premium Shingle 1 -->
+                <div class="material-card">
+                    <img src="https://kimi-web-img.moonshot.cn/img/roofingsolutionsoftexas.com/d3823b6599439f7e452b04d38a81af3610a3b6a7.jpeg" alt="Charcoal Gray Shingles" class="material-image"/>
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="text-lg font-bold">Charcoal Gray</h4>
+                            <span class="spec-badge">Premium</span>
+                        </div>
+                        <p class="text-gray-600 mb-4">High-definition architectural shingles with enhanced shadow lines and dimensional appearance.</p>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Available Colors:</h5>
+                            <div class="flex space-x-2">
+                                <div class="color-swatch" style="background-color: #36454F;" title="Charcoal Gray"></div>
+                                <div class="color-swatch" style="background-color: #8B7355;" title="Weathered Wood"></div>
+                                <div class="color-swatch" style="background-color: #708090;" title="Estate Gray"></div>
+                                <div class="color-swatch" style="background-color: #2F2F2F;" title="Onxy Black"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Specifications:</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• Wind Resistance: 130+ MPH</li>
+                                <li>• Algae Resistance: 10 years</li>
+                                <li>• Fire Rating: Class A</li>
+                                <li>• Warranty: Limited Lifetime</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-gray-600">
+                                <div>Labor: <span class="font-bold text-orange-600">$95/SQ</span></div>
+                                <div>Materials: <span class="font-bold text-blue-600">$150/SQ</span></div>
+                            </div>
+                            <button class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors" onclick="selectMaterialForEstimate(&#39;charcoal-gray&#39;)">
+                                Select
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Premium Shingle 2 -->
+                <div class="material-card">
+                    <img src="https://kimi-web-img.moonshot.cn/img/polarisroofingsystems.com/b4398096982351c34f921006c287fbf764da5788.jpg" alt="Architectural Shingles" class="material-image"/>
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="text-lg font-bold">Weathered Wood</h4>
+                            <span class="spec-badge">Premium</span>
+                        </div>
+                        <p class="text-gray-600 mb-4">Rustic wood-shake appearance with modern performance and durability features.</p>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Available Colors:</h5>
+                            <div class="flex space-x-2">
+                                <div class="color-swatch" style="background-color: #8B7355;" title="Weathered Wood"></div>
+                                <div class="color-swatch" style="background-color: #A0522D;" title="Saddlewood"></div>
+                                <div class="color-swatch" style="background-color: #8FBC8F;" title="Forest Green"></div>
+                                <div class="color-swatch" style="background-color: #D2691E;" title="Autumn Brown"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Specifications:</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• Wind Resistance: 130+ MPH</li>
+                                <li>• Algae Resistance: 10 years</li>
+                                <li>• Fire Rating: Class A</li>
+                                <li>• Warranty: Limited Lifetime</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-gray-600">
+                                <div>Labor: <span class="font-bold text-orange-600">$95/SQ</span></div>
+                                <div>Materials: <span class="font-bold text-blue-600">$155/SQ</span></div>
+                            </div>
+                            <button class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors" onclick="selectMaterialForEstimate(&#39;weathered-wood&#39;)">
+                                Select
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Premium Shingle 3 -->
+                <div class="material-card">
+                    <img src="https://kimi-web-img.moonshot.cn/img/africkerroofing.com/41ba3d84a39b128b815650310ea1dfd24ee75465.jpg" alt="Designer Shingles" class="material-image"/>
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="text-lg font-bold">Designer Collection</h4>
+                            <span class="spec-badge">Premium+</span>
+                        </div>
+                        <p class="text-gray-600 mb-4">Premium designer shingles with enhanced curb appeal and maximum durability.</p>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Available Colors:</h5>
+                            <div class="flex space-x-2">
+                                <div class="color-swatch" style="background-color: #2F2F2F;" title="Onxy Black"></div>
+                                <div class="color-swatch" style="background-color: #708090;" title="Estate Gray"></div>
+                                <div class="color-swatch" style="background-color: #8B4513;" title="Saddlewood"></div>
+                                <div class="color-swatch" style="background-color: #556B2F;" title="Forest Green"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Specifications:</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• Wind Resistance: 150+ MPH</li>
+                                <li>• Algae Resistance: 15 years</li>
+                                <li>• Fire Rating: Class A</li>
+                                <li>• Warranty: Limited Lifetime+</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-gray-600">
+                                <div>Labor: <span class="font-bold text-orange-600">$95/SQ</span></div>
+                                <div>Materials: <span class="font-bold text-blue-600">$180/SQ</span></div>
+                            </div>
+                            <button class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors" onclick="selectMaterialForEstimate(&#39;designer-collection&#39;)">
+                                Select
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metal Roofing Section -->
+        <div class="mb-12">
+            <h3 class="text-2xl font-bold mb-6 text-center text-gray-800">Metal Roofing</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Metal Roofing 1 -->
+                <div class="material-card">
+                    <img src="https://kimi-web-img.moonshot.cn/img/livestockcorrals.com/60e95b631fd48ada764992a384c2ad28c5345ef4.jpg" alt="Metal Roofing Panels" class="material-image"/>
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="text-lg font-bold">Standing Seam Metal</h4>
+                            <span class="spec-badge">Premium</span>
+                        </div>
+                        <p class="text-gray-600 mb-4">Durable standing seam panels with concealed fasteners and modern aesthetic appeal.</p>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Available Colors:</h5>
+                            <div class="flex space-x-2">
+                                <div class="color-swatch" style="background-color: #36454F;" title="Charcoal Gray"></div>
+                                <div class="color-swatch" style="background-color: #708090;" title="Burnished Slate"></div>
+                                <div class="color-swatch" style="background-color: #DC143C;" title="Crimson Red"></div>
+                                <div class="color-swatch" style="background-color: #B22222;" title="Colonial Red"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Specifications:</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• Material: 26-gauge steel</li>
+                                <li>• Coating: Galvalume®</li>
+                                <li>• Wind Resistance: 150+ MPH</li>
+                                <li>• Warranty: 40 years</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-gray-600">
+                                <div>Labor: <span class="font-bold text-orange-600">$300/SQ</span></div>
+                                <div>Materials: <span class="font-bold text-blue-600">$450/SQ</span></div>
+                            </div>
+                            <button class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors" onclick="selectMaterialForEstimate(&#39;standing-seam&#39;)">
+                                Select
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metal Roofing 2 -->
+                <div class="material-card">
+                    <img src="https://kimi-web-img.moonshot.cn/img/www.metalsales.us.com/cdad1698d26ae244ce66b3842ca976b61567576e.jpg" alt="Metal Panels" class="material-image"/>
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="text-lg font-bold">Corrugated Metal</h4>
+                            <span class="spec-badge">Standard</span>
+                        </div>
+                        <p class="text-gray-600 mb-4">Economical corrugated panels ideal for agricultural and industrial applications.</p>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Available Colors:</h5>
+                            <div class="flex space-x-2">
+                                <div class="color-swatch" style="background-color: #36454F;" title="Charcoal Gray"></div>
+                                <div class="color-swatch" style="background-color: #C0C0C0;" title="Galvalume"></div>
+                                <div class="color-swatch" style="background-color: #228B22;" title="Forest Green"></div>
+                                <div class="color-swatch" style="background-color: #8B4513;" title="Brown"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h5 class="font-semibold mb-2">Specifications:</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• Material: 29-gauge steel</li>
+                                <li>• Coating: Galvalume®</li>
+                                <li>• Wind Resistance: 120+ MPH</li>
+                                <li>• Warranty: 25 years</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-gray-600">
+                                <div>Labor: <span class="font-bold text-orange-600">$260/SQ</span></div>
+                                <div>Materials: <span class="font-bold text-blue-600">$285/SQ</span></div>
+                            </div>
+                            <button class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors" onclick="selectMaterialForEstimate(&#39;corrugated-metal&#39;)">
+                                Select
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Material Comparison Table -->
+        <div class="mb-12">
+            <h3 class="text-2xl font-bold mb-6 text-center text-gray-800">Material Comparison</h3>
+            <div class="comparison-table overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lifespan</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Wind Resistance</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fire Rating</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Warranty</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost/sq ft</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Architectural Shingles</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">20-30 years</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">130+ MPH</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Class A</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Limited Lifetime</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-orange-600">$245-$275/SQ</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Standing Seam Metal</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">40-70 years</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">150+ MPH</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Class A</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">40 years</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-orange-600">$750/SQ</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Exposed Fastener Metal</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">25-40 years</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">120+ MPH</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Class A</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">25 years</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-orange-600">$545/SQ</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Concrete Tile</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">50+ years</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">150+ MPH</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Class A</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">50 years</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-orange-600">$380/SQ Labor Only</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Warranty Information -->
+        <div class="mb-12">
+            <h3 class="text-2xl font-bold mb-6 text-center text-gray-800">Warranty Coverage</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                <div class="material-card p-6 text-center">
+                    <div class="text-4xl mb-4">🛡️</div>
+                    <h4 class="text-lg font-bold mb-3">Manufacturer Warranty</h4>
+                    <p class="text-gray-600 mb-4">Comprehensive coverage against manufacturing defects and premature wear.</p>
+                    <div class="warranty-badge">Limited Lifetime</div>
+                </div>
+                
+                <div class="material-card p-6 text-center">
+                    <div class="text-4xl mb-4">🔧</div>
+                    <h4 class="text-lg font-bold mb-3">Workmanship Warranty</h4>
+                    <p class="text-gray-600 mb-4">Our guarantee covers installation quality and craftsmanship for peace of mind.</p>
+                    <div class="warranty-badge">10 Years</div>
+                </div>
+                
+                <div class="material-card p-6 text-center">
+                    <div class="text-4xl mb-4">💨</div>
+                    <h4 class="text-lg font-bold mb-3">Wind Warranty</h4>
+                    <p class="text-gray-600 mb-4">Protection against wind damage up to specified wind speeds.</p>
+                    <div class="warranty-badge">130+ MPH</div>
+                </div>
+                
+                <div class="material-card p-6 text-center">
+                    <div class="text-4xl mb-4">🌿</div>
+                    <h4 class="text-lg font-bold mb-3">Algae Resistance</h4>
+                    <p class="text-gray-600 mb-4">Copper-infused granules prevent algae growth and maintain appearance.</p>
+                    <div class="warranty-badge">10-15 Years</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Installation Requirements -->
+        <div class="mb-12">
+            <h3 class="text-2xl font-bold mb-6 text-center text-gray-800">Installation Requirements</h3>
+            <div class="comparison-table p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    
+                    <div class="text-center">
+                        <div class="text-3xl mb-4">📐</div>
+                        <h4 class="text-lg font-bold mb-3">Roof Pitch</h4>
+                        <ul class="text-sm text-gray-600 space-y-2">
+                            <li>• Minimum 2:12 pitch required</li>
+                            <li>• Optimal performance 4:12 - 12:12</li>
+                            <li>• Special installation for steep slopes</li>
+                            <li>• Professional assessment recommended</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="text-3xl mb-4">🏗️</div>
+                        <h4 class="text-lg font-bold mb-3">Deck Requirements</h4>
+                        <ul class="text-sm text-gray-600 space-y-2">
+                            <li>• Minimum 3/8&#34; plywood decking</li>
+                            <li>• Clean, dry, and structurally sound</li>
+                            <li>• Proper ventilation system</li>
+                            <li>• Ice dam protection in cold climates</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="text-3xl mb-4">⚡</div>
+                        <h4 class="text-lg font-bold mb-3">Underlayment</h4>
+                        <ul class="text-sm text-gray-600 space-y-2">
+                            <li>• Synthetic underlayment recommended</li>
+                            <li>• Ice &amp; water shield in valleys</li>
+                            <li>• Proper drip edge installation</li>
+                            <li>• Ventilation compliance</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Professional Footer -->
+    <footer class="footer-section">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h4 class="font-bold mb-4">Premier Roofing LLC</h4>
+                    <p class="text-sm opacity-90 mb-2">Licensed &amp; Insured Contractor</p>
+                    <p class="text-sm opacity-90 mb-2">License #: RCC-123456</p>
+                    <p class="text-sm opacity-90">General Liability: $2,000,000</p>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-4">Contact Information</h4>
+                    <p class="text-sm opacity-90 mb-2">📞 (555) 123-ROOF</p>
+                    <p class="text-sm opacity-90 mb-2">📧 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f0999e969fb08082959d999582829f9f96999e97de939f9d">[email&#160;protected]</a></p>
+                    <p class="text-sm opacity-90">🌐 www.premierroofing.com</p>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-4">Warranty &amp; Service</h4>
+                    <p class="text-sm opacity-90 mb-2">✅ Manufacturer Warranty</p>
+                    <p class="text-sm opacity-90 mb-2">✅ Workmanship Guarantee</p>
+                    <p class="text-sm opacity-90">✅ Free Inspections</p>
+                </div>
+            </div>
+            <div class="border-t border-gray-600 mt-6 pt-6 text-center text-sm opacity-75">
+                <p>© 2024 Premier Roofing LLC. All rights reserved. Professional roofing services with integrity.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+        // Initialize animations
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate material cards
+            anime({
+                targets: '.material-card',
+                translateY: [30, 0],
+                opacity: [0, 1],
+                duration: 800,
+                delay: anime.stagger(150),
+                easing: 'easeOutQuart'
+            });
+        });
+        
+        // Select material for estimate
+        function selectMaterialForEstimate(materialType) {
+            // Map material types to our system
+            let systemMaterial = 'shingle'; // default
+            if (materialType.includes('metal')) {
+                systemMaterial = 'metal-standing';
+            } else if (materialType.includes('exposed')) {
+                systemMaterial = 'metal-exposed';
+            } else if (materialType.includes('tile')) {
+                systemMaterial = 'tile';
+            }
+            
+            // Store selection in localStorage
+            localStorage.setItem('selectedMaterial', systemMaterial);
+            
+            // Show confirmation
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = '✓ Selected';
+            button.style.backgroundColor = '#27AE60';
+            
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.backgroundColor = '#E67E22';
+            }, 2000);
+            
+            // Animate selection
+            anime({
+                targets: button,
+                scale: [1, 1.1, 1],
+                duration: 400,
+                easing: 'easeOutQuart'
+            });
+            
+            // Optionally redirect to estimate page
+            setTimeout(() => {
+                if (confirm('Material selected! Would you like to go to the estimate page?')) {
+                    window.location.href = 'index.html';
+                }
+            }, 1000);
+        }
+    </script>
+
+</body></html>

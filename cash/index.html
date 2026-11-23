@@ -1,0 +1,711 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Diversity Roofing - Professional Estimate Template</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/js/splide.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typed.js/2.0.12/typed.min.js"></script>
+    <script src="https://unpkg.com/splitting@1.0.6/dist/splitting.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- External Stylesheets -->
+    <link href="https://unpkg.com/splitting@1.0.6/dist/splitting.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/css/splide.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;family=Merriweather:wght@400;700&amp;display=swap" rel="stylesheet"/>
+    
+    <style>
+        :root {
+            --slate-blue: #2C3E50;
+            --warm-charcoal: #34495E;
+            --copper-orange: #E67E22;
+            --sage-green: #27AE60;
+            --light-gray: #F8F9FA;
+            --border-gray: #E9ECEF;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        
+        .hero-bg {
+            background: linear-gradient(135deg, var(--slate-blue) 0%, var(--warm-charcoal) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .form-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+        
+        .form-input {
+            border: 2px solid var(--border-gray);
+            border-radius: 8px;
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--copper-orange);
+            box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--copper-orange) 0%, #d35400 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(230, 126, 34, 0.3);
+        }
+        
+        .section-header {
+            color: var(--slate-blue);
+            font-weight: 700;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+        
+        .section-header::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: var(--copper-orange);
+            border-radius: 2px;
+        }
+        
+        .cost-breakdown {
+            background: var(--light-gray);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        
+        .total-cost {
+            background: linear-gradient(135deg, var(--sage-green) 0%, #229954 100%);
+            color: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+        
+        .image-upload-area {
+            border: 2px dashed var(--border-gray);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .image-upload-area:hover {
+            border-color: var(--copper-orange);
+            background: rgba(230, 126, 34, 0.05);
+        }
+        
+        .material-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .material-card {
+            border: 2px solid var(--border-gray);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .material-card:hover {
+            border-color: var(--copper-orange);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+        
+        .material-card.selected {
+            border-color: var(--copper-orange);
+            background: rgba(230, 126, 34, 0.1);
+        }
+        
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .footer-section {
+            background: var(--warm-charcoal);
+            color: white;
+            padding: 2rem 0;
+            margin-top: 3rem;
+        }
+        
+        .roof-report-upload {
+            border: 3px dashed var(--copper-orange);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: rgba(230, 126, 34, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .roof-report-upload:hover {
+            background: rgba(230, 126, 34, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .report-preview {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-top: 1rem;
+        }
+        
+        .measurement-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 1rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-gray);
+            align-items: center;
+        }
+        
+        .measurement-row:last-child {
+            border-bottom: none;
+        }
+        
+        .margin-button {
+            background: linear-gradient(135deg, var(--copper-orange) 0%, #d35400 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        
+        .margin-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(230, 126, 34, 0.3);
+        }
+        
+        .margin-button.selected {
+            background: linear-gradient(135deg, var(--sage-green) 0%, #229954 100%);
+        }
+        
+        .sales-preview {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid #2196f3;
+        }
+        
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+            .form-card { box-shadow: none !important; border: 1px solid #ccc; }
+        }
+    </style>
+<script src="https://www.kimi.com/sdk-seed.js" defer="" data-kimi-disable-watermark="false" data-kimi-analytics="false"></script></head>
+<body>
+    <!-- Navigation -->
+    <nav class="hero-bg text-white p-4 no-print">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <img src="resources/diversity-logo-with-bg.pdf" alt="Diversity Roofing" class="h-12 w-auto"/>
+                <div>
+                    <h1 class="text-xl font-bold">Diversity Roofing</h1>
+                    <p class="text-sm opacity-90">Professional Estimates</p>
+                </div>
+            </div>
+            <div class="flex space-x-4">
+                <a class="nav-link" href="index.html">Estimate</a>
+                <a class="nav-link" href="diversity-template-fixed.html">Your Template</a>
+                <a class="nav-link" href="diversity-template-customer.html">Customer Template</a>
+                <a class="nav-link" href="rcv-acv-policy-scanner.html">RCV/ACV Scanner</a>
+                <a class="nav-link" href="materials.html">Materials</a>
+                <a class="nav-link" href="credentials.html">Credentials</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header Section -->
+    <div class="hero-bg text-white py-12">
+        <div class="container mx-auto px-4">
+            <div class="text-center">
+                <h2 class="text-4xl font-bold mb-4" data-splitting="">Diversity Roofing Professional Estimate</h2>
+                <p class="text-xl opacity-90 mb-6">Licensed, insured, and certified for your peace of mind</p>
+                <div class="inline-block">
+                    <span class="typed-text" id="typed-text"></span>
+                </div>
+                <div class="mt-6">
+                    <a class="btn-primary inline-block" href="diversity-template-final.html">
+                        📝 Use Professional Template
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8">
+        
+        <!-- Roof Report Upload Section -->
+        <div class="form-card p-6 mb-8 no-print">
+            <h3 class="section-header">📊 Roof Report Upload</h3>
+            <p class="text-gray-600 mb-6">Upload your roof measurement report to automatically populate all dimensions and calculations</p>
+            
+            <div class="roof-report-upload" onclick="document.getElementById(&#39;reportUpload&#39;).click()">
+                <div class="text-5xl mb-4">📋</div>
+                <h4 class="text-xl font-bold mb-2">Upload Roof Report</h4>
+                <p class="text-gray-600 mb-2">Supports PDF, JPG, PNG files</p>
+                <p class="text-sm text-gray-500">Click to select or drag and drop your measurement report</p>
+            </div>
+            <input type="file" id="reportUpload" accept=".pdf,.jpg,.jpeg,.png" class="hidden" onchange="handleReportUpload(event)"/>
+            
+            <!-- Report Preview -->
+            <div id="reportPreview" class="hidden">
+                <div class="report-preview">
+                    <h4 class="font-bold mb-4">Extracted Measurements</h4>
+                    <div class="measurement-row font-semibold text-sm text-gray-600">
+                        <div>Section</div>
+                        <div>Length (ft)</div>
+                        <div>Width (ft)</div>
+                        <div>Area (sq ft)</div>
+                    </div>
+                    <div id="measurementsList"></div>
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <div class="flex justify-between items-center font-bold text-lg">
+                            <span>Total Roof Area:</span>
+                            <span id="totalArea" class="text-orange-600">0 sq ft</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm text-gray-600 mt-1">
+                            <span>Total Squares:</span>
+                            <span id="totalSquares">0.0 SQ</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column - Estimate Form -->
+            <div class="lg:col-span-2">
+                <!-- Customer Information -->
+                <div class="form-card p-6 mb-6">
+                    <h3 class="section-header">Customer Information</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Customer Name *</label>
+                            <input type="text" id="customerName" class="form-input w-full" placeholder="Enter customer name"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Phone Number *</label>
+                            <input type="tel" id="phoneNumber" class="form-input w-full" placeholder="(555) 123-4567"/>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium mb-2">Property Address *</label>
+                            <input type="text" id="propertyAddress" class="form-input w-full" placeholder="123 Main Street, City, State 12345"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Email Address</label>
+                            <input type="email" id="emailAddress" class="form-input w-full" placeholder="customer@email.com"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Estimate Date</label>
+                            <input type="date" id="estimateDate" class="form-input w-full" value=""/>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Property Details -->
+                <div class="form-card p-6 mb-6">
+                    <h3 class="section-header">Property Details</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Roof Square Footage *</label>
+                            <input type="number" id="squareFootage" class="form-input w-full" placeholder="e.g., 2500" onchange="calculateCosts()"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Number of Stories</label>
+                            <select id="stories" class="form-input w-full" onchange="calculateCosts()">
+                                <option value="1">Single Story</option>
+                                <option value="2">Two Story (+$5/SQ)</option>
+                                <option value="3">Three Story</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Roof Pitch</label>
+                            <select id="roofPitch" class="form-input w-full" onchange="calculateCosts()">
+                                <option value="low">Low (4/12 or less)</option>
+                                <option value="medium">Medium (5/12 to 8/12) (+$10/SQ)</option>
+                                <option value="steep">Steep (9/12 or more) (+$20/SQ)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Current Roof Condition</label>
+                            <select id="roofCondition" class="form-input w-full" onchange="calculateCosts()">
+                                <option value="good">Good - 1 layer</option>
+                                <option value="average">Average - 2 layers (+$25/SQ)</option>
+                                <option value="poor">Poor - 3+ layers (+$50/SQ)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Material Selection -->
+                <div class="form-card p-6 mb-6">
+                    <h3 class="section-header">Material Selection</h3>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-2">Roofing Type</label>
+                        <div class="material-selector">
+                            <div class="material-card selected" data-material="shingle" onclick="selectMaterial(&#39;shingle&#39;)">
+                                <div class="text-2xl mb-2">🏠</div>
+                                <h4 class="font-semibold">Architectural Shingles</h4>
+                                <p class="text-sm text-gray-600">Premium asphalt shingles</p>
+                                <p class="font-bold text-orange-600">$95/SQ Labor</p>
+                            </div>
+                            <div class="material-card" data-material="metal-standing" onclick="selectMaterial(&#39;metal-standing&#39;)">
+                                <div class="text-2xl mb-2">🏭</div>
+                                <h4 class="font-semibold">Standing Seam Metal</h4>
+                                <p class="text-sm text-gray-600">Concealed fastener system</p>
+                                <p class="font-bold text-orange-600">$300/SQ Labor</p>
+                            </div>
+                            <div class="material-card" data-material="metal-exposed" onclick="selectMaterial(&#39;metal-exposed&#39;)">
+                                <div class="text-2xl mb-2">🔩</div>
+                                <h4 class="font-semibold">Exposed Fastener Metal</h4>
+                                <p class="text-sm text-gray-600">Economical metal system</p>
+                                <p class="font-bold text-orange-600">$260/SQ Labor</p>
+                            </div>
+                            <div class="material-card" data-material="tile" onclick="selectMaterial(&#39;tile&#39;)">
+                                <div class="text-2xl mb-2">🏛️</div>
+                                <h4 class="font-semibold">Concrete Tile</h4>
+                                <p class="text-sm text-gray-600">Premium tile roofing</p>
+                                <p class="font-bold text-orange-600">$380/SQ Labor</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Shingle Color</label>
+                            <select id="shingleColor" class="form-input w-full">
+                                <option value="charcoal">Charcoal Gray</option>
+                                <option value="weathered">Weathered Wood</option>
+                                <option value="estate">Estate Gray</option>
+                                <option value="onxy">Onxy Black</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Underlayment</label>
+                            <select id="underlayment" class="form-input w-full" onchange="calculateCosts()">
+                                <option value="standard">Standard Felt</option>
+                                <option value="synthetic">Synthetic Underlayment</option>
+                                <option value="iceguard">Ice &amp; Water Shield</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scope of Work -->
+                <div class="form-card p-6 mb-6">
+                    <h3 class="section-header">Scope of Work</h3>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-2">Project Description</label>
+                        <textarea id="projectDescription" class="form-input w-full h-32" placeholder="Describe the scope of work...">Complete roof replacement including:
+• Removal of existing roofing materials to bare deck
+• Inspection and replacement of damaged decking as needed (up to 3 sheets included)
+• Installation of new synthetic underlayment
+• Installation of Ice &amp; Water Shield in valleys
+• Installation of starter strip around perimeter
+• Installation of new architectural shingles with manufacturer warranty
+• Installation of new pipe boots and roof ventilation components
+• Cleanup and disposal of all job-related debris from property
+• Final inspection and warranty documentation</textarea>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Estimated Start Date</label>
+                            <input type="date" id="startDate" class="form-input w-full"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Estimated Completion</label>
+                            <input type="date" id="completionDate" class="form-input w-full"/>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Terms &amp; Warranty -->
+                <div class="form-card p-6 mb-6">
+                    <h3 class="section-header">Terms &amp; Warranty</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-bold mb-3 text-orange-600">Payment Terms</h4>
+                            <ul class="space-y-2 text-sm text-gray-600">
+                                <li>• 50% deposit due upon contract signing</li>
+                                <li>• 50% due upon completion of work</li>
+                                <li>• NET 7 payment terms</li>
+                                <li>• All prices negotiated based on volume</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-bold mb-3 text-green-600">Warranty Coverage</h4>
+                            <ul class="space-y-2 text-sm text-gray-600">
+                                <li>• 10-Year Labor Warranty</li>
+                                <li>• Manufacturer&#39;s Limited Lifetime Shingle Warranty</li>
+                                <li>• Full licensing and insurance coverage</li>
+                                <li>• Project manager on every job site</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Image Upload -->
+                <div class="form-card p-6 mb-6">
+                    <h3 class="section-header">Property Photos</h3>
+                    <div class="image-upload-area" onclick="document.getElementById(&#39;photoUpload&#39;).click()">
+                        <div class="text-4xl mb-4">📸</div>
+                        <h4 class="font-semibold mb-2">Upload Property Photos</h4>
+                        <p class="text-gray-600">Click to select photos or drag and drop</p>
+                        <p class="text-sm text-gray-500 mt-2">Supports JPG, PNG files up to 10MB</p>
+                    </div>
+                    <input type="file" id="photoUpload" multiple="" accept="image/*" class="hidden" onchange="handlePhotoUpload(event)"/>
+                    <div id="photoPreview" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"></div>
+                </div>
+            </div>
+
+            <!-- Right Column - Cost Summary -->
+            <div class="lg:col-span-1">
+                <div class="form-card p-6 sticky top-4">
+                    <h3 class="section-header">Estimate Summary</h3>
+                    
+                    <div class="cost-breakdown">
+                        <div class="flex justify-between items-center mb-2">
+                            <span>Labor (Tear-off &amp; Install):</span>
+                            <span id="laborCost">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span>Materials:</span>
+                            <span id="materialCost">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span>Additional Charges:</span>
+                            <span id="additionalCost">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span>Permits &amp; Fees:</span>
+                            <span id="permitCost">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span>Dumpster &amp; Disposal:</span>
+                            <span id="dumpsterCost">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span>Overhead (8%):</span>
+                            <span id="overheadCost">$0.00</span>
+                        </div>
+                        <hr class="my-3"/>
+                        <div class="flex justify-between items-center font-semibold">
+                            <span>Subtotal:</span>
+                            <span id="subtotalCost">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm text-gray-600">
+                            <span>Tax (8.25%):</span>
+                            <span id="taxCost">$0.00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="total-cost">
+                        <div class="text-sm opacity-90 mb-1">Total Project Cost</div>
+                        <div class="text-3xl font-bold" id="totalCost">$0.00</div>
+                    </div>
+
+                    <!-- Cost Breakdown Chart -->
+                    <div class="mt-6">
+                        <h4 class="font-semibold mb-3">Cost Breakdown</h4>
+                        <div id="costChart" style="height: 200px;"></div>
+                    </div>
+
+                    <!-- Sales Rep Pricing Preview -->
+                    <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg no-print">
+                        <h4 class="font-semibold mb-3 text-blue-800">Sales Rep Preview</h4>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span>Base Cost:</span>
+                                <span id="baseCost" class="text-blue-600 font-semibold">$0.00</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Overhead (8%, $1800 max):</span>
+                                <span id="overheadDisplay" class="text-blue-600 font-semibold">$0.00</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Subtotal with Overhead:</span>
+                                <span id="subtotalWithOverhead" class="text-blue-600 font-semibold">$0.00</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Selected Margin:</span>
+                                <span id="selectedMargin" class="text-blue-600 font-semibold">None</span>
+                            </div>
+                            <div class="flex justify-between font-bold text-lg border-t border-blue-300 pt-2">
+                                <span>Final Customer Price:</span>
+                                <span id="customerPrice" class="text-blue-800">$0.00</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Profit Margin Selection -->
+                        <div class="mt-4">
+                            <h5 class="font-semibold mb-2 text-blue-800">Select Profit Margin:</h5>
+                            <div class="grid grid-cols-2 gap-2" id="marginSelection">
+                                <button class="margin-button" onclick="selectMargin(40)">40% Margin</button>
+                                <button class="margin-button" onclick="selectMargin(50)">50% Margin</button>
+                                <button class="margin-button" onclick="selectMargin(60)">60% Margin</button>
+                                <button class="margin-button" onclick="selectMargin(80)">80% Margin</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Options -->
+                    <div class="mt-6">
+                        <h4 class="font-semibold mb-3">Payment Options</h4>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span>Cash Discount:</span>
+                                <span id="cashPrice" class="text-green-600 font-semibold">$0.00</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Financing Available:</span>
+                                <span class="text-blue-600">Ask for details</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="mt-6 space-y-3">
+                        <button class="btn-primary w-full" onclick="generateWorkingPDF()">
+                            📄 Generate PDF Proposal
+                        </button>
+                        <button class="btn-primary w-full" onclick="saveEstimate()">
+                            💾 Save Estimate
+                        </button>
+                        <button class="btn-primary w-full" onclick="emailEstimate()">
+                            📧 Email to Customer
+                        </button>
+                    </div>
+
+                    <!-- Validity Notice -->
+                    <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
+                        <p class="text-yellow-800">
+                            <strong>Estimate Valid:</strong> 30 days from date issued. 
+                            Prices subject to material availability and site conditions.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Professional Footer -->
+    <footer class="footer-section no-print">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h4 class="font-bold mb-4">Diversity Contracting And Roofing LLC</h4>
+                    <p class="text-sm opacity-90 mb-2">Licensed &amp; Insured Contractor</p>
+                    <p class="text-sm opacity-90 mb-2">Fully Licensed with General Liability and Workers Compensation</p>
+                    <p class="text-sm opacity-90">Project Manager on Every Job Site</p>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-4">Contact Information</h4>
+                    <p class="text-sm opacity-90 mb-2">📞 (904) 979-0556</p>
+                    <p class="text-sm opacity-90 mb-2">📧 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="5e143f3d352d3130283732323b1e1a37283b2c2d372a27730c313138373039703d3133">[email&#160;protected]</a></p>
+                    <p class="text-sm opacity-90">🌐 www.Diversity-Roofing.com</p>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-4">Why Choose Us?</h4>
+                    <p class="text-sm opacity-90 mb-2">✅ Site visit every project before start</p>
+                    <p class="text-sm opacity-90 mb-2">✅ Unmarked vehicles representing your company</p>
+                    <p class="text-sm opacity-90">✅ Drone photos for sales and marketing</p>
+                </div>
+            </div>
+            <div class="border-t border-gray-600 mt-6 pt-6 text-center text-sm opacity-75">
+                <p>© 2024 Diversity Contracting And Roofing LLC. All rights reserved. Professional roofing services with integrity.</p>
+                <p class="mt-2">10151 Deerwood Park Blvd, Bldg 200, Ste 250, Jacksonville, FL 32256</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Load JavaScript -->
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="main.js"></script>
+    <script src="pdf-generator-fixed.js"></script>
+    
+    <script>
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set current date
+            document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
+            
+            // Initialize animations
+            initializeAnimations();
+            
+            // Initialize cost chart
+            initializeCostChart();
+            
+            // Calculate initial costs
+            calculateCosts();
+            
+            // Initialize typed text
+            new Typed('#typed-text', {
+                strings: ['Quality Craftsmanship', 'Premium Materials', 'Professional Service', 'Lifetime Warranty'],
+                typeSpeed: 50,
+                backSpeed: 30,
+                backDelay: 2000,
+                loop: true
+            });
+        });
+    </script>
+
+</body></html>

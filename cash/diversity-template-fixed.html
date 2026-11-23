@@ -1,0 +1,1245 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Diversity Estimate - Customer View</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --accent-color: #f59e0b;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo-placeholder {
+            width: 150px;
+            height: 80px;
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--background);
+            cursor: pointer;
+            transition: all 0.2s;
+            overflow: hidden;
+        }
+
+        .logo-placeholder:hover {
+            border-color: var(--primary-color);
+            background: rgba(37, 99, 235, 0.05);
+        }
+
+        .logo-placeholder img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .company-info h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        .company-info p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .estimate-meta {
+            text-align: right;
+            min-width: 200px;
+        }
+
+        .estimate-number {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .date-info {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .customer-section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+        }
+
+        .customer-section h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .customer-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .form-group input {
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .estimate-section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+        }
+
+        .estimate-section h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .line-items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .line-items th,
+        .line-items td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .line-items th {
+            background: var(--background);
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .line-items tr:hover {
+            background: rgba(37, 99, 235, 0.02);
+        }
+
+        .line-item-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .line-item-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        .add-row-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .add-row-btn:hover {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .sales-controls {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            color: white;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .sales-controls h3 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .profit-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .profit-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .profit-btn:hover,
+        .profit-btn.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .custom-profit {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .custom-profit label {
+            font-weight: 500;
+        }
+
+        .custom-profit input {
+            width: 80px;
+            padding: 8px 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        .custom-profit input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .totals-section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+        }
+
+        .totals-section h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .totals-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+
+        .totals-left {
+            border-right: 1px solid var(--border-color);
+            padding-right: 30px;
+        }
+
+        .totals-right {
+            padding-left: 30px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .total-row:last-child {
+            border-bottom: none;
+        }
+
+        .total-row.grand-total {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            border-top: 2px solid var(--primary-color);
+            margin-top: 10px;
+            padding-top: 20px;
+        }
+
+        .total-label {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .total-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .terms-section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+        }
+
+        .terms-section h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .terms-content {
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .terms-content h3 {
+            color: var(--text-primary);
+            font-weight: 600;
+            margin: 20px 0 10px 0;
+            font-size: 1.1rem;
+        }
+
+        .terms-content ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .terms-content li {
+            margin-bottom: 5px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .status-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .status-message.show {
+            transform: translateX(0);
+        }
+
+        .status-message.success {
+            background: var(--success-color);
+        }
+
+        .status-message.error {
+            background: var(--danger-color);
+        }
+
+        @media print {
+            .sales-controls,
+            .action-buttons,
+            .add-row-btn,
+            .logo-upload-section {
+                display: none !important;
+            }
+
+            body {
+                background: white !important;
+            }
+
+            .container {
+                padding: 0 !important;
+                max-width: none !important;
+            }
+
+            .header,
+            .customer-section,
+            .estimate-section,
+            .totals-section,
+            .terms-section {
+                box-shadow: none !important;
+                border: 1px solid #ddd !important;
+                margin-bottom: 20px !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .estimate-meta {
+                text-align: center;
+            }
+
+            .totals-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .totals-left,
+            .totals-right {
+                border: none;
+                padding: 0;
+            }
+
+            .customer-form {
+                grid-template-columns: 1fr;
+            }
+
+            .profit-options {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .customer-view .sales-controls {
+            display: none !important;
+        }
+
+        .customer-view .profit-display {
+            display: none !important;
+        }
+
+        .logo-upload-section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        .logo-upload-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            margin: 0 10px;
+            transition: all 0.2s;
+        }
+
+        .logo-upload-btn:hover {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+        }
+
+        .logo-preview {
+            margin-top: 15px;
+            max-width: 200px;
+            max-height: 100px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        }
+
+        .logo-preview img {
+            max-width: 100%;
+            max-height: 80px;
+            object-fit: contain;
+        }
+
+        .commission-breakdown {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .commission-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .commission-row:last-child {
+            border-bottom: none;
+            font-weight: 600;
+        }
+
+        .commission-label {
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .commission-value {
+            font-weight: 600;
+            color: white;
+        }
+    </style>
+<script src="https://www.kimi.com/sdk-seed.js" defer="" data-kimi-disable-watermark="false" data-kimi-analytics="false"></script></head>
+<body>
+    <div class="container">
+        <!-- Logo Upload Section -->
+        <div class="logo-upload-section">
+            <h3><i class="fas fa-image"></i> Logo Management</h3>
+            <p>Upload your company logo to appear on all estimates and PDFs</p>
+            <div style="margin-top: 15px;">
+                <input type="file" id="logoUpload" accept="image/*" style="display: none;" onchange="handleLogoUpload(event)"/>
+                <button class="logo-upload-btn" onclick="document.getElementById(&#39;logoUpload&#39;).click()">
+                    <i class="fas fa-upload"></i> Choose Logo File
+                </button>
+                <button class="logo-upload-btn" onclick="useDefaultLogo()">
+                    <i class="fas fa-undo"></i> Use Default Logo
+                </button>
+            </div>
+            <div id="logoPreview" class="logo-preview hidden">
+                <img id="previewImage" alt="Logo Preview"/>
+                <p style="margin-top: 10px; font-size: 0.9rem; color: var(--text-secondary);">Logo Preview</p>
+            </div>
+        </div>
+
+        <!-- Header Section -->
+        <div class="header">
+            <div class="logo-section">
+                <div class="logo-placeholder" id="logoDisplay">
+                    <span id="logoText">Click to upload logo</span>
+                    <img id="logoImage" class="hidden" alt="Company Logo"/>
+                </div>
+                <div class="company-info">
+                    <h1>Diversity Construction</h1>
+                    <p>Professional Construction Services</p>
+                    <p>License #123456 | Phone: (555) 123-4567</p>
+                </div>
+            </div>
+            <div class="estimate-meta">
+                <div class="estimate-number">ESTIMATE #<span id="estimateNumber">001</span></div>
+                <div class="date-info">
+                    <div>Date: <span id="currentDate"></span></div>
+                    <div>Valid for 30 days</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Information -->
+        <div class="customer-section">
+            <h2><i class="fas fa-user"></i> Customer Information</h2>
+            <div class="customer-form">
+                <div class="form-group">
+                    <label for="customerName">Customer Name *</label>
+                    <input type="text" id="customerName" placeholder="Enter customer name" required=""/>
+                </div>
+                <div class="form-group">
+                    <label for="customerEmail">Email Address</label>
+                    <input type="email" id="customerEmail" placeholder="Enter email address"/>
+                </div>
+                <div class="form-group">
+                    <label for="customerPhone">Phone Number</label>
+                    <input type="tel" id="customerPhone" placeholder="Enter phone number"/>
+                </div>
+                <div class="form-group">
+                    <label for="projectAddress">Project Address</label>
+                    <input type="text" id="projectAddress" placeholder="Enter project address"/>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sales Controls (Hidden in Customer View) -->
+        <div class="sales-controls">
+            <h3><i class="fas fa-cog"></i> Sales Rep Controls</h3>
+            <div class="profit-options">
+                <button class="profit-btn" data-margin="20" onclick="selectProfitMargin(20)">20% Commission</button>
+                <button class="profit-btn" data-margin="25" onclick="selectProfitMargin(25)">25% Commission</button>
+                <button class="profit-btn" data-margin="30" onclick="selectProfitMargin(30)">30% Commission</button>
+                <button class="profit-btn active" data-margin="50" onclick="selectProfitMargin(50)">50% Commission</button>
+            </div>
+            <div class="custom-profit">
+                <label>Custom %:</label>
+                <input type="number" id="customProfit" placeholder="50" min="0" max="100" onchange="setCustomProfit()"/>
+                <button class="profit-btn" onclick="applyCustomProfit()">Apply</button>
+            </div>
+            
+            <!-- Commission Breakdown (Visible to Sales Only) -->
+            <div class="commission-breakdown">
+                <h4 style="margin-bottom: 10px; color: white;">Commission Breakdown</h4>
+                <div class="commission-row">
+                    <span class="commission-label">Total Job Amount:</span>
+                    <span class="commission-value" id="totalJobAmount">$0.00</span>
+                </div>
+                <div class="commission-row">
+                    <span class="commission-label">Materials &amp; Labor:</span>
+                    <span class="commission-value" id="materialsLabor">$0.00</span>
+                </div>
+                <div class="commission-row">
+                    <span class="commission-label">Overhead (8%, capped at $1800):</span>
+                    <span class="commission-value" id="overheadCapped">$0.00</span>
+                </div>
+                <div class="commission-row">
+                    <span class="commission-label">Gross Profit:</span>
+                    <span class="commission-value" id="grossProfit">$0.00</span>
+                </div>
+                <div class="commission-row">
+                    <span class="commission-label">Sales Commission (<span id="commissionPercent">50</span>%):</span>
+                    <span class="commission-value" id="salesCommission">$0.00</span>
+                </div>
+                <div class="commission-row">
+                    <span class="commission-label">Net Profit:</span>
+                    <span class="commission-value" id="netProfit">$0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estimate Items -->
+        <div class="estimate-section">
+            <h2><i class="fas fa-list"></i> Estimate Details</h2>
+            <table class="line-items" id="lineItemsTable">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Description</th>
+                        <th style="width: 15%;">Quantity</th>
+                        <th style="width: 15%;">Unit</th>
+                        <th style="width: 15%;">Rate ($)</th>
+                        <th style="width: 15%;">Amount ($)</th>
+                    </tr>
+                </thead>
+                <tbody id="lineItemsBody">
+                    <tr>
+                        <td><input type="text" class="line-item-input" placeholder="Enter description" onchange="calculateDiversityTotals()"/></td>
+                        <td><input type="number" class="line-item-input" placeholder="1" min="0" step="0.01" onchange="calculateDiversityTotals()"/></td>
+                        <td><input type="text" class="line-item-input" placeholder="Each" onchange="calculateDiversityTotals()"/></td>
+                        <td><input type="number" class="line-item-input" placeholder="0.00" min="0" step="0.01" onchange="calculateDiversityTotals()"/></td>
+                        <td class="total-value">$0.00</td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-row-btn" onclick="addLineItem()">
+                <i class="fas fa-plus"></i> Add Line Item
+            </button>
+        </div>
+
+        <!-- Totals Section -->
+        <div class="totals-section">
+            <h2><i class="fas fa-calculator"></i> Estimate Summary</h2>
+            <div class="totals-grid">
+                <div class="totals-left">
+                    <div class="total-row">
+                        <span class="total-label">Subtotal:</span>
+                        <span class="total-value" id="subtotal">$0.00</span>
+                    </div>
+                    <div class="total-row profit-display">
+                        <span class="total-label">Overhead (8%, capped at $1800):</span>
+                        <span class="total-value" id="overhead">$0.00</span>
+                    </div>
+                </div>
+                <div class="totals-right">
+                    <div class="total-row">
+                        <span class="total-label">Subtotal with Overhead:</span>
+                        <span class="total-value" id="subtotalWithOverhead">$0.00</span>
+                    </div>
+                    <div class="total-row">
+                        <span class="total-label">Sales Tax (8.25%):</span>
+                        <span class="total-value" id="tax">$0.00</span>
+                    </div>
+                    <div class="total-row grand-total">
+                        <span class="total-label">Total Investment:</span>
+                        <span class="total-value" id="grand">$0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms and Conditions -->
+        <div class="terms-section">
+            <h2><i class="fas fa-file-contract"></i> Terms &amp; Conditions</h2>
+            <div class="terms-content">
+                <h3>Payment Terms</h3>
+                <ul>
+                    <li>50% down payment required to begin work</li>
+                    <li>25% payment due at 50% completion</li>
+                    <li>25% final payment due upon completion</li>
+                    <li>Payment methods accepted: Cash, Check, Credit Card (3% processing fee)</li>
+                </ul>
+
+                <h3>Project Timeline</h3>
+                <ul>
+                    <li>Project start date will be scheduled upon receipt of down payment</li>
+                    <li>Typical project completion: 2-6 weeks depending on scope</li>
+                    <li>Weather delays may affect outdoor work schedules</li>
+                </ul>
+
+                <h3>Warranty Information</h3>
+                <ul>
+                    <li>1-year warranty on all workmanship</li>
+                    <li>Manufacturer warranties apply to materials</li>
+                    <li>Warranty does not cover damage due to misuse or natural disasters</li>
+                </ul>
+
+                <h3>Change Orders</h3>
+                <ul>
+                    <li>Any changes to scope of work must be approved in writing</li>
+                    <li>Additional costs will be calculated and approved before work begins</li>
+                    <li>Change orders may affect project timeline</li>
+                </ul>
+
+                <h3>Permits &amp; Inspections</h3>
+                <ul>
+                    <li>All required permits will be obtained by contractor</li>
+                    <li>Inspection scheduling and coordination included</li>
+                    <li>Permit fees are included in estimate total</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="generatePDF()">
+                <i class="fas fa-download"></i> Download PDF
+            </button>
+            <button class="btn btn-secondary" onclick="printEstimate()">
+                <i class="fas fa-print"></i> Print Estimate
+            </button>
+            <button class="btn btn-success" onclick="saveEstimate()">
+                <i class="fas fa-save"></i> Save Estimate
+            </button>
+        </div>
+    </div>
+
+    <!-- Status Message -->
+    <div id="statusMessage" class="status-message"></div>
+
+    <script>
+        let selectedCommissionRate = 50;
+        let logoData = null;
+        let defaultLogo = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMjAwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjMjU2M2ViIiByeD0iOCIvPgo8dGV4dCB4PSIxMDAiIHk9IjI1IiBmaWxsPSJ3aGl0ZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RElWRVJTSVRZPC90ZXh0Pgo8dGV4dCB4PSIxMDAiIHk9IjQ1IiBmaWxsPSJ3aGl0ZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5ST09GSU5HPC90ZXh0Pgo8dGV4dCB4PSIxMDAiIHk9IjYwIiBmaWxsPSJ3aGl0ZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DT05TVFJVQ1RJT048L3RleHQ+Cjwvc3ZnPgo=';
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('currentDate').textContent = new Date().toLocaleDateString();
+            generateEstimateNumber();
+            calculateDiversityTotals();
+            loadSavedData();
+            useDefaultLogo(); // Set default logo on load
+        });
+
+        function generateEstimateNumber() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            document.getElementById('estimateNumber').textContent = `${year}${month}${day}-${random}`;
+        }
+
+        function selectProfitMargin(margin) {
+            selectedCommissionRate = margin;
+            
+            // Update active button
+            document.querySelectorAll('.profit-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-margin="${margin}"]`).classList.add('active');
+            
+            // Clear custom input
+            document.getElementById('customProfit').value = '';
+            
+            calculateDiversityTotals();
+        }
+
+        function setCustomProfit() {
+            const customValue = parseFloat(document.getElementById('customProfit').value);
+            if (customValue >= 0 && customValue <= 100) {
+                selectedCommissionRate = customValue;
+                
+                // Clear active button
+                document.querySelectorAll('.profit-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                calculateDiversityTotals();
+            }
+        }
+
+        function applyCustomProfit() {
+            setCustomProfit();
+        }
+
+        function addLineItem() {
+            const tbody = document.getElementById('lineItemsBody');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" class="line-item-input" placeholder="Enter description" onchange="calculateDiversityTotals()"></td>
+                <td><input type="number" class="line-item-input" placeholder="1" min="0" step="0.01" onchange="calculateDiversityTotals()"></td>
+                <td><input type="text" class="line-item-input" placeholder="Each" onchange="calculateDiversityTotals()"></td>
+                <td><input type="number" class="line-item-input" placeholder="0.00" min="0" step="0.01" onchange="calculateDiversityTotals()"></td>
+                <td class="total-value">$0.00</td>
+            `;
+            tbody.appendChild(newRow);
+            
+            // Focus on the new description input
+            newRow.querySelector('input').focus();
+        }
+
+        function calculateDiversityTotals() {
+            const rows = document.querySelectorAll('#lineItemsBody tr');
+            let subtotal = 0;
+            let materialsTotal = 0;
+            let laborTotal = 0;
+
+            rows.forEach(row => {
+                const description = row.cells[0].querySelector('input').value.toLowerCase();
+                const quantity = parseFloat(row.cells[1].querySelector('input').value) || 0;
+                const rate = parseFloat(row.cells[3].querySelector('input').value) || 0;
+                const amount = quantity * rate;
+                
+                row.cells[4].textContent = formatCurrency(amount);
+                subtotal += amount;
+
+                // Categorize materials vs labor (simple categorization)
+                if (description.includes('labor') || description.includes('crew') || description.includes('install')) {
+                    laborTotal += amount;
+                } else {
+                    materialsTotal += amount;
+                }
+            });
+
+            // Calculate profit/commission amount
+            const profitAmount = subtotal * (selectedCommissionRate / 100);
+            const subtotalWithProfit = subtotal + profitAmount;
+
+            // Calculate overhead (8% with $1800 cap) - APPLIED AFTER PROFIT
+            const overheadRate = 0.08;
+            const overheadCap = 1800;
+            let overhead = subtotalWithProfit * overheadRate;
+            if (overhead > overheadCap) overhead = overheadCap;
+
+            const subtotalWithOverhead = subtotalWithProfit + overhead;
+            
+            // Calculate tax (8.25%)
+            const taxRate = 0.0825;
+            const tax = subtotalWithOverhead * taxRate;
+            
+            const grandTotal = subtotalWithOverhead + tax;
+
+            // Calculate commission breakdown
+            const grossProfit = subtotalWithProfit - overhead; // Gross profit after overhead
+            const salesCommission = grossProfit * (selectedCommissionRate / 100);
+            const netProfit = grossProfit - salesCommission;
+
+            // Update display
+            document.getElementById('subtotal').textContent = formatCurrency(subtotal);
+            document.getElementById('overhead').textContent = formatCurrency(overhead);
+            document.getElementById('subtotalWithOverhead').textContent = formatCurrency(subtotalWithOverhead);
+            document.getElementById('tax').textContent = formatCurrency(tax);
+            document.getElementById('grand').textContent = formatCurrency(grandTotal);
+
+            // Update commission breakdown (sales view only)
+            document.getElementById('totalJobAmount').textContent = formatCurrency(grandTotal);
+            document.getElementById('materialsLabor').textContent = formatCurrency(materialsTotal + laborTotal);
+            document.getElementById('overheadCapped').textContent = formatCurrency(overhead);
+            document.getElementById('grossProfit').textContent = formatCurrency(grossProfit);
+            document.getElementById('commissionPercent').textContent = selectedCommissionRate;
+            document.getElementById('salesCommission').textContent = formatCurrency(salesCommission);
+            document.getElementById('netProfit').textContent = formatCurrency(netProfit);
+
+            // Auto-save
+            saveToLocalStorage();
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(amount);
+        }
+
+        function handleLogoUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    logoData = e.target.result;
+                    displayLogo(logoData);
+                    showLogoPreview(logoData);
+                    showStatus('Logo uploaded successfully!', 'success');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function useDefaultLogo() {
+            logoData = defaultLogo;
+            displayLogo(logoData);
+            hideLogoPreview();
+            showStatus('Using default logo', 'success');
+        }
+
+        function displayLogo(imageData) {
+            const logoImage = document.getElementById('logoImage');
+            const logoText = document.getElementById('logoText');
+            
+            logoImage.src = imageData;
+            logoImage.classList.remove('hidden');
+            logoText.classList.add('hidden');
+        }
+
+        function showLogoPreview(imageData) {
+            const preview = document.getElementById('logoPreview');
+            const previewImage = document.getElementById('previewImage');
+            
+            previewImage.src = imageData;
+            preview.classList.remove('hidden');
+        }
+
+        function hideLogoPreview() {
+            document.getElementById('logoPreview').classList.add('hidden');
+        }
+
+        function generatePDF() {
+            try {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'letter');
+                
+                // Add logo if available
+                if (logoData) {
+                    try {
+                        pdf.addImage(logoData, 'PNG', 20, 20, 40, 20);
+                    } catch (e) {
+                        console.log('Logo not available for PDF, using text only');
+                    }
+                }
+                
+                // Add company info
+                pdf.setFontSize(16);
+                pdf.text('Diversity Construction', 70, 30);
+                pdf.setFontSize(10);
+                pdf.text('Professional Construction Services', 70, 37);
+                pdf.text('License #123456 | Phone: (555) 123-4567', 70, 44);
+                
+                // Add estimate info
+                pdf.setFontSize(14);
+                pdf.text(`ESTIMATE #${document.getElementById('estimateNumber').textContent}`, 150, 30);
+                pdf.setFontSize(10);
+                pdf.text(`Date: ${document.getElementById('currentDate').textContent}`, 150, 37);
+                pdf.text('Valid for 30 days', 150, 44);
+                
+                // Add customer info
+                const customerName = document.getElementById('customerName').value || 'Customer Name';
+                const customerEmail = document.getElementById('customerEmail').value || 'Email';
+                const customerPhone = document.getElementById('customerPhone').value || 'Phone';
+                const projectAddress = document.getElementById('projectAddress').value || 'Project Address';
+                
+                pdf.setFontSize(12);
+                pdf.text('Customer Information:', 20, 60);
+                pdf.setFontSize(10);
+                pdf.text(`Name: ${customerName}`, 20, 70);
+                pdf.text(`Email: ${customerEmail}`, 20, 77);
+                pdf.text(`Phone: ${customerPhone}`, 20, 84);
+                pdf.text(`Address: ${projectAddress}`, 20, 91);
+                
+                // Add line items
+                pdf.setFontSize(12);
+                pdf.text('Estimate Details:', 20, 105);
+                
+                let yPosition = 115;
+                
+                // Headers
+                pdf.setFontSize(9);
+                pdf.text('Description', 20, yPosition);
+                pdf.text('Qty', 120, yPosition);
+                pdf.text('Unit', 140, yPosition);
+                pdf.text('Rate', 160, yPosition);
+                pdf.text('Amount', 180, yPosition);
+                
+                yPosition += 10;
+                
+                // Line items
+                const rows = document.querySelectorAll('#lineItemsBody tr');
+                rows.forEach(row => {
+                    if (yPosition > 250) {
+                        pdf.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    const description = row.cells[0].querySelector('input').value || '';
+                    const quantity = row.cells[1].querySelector('input').value || '0';
+                    const unit = row.cells[2].querySelector('input').value || '';
+                    const rate = row.cells[3].querySelector('input').value || '0';
+                    const amount = row.cells[4].textContent || '$0.00';
+                    
+                    if (description.trim()) {
+                        pdf.text(description.substring(0, 30), 20, yPosition);
+                        pdf.text(quantity, 120, yPosition);
+                        pdf.text(unit, 140, yPosition);
+                        pdf.text(`$${rate}`, 160, yPosition);
+                        pdf.text(amount, 180, yPosition);
+                        yPosition += 7;
+                    }
+                });
+                
+                // Totals (CORRECTED ORDER)
+                yPosition += 10;
+                pdf.setFontSize(10);
+                pdf.text(`Subtotal: ${document.getElementById('subtotal').textContent}`, 140, yPosition);
+                yPosition += 7;
+                pdf.text(`Overhead: ${document.getElementById('overhead').textContent}`, 140, yPosition);
+                yPosition += 7;
+                pdf.text(`Sales Tax: ${document.getElementById('tax').textContent}`, 140, yPosition);
+                yPosition += 7;
+                pdf.setFontSize(12);
+                pdf.text(`Total Investment: ${document.getElementById('grand').textContent}`, 140, yPosition);
+                
+                // Save PDF
+                const customerNameClean = customerName.replace(/[^a-zA-Z0-9]/g, '_');
+                pdf.save(`Diversity_Estimate_${customerNameClean}_${document.getElementById('estimateNumber').textContent}.pdf`);
+                
+                showStatus('PDF generated successfully!', 'success');
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                showStatus('PDF generation failed. Please use Print to PDF instead.', 'error');
+            }
+        }
+
+        function printEstimate() {
+            window.print();
+        }
+
+        function saveEstimate() {
+            const estimateData = {
+                customerName: document.getElementById('customerName').value,
+                customerEmail: document.getElementById('customerEmail').value,
+                customerPhone: document.getElementById('customerPhone').value,
+                projectAddress: document.getElementById('projectAddress').value,
+                lineItems: [],
+                commissionRate: selectedCommissionRate,
+                logoData: logoData,
+                estimateNumber: document.getElementById('estimateNumber').textContent,
+                date: document.getElementById('currentDate').textContent
+            };
+
+            const rows = document.querySelectorAll('#lineItemsBody tr');
+            rows.forEach(row => {
+                estimateData.lineItems.push({
+                    description: row.cells[0].querySelector('input').value,
+                    quantity: row.cells[1].querySelector('input').value,
+                    unit: row.cells[2].querySelector('input').value,
+                    rate: row.cells[3].querySelector('input').value
+                });
+            });
+
+            localStorage.setItem('diversityEstimate', JSON.stringify(estimateData));
+            showStatus('Estimate saved successfully!', 'success');
+        }
+
+        function saveToLocalStorage() {
+            // Auto-save functionality
+            setTimeout(saveEstimate, 1000);
+        }
+
+        function loadSavedData() {
+            const saved = localStorage.getItem('diversityEstimate');
+            if (saved) {
+                const data = JSON.parse(saved);
+                
+                document.getElementById('customerName').value = data.customerName || '';
+                document.getElementById('customerEmail').value = data.customerEmail || '';
+                document.getElementById('customerPhone').value = data.customerPhone || '';
+                document.getElementById('projectAddress').value = data.projectAddress || '';
+                
+                if (data.logoData) {
+                    logoData = data.logoData;
+                    displayLogo(logoData);
+                }
+                
+                if (data.commissionRate) {
+                    selectProfitMargin(data.commissionRate);
+                }
+                
+                if (data.lineItems && data.lineItems.length > 0) {
+                    const tbody = document.getElementById('lineItemsBody');
+                    tbody.innerHTML = '';
+                    
+                    data.lineItems.forEach(item => {
+                        const newRow = document.createElement('tr');
+                        newRow.innerHTML = `
+                            <td><input type="text" class="line-item-input" value="${item.description || ''}" onchange="calculateDiversityTotals()"></td>
+                            <td><input type="number" class="line-item-input" value="${item.quantity || ''}" min="0" step="0.01" onchange="calculateDiversityTotals()"></td>
+                            <td><input type="text" class="line-item-input" value="${item.unit || ''}" onchange="calculateDiversityTotals()"></td>
+                            <td><input type="number" class="line-item-input" value="${item.rate || ''}" min="0" step="0.01" onchange="calculateDiversityTotals()"></td>
+                            <td class="total-value">$0.00</td>
+                        `;
+                        tbody.appendChild(newRow);
+                    });
+                }
+                
+                calculateDiversityTotals();
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message ${type} show`;
+            
+            setTimeout(() => {
+                statusEl.classList.remove('show');
+            }, 3000);
+        }
+
+        // Auto-save on any input change
+        document.addEventListener('input', function() {
+            saveToLocalStorage();
+        });
+    </script>
+
+</body></html>

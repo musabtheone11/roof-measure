@@ -1,0 +1,953 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Diversity Roofing — Professional Estimate</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --brand:#23495E;
+    --ink:#1b2a36;
+    --muted:#6b7f8e;
+    --line:#e5eaef;
+    --bg:#f7fafc;
+    --accent:#3aa0ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Inter",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .page{max-width:900px;margin:32px auto;padding:28px;background:#fff;border:1px solid var(--line);border-radius:18px}
+  .header{display:flex;gap:20px;align-items:center;justify-content:space-between;border-bottom:2px solid var(--line);padding-bottom:18px}
+  .brand{display:flex;align-items:center;gap:16px}
+  .brand img{width:72px;height:72px;object-fit:contain;border-radius:12px;background:#1f4154}
+  .brand .name{font-weight:800;font-size:26px;letter-spacing:.2px;color:#0f2a3a}
+  .brand .tag{font-size:13px;color:#8da3b1;margin-top:2px}
+  .meta{ text-align:right }
+  .meta h1{margin:0;font-size:28px;letter-spacing:.3px;color:var(--brand)}
+  .meta .pill{display:inline-block;margin-top:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+  .card{border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h3{margin:0 0 8px;font-size:15px;letter-spacing:.3px;color:var(--brand)}
+  .kv{display:grid;grid-template-columns:140px 1fr;row-gap:6px;font-size:14px}
+  .kv .k{color:var(--muted)}
+  .hr{height:1px;background:var(--line);margin:22px 0}
+  .scope ul{margin:8px 0 0 20px}
+  .scope li{margin:8px 0}
+  table.items{width:100%;border-collapse:collapse;margin-top:6px}
+  .items th,.items td{padding:12px;border-bottom:1px dashed var(--line);text-align:left;font-size:14px;vertical-align:top}
+  .items th{font-weight:600;color:var(--brand);background:#f9fbfd}
+  .items td.qty,.items td.rate,.items td.total{white-space:nowrap;text-align:right}
+  .add-row{margin-top:10px;font-size:13px;color:var(--accent);background:none;border:none;padding:6px 0;cursor:pointer}
+  .totals{margin-top:14px;display:grid;grid-template-columns:1fr 320px}
+  .totals .note{color:var(--muted);font-size:13px;padding-right:10px}
+  .totals .tbox{border:1px solid var(--line);border-radius:12px;padding:14px}
+  .row{display:flex;justify-content:space-between;align-items:center;margin:6px 0}
+  .row .lbl{color:var(--muted);font-size:14px}
+  .row .val{font-weight:600}
+  .row.total{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+  .terms p{margin:8px 0}
+  .terms strong{color:var(--ink)}
+  .badges{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+  .badge{font-size:12px;border:1px solid var(--line);padding:6px 10px;border-radius:999px;color:var(--muted)}
+  .accept{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .sig{border:1px dashed var(--line);border-radius:10px;padding:12px;height:110px}
+  .muted{color:var(--muted)}
+  .footer{display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  button.primary{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+  button.line{background:#fff;color:var(--brand);border:1px solid var(--brand);border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+  a{color:var(--accent);text-decoration:none}
+  @media print{
+    body{background:#fff}
+    .page{border:none;margin:0;max-width:none;padding:0}
+    .actions{display:none}
+  }
+
+  /* Logo Upload Styles */
+  .logo-upload {
+    margin: 20px 0;
+    padding: 20px;
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    text-align: center;
+    background: #f9fbfd;
+  }
+  .logo-upload h3 {
+    color: var(--brand);
+    margin: 0 0 15px 0;
+  }
+  .logo-preview {
+    margin: 15px 0;
+    display: none;
+  }
+  .logo-preview img {
+    max-width: 200px;
+    max-height: 100px;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  .file-input {
+    display: none;
+  }
+  .upload-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    margin: 10px;
+  }
+  .upload-btn:hover {
+    background: #2d8ae9;
+  }
+  .logo-status {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+  .logo-status.success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+  }
+  .logo-status.error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+  }
+
+  /* PDF Status Styles */
+  .pdf-status {
+    margin: 10px 0;
+    padding: 15px;
+    border-radius: 8px;
+    font-weight: 500;
+    display: none;
+  }
+  .pdf-status.generating {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+  }
+  .pdf-status.success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+  }
+  .pdf-status.error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+  }
+
+  /* Profit Margin Selection */
+  .profit-section {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f9fbfd;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .profit-section h4 {
+    color: var(--brand);
+    margin: 0 0 10px 0;
+  }
+  .profit-options {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .profit-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--line);
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .profit-btn.active {
+    background: var(--brand);
+    color: white;
+    border-color: var(--brand);
+  }
+  .profit-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+</style>
+<script src="https://www.kimi.com/sdk-seed.js" defer="" data-kimi-disable-watermark="false" data-kimi-analytics="false"></script></head>
+<body>
+
+<div class="page" id="estimate">
+
+  <!-- LOGO UPLOAD SECTION -->
+  <div class="logo-upload">
+    <h3>🖼️ Company Logo Upload</h3>
+    <p>Upload your company logo (PNG, JPG, or PDF format)</p>
+    <input type="file" id="logoUpload" class="file-input" accept="image/*,.pdf"/>
+    <button class="upload-btn" onclick="document.getElementById(&#39;logoUpload&#39;).click()">Choose Logo File</button>
+    <button class="upload-btn" onclick="useDefaultLogo()">Use Default Logo</button>
+    
+    <div class="logo-preview" id="logoPreview">
+      <img id="previewImage" alt="Logo Preview"/>
+      <p><strong>Logo Preview</strong></p>
+    </div>
+    
+    <div class="logo-status" id="logoStatus" style="display: none;"></div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="brand">
+      <!-- Logo will be inserted here -->
+      <img id="companyLogo" src="user-logo.png" alt="Diversity Roofing logo"/>
+      <div>
+        <div class="name">DIVERSITY ROOFING</div>
+        <div class="tag">Protecting Homes. Respecting People.</div>
+      </div>
+    </div>
+    <div class="meta">
+      <h1>ESTIMATE</h1>
+      <div class="pill"><strong>No.</strong> <span contenteditable="true" id="estimateNumber">DR-EST-0001</span></div><br/>
+      <div class="pill"><strong>Date</strong> <span contenteditable="true" id="estDate"></span></div>
+    </div>
+  </div>
+
+  <!-- PDF STATUS -->
+  <div class="pdf-status" id="pdfStatus"></div>
+
+  <!-- INFO CARDS -->
+  <div class="grid">
+    <div class="card">
+      <h3>Prepared For</h3>
+      <div class="kv">
+        <div class="k">Client</div><div contenteditable="true" id="customerName">CLIENT NAME</div>
+        <div class="k">Phone</div><div contenteditable="true" id="customerPhone">CLIENT PHONE</div>
+        <div class="k">Email</div><div contenteditable="true" id="customerEmail">CLIENT EMAIL</div>
+        <div class="k">Property</div><div contenteditable="true" id="propertyAddress">PROPERTY ADDRESS, CITY, FL ZIP</div>
+        <div class="k">Insurance (opt.)</div><div contenteditable="true">INSURER / CLAIM # (if applicable)</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Prepared By</h3>
+      <div class="kv">
+        <div class="k">Company</div><div>Diversity Contracting &amp; Roofing LLC</div>
+        <div class="k">Estimator</div><div contenteditable="true">REP NAME</div>
+        <div class="k">Phone</div><div><a href="tel:19049790556">904-979-0556</a></div>
+        <div class="k">Email</div><div><a href="/cdn-cgi/l/email-protection#5b313a38302834352d3237373e1b3f322d3e2928322f22762934343d32353c75383436"><span class="__cf_email__" data-cfemail="e7ad86848c948889918e8b8b82a7a38e918295948e939ecab58888818e8980c984888a">[email&#160;protected]</span></a></div>
+        <div class="k">Office</div><div>10151 Deerwood Park Blvd, Bldg 200, Ste 250, Jacksonville, FL 32256</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hr"></div>
+
+  <!-- SCOPE / SUMMARY -->
+  <div class="grid">
+    <div class="card scope">
+      <h3>Scope of Work</h3>
+      <ul>
+        <li>Tear off existing roofing materials down to decking.</li>
+        <li>Inspect decking and replace any damaged sheets (<strong>up to 3 included</strong>).</li>
+        <li>Install synthetic underlayment; Ice &amp; Water Shield in valleys.</li>
+        <li>Install starter strip around perimeter; new architectural shingles with manufacturer warranty.</li>
+        <li>Install new pipe boots and roof ventilation components.</li>
+        <li>Jobsite protection, daily cleanup, and debris haul-off.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Project Notes</h3>
+      <p class="muted">A timeline is provided once the initial payment is received. Any additional work outside this scope will require written approval via change order.</p>
+      <div class="badges">
+        <span class="badge">10-Year Labor Warranty</span>
+        <span class="badge">Limited Lifetime Shingle Warranty</span>
+        <span class="badge">FL Licensed &amp; Insured</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFIT MARGIN SELECTION -->
+  <div class="profit-section">
+    <h4>Sales Rep Profit Margin</h4>
+    <div class="profit-options">
+      <button class="profit-btn" data-margin="40" onclick="selectProfitMargin(40)">40% Profit</button>
+      <button class="profit-btn active" data-margin="50" onclick="selectProfitMargin(50)">50% Profit</button>
+      <button class="profit-btn" data-margin="60" onclick="selectProfitMargin(60)">60% Profit</button>
+      <button class="profit-btn" data-margin="80" onclick="selectProfitMargin(80)">80% Profit</button>
+    </div>
+    <p class="muted" style="margin-top: 10px; font-size: 12px;">
+      Select profit margin for sales rep pricing. This affects the final customer price.
+    </p>
+  </div>
+
+  <!-- LINE ITEMS -->
+  <div class="card" style="margin-top:18px">
+    <h3>Estimate Details</h3>
+    <table class="items" id="items">
+      <thead>
+        <tr>
+          <th style="width:48%">Description</th>
+          <th class="qty" style="width:12%">Qty</th>
+          <th class="rate" style="width:20%">Unit Price ($)</th>
+          <th class="total" style="width:20%">Line Total ($)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td contenteditable="true">Roof tear-off &amp; disposal</td>
+          <td class="qty" contenteditable="true">1</td>
+          <td class="rate" contenteditable="true">5200</td>
+          <td class="total">$0.00</td>
+        </tr>
+        <tr>
+          <td contenteditable="true">Synthetic underlayment &amp; Ice/Water Shield</td>
+          <td class="qty" contenteditable="true">1</td>
+          <td class="rate" contenteditable="true">1650</td>
+          <td class="total">$0.00</td>
+        </tr>
+        <tr>
+          <td contenteditable="true">Architectural shingles (install)</td>
+          <td class="qty" contenteditable="true">1</td>
+          <td class="rate" contenteditable="true">13800</td>
+          <td class="total">$0.00</td>
+        </tr>
+        <tr>
+          <td contenteditable="true">Pipe boots, ventilation, flashings</td>
+          <td class="qty" contenteditable="true">1</td>
+          <td class="rate" contenteditable="true">1450</td>
+          <td class="total">$0.00</td>
+        </tr>
+        <tr>
+          <td contenteditable="true">Decking replacement (up to 3 sheets included)</td>
+          <td class="qty" contenteditable="true">1</td>
+          <td class="rate" contenteditable="true">0</td>
+          <td class="total">$0.00</td>
+        </tr>
+      </tbody>
+    </table>
+    <button class="add-row" id="addRow" type="button">+ Add line item</button>
+
+    <div class="totals">
+      <div class="note">Edit any field in place. Totals update automatically. Sales tax is optional; set to 0% if not taxable.</div>
+      <div class="tbox">
+        <div class="row"><div class="lbl">Subtotal</div><div class="val" id="subtotal">$0.00</div></div>
+        <div class="row"><div class="lbl">Profit Markup</div><div class="val" id="profitAmount">$0.00</div></div>
+        <div class="row"><div class="lbl">Overhead (8% - Max $1,800)</div><div class="val" id="overhead">$0.00</div></div>
+        <div class="row">
+          <div class="lbl">Sales Tax (%)</div>
+          <div class="val"><span contenteditable="true" id="taxRate">7</span>%</div>
+        </div>
+        <div class="row"><div class="lbl">Tax</div><div class="val" id="tax">$0.00</div></div>
+        <div class="row total"><div class="lbl"><strong>Estimate Total</strong></div><div class="val" id="grand"><strong>$0.00</strong></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TERMS -->
+  <div class="grid terms" style="margin-top:18px">
+    <div class="card">
+      <h3>Payment Terms</h3>
+      <p><strong>50% deposit</strong> due upon contract signing. <strong>50% due</strong> upon completion of work.</p>
+      <p class="muted">Payments accepted: check, ACH, or card. Invoices include clear due dates and remittance instructions.</p>
+    </div>
+    <div class="card">
+      <h3>Warranty</h3>
+      <p><strong>10-Year Labor Warranty</strong> from Diversity Roofing. <strong>Manufacturer&#39;s Limited Lifetime Shingle Warranty</strong> per product specs.</p>
+      <p class="muted">Warranty requires proper attic ventilation and timely payment per terms.</p>
+    </div>
+  </div>
+
+  <!-- TERMS &amp; CONDITIONS -->
+  <div class="grid terms" style="margin-top:18px">
+    <div class="card">
+      <h3>Terms &amp; Conditions</h3>
+          <p><strong>1. Validity:</strong> This estimate is valid for 30 days from the date of issue.</p>
+          <p><strong>2. Payment Terms:</strong> 50% deposit required to schedule work, remaining 50% due upon completion.</p>
+          <p><strong>3. Scope of Work:</strong> All work will be performed according to local building codes and manufacturer specifications.</p>
+          <p><strong>4. Permits:</strong> Customer is responsible for obtaining any necessary building permits.</p>
+          <p><strong>5. Additional Work:</strong> Any additional work not included in this estimate will be billed at $85/hour plus materials.</p>
+          <p><strong>6. Warranty:</strong> 10-year workmanship warranty on installation, manufacturer warranty on materials.</p>
+          <p><strong>7. Project Management:</strong> Project manager on every job site. Site visit before project start.</p>
+    </div>
+    <div class="card">
+      <h3>Additional Notes</h3>
+      <p class="muted">This estimate includes complete roof replacement with premium materials. Final price includes profit margin, 8% overhead (capped at $1,800) and applicable taxes.</p>
+      <div class="badges">
+        <span class="badge">8% Overhead (Max $1,800)</span>
+        <span class="badge">Project Manager On-Site</span>
+        <span class="badge">Drone Documentation</span>
+        <span class="badge">Licensed &amp; Insured</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCEPTANCE -->
+  <div class="card" style="margin-top:18px">
+    <h3>Customer Acceptance</h3>
+    <p class="muted">By signing below, client authorizes Diversity Roofing to perform the scope of work and agrees to payment terms above. Change orders must be approved in writing.</p>
+    <div class="accept">
+      <div>
+        <div class="kv" style="margin-bottom:10px">
+          <div class="k">Client Name</div><div contenteditable="true" id="clientSigName">CLIENT NAME</div>
+          <div class="k">Date</div><div contenteditable="true" id="clientSigDate"></div>
+        </div>
+        <div class="sig" contenteditable="true">Sign here</div>
+      </div>
+      <div>
+        <div class="kv" style="margin-bottom:10px">
+          <div class="k">Estimator</div><div contenteditable="true">REP NAME</div>
+          <div class="k">Date</div><div contenteditable="true" id="repSigDate"></div>
+        </div>
+        <div class="sig" contenteditable="true">Sign here</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>
+      © <span id="yr"></span> Diversity Contracting &amp; Roofing LLC • <a href="https://www.diversity-roofing.com">diversity-roofing.com</a>
+      • Jacksonville, FL • FL License #: <span contenteditable="true">YOUR-LICENSE-NO</span>
+    </div>
+    <div class="actions">
+      <button class="primary" onclick="generatePDF()">Generate PDF</button>
+      <button class="line" onclick="window.print()">Print</button>
+      <button class="line" onclick="saveEstimate()">Save</button>
+      <button class="line" onclick="copyHTML()">Copy HTML</button>
+    </div>
+  </div>
+
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+  // Logo upload functionality
+  let currentLogoSrc = 'user-logo.png';
+  let selectedProfitMargin = 50; // Default profit margin
+  
+  document.getElementById('logoUpload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          currentLogoSrc = e.target.result;
+          document.getElementById('companyLogo').src = currentLogoSrc;
+          document.getElementById('previewImage').src = currentLogoSrc;
+          document.getElementById('logoPreview').style.display = 'block';
+          
+          // Show success message
+          const status = document.getElementById('logoStatus');
+          status.textContent = '✅ Logo uploaded successfully!';
+          status.className = 'logo-status success';
+          status.style.display = 'block';
+          
+          // Hide message after 3 seconds
+          setTimeout(() => {
+            status.style.display = 'none';
+          }, 3000);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Show error message
+        const status = document.getElementById('logoStatus');
+        status.textContent = '❌ Please select an image or PDF file';
+        status.className = 'logo-status error';
+        status.style.display = 'block';
+        
+        setTimeout(() => {
+          status.style.display = 'none';
+        }, 3000);
+      }
+    }
+  });
+
+  function useDefaultLogo() {
+    currentLogoSrc = 'user-logo.png';
+    document.getElementById('companyLogo').src = currentLogoSrc;
+    document.getElementById('logoPreview').style.display = 'none';
+    
+    const status = document.getElementById('logoStatus');
+    status.textContent = '✅ Using default logo';
+    status.className = 'logo-status success';
+    status.style.display = 'block';
+    
+    setTimeout(() => {
+      status.style.display = 'none';
+    }, 3000);
+  }
+
+  // Profit margin selection
+  function selectProfitMargin(margin) {
+    selectedProfitMargin = margin;
+    
+    // Update button states
+    document.querySelectorAll('.profit-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    document.querySelector(`[data-margin="${margin}"]`).classList.add('active');
+    
+    // Recalculate totals
+    calculateDiversityTotals();
+    
+    const status = document.getElementById('pdfStatus');
+    status.textContent = `✅ Profit margin set to ${margin}%`;
+    status.className = 'pdf-status success';
+    status.style.display = 'block';
+    
+    setTimeout(() => {
+      status.style.display = 'none';
+    }, 2000);
+  }
+
+  // Helper: currency formatting
+  const fmt = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD'});
+
+  // Set dates
+  const today = new Date();
+  document.getElementById('estDate').textContent = today.toLocaleDateString();
+  document.getElementById('clientSigDate').textContent = today.toLocaleDateString();
+  document.getElementById('repSigDate').textContent = today.toLocaleDateString();
+  document.getElementById('yr').textContent = today.getFullYear();
+  
+  // Generate estimate number
+  const estimateNumber = 'DR-' + today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0') + '-' + Math.floor(Math.random() * 1000);
+  document.getElementById('estimateNumber').textContent = estimateNumber;
+
+  // Diversity Roofing pricing and calculations - FIXED OVERHEAD CALCULATION
+  function calculateDiversityTotals() {
+    let subtotal = 0;
+    
+    // Calculate line items
+    document.querySelectorAll('#items tbody tr').forEach(tr=>{
+      const qty = parseFloat((tr.querySelector('.qty')?.textContent || '0').replace(/[^0-9.\-]/g,'')) || 0;
+      const rate = parseFloat((tr.querySelector('.rate')?.textContent || '0').replace(/[^0-9.\-]/g,'')) || 0;
+      const line = qty*rate;
+      tr.querySelector('.total').textContent = fmt(line);
+      subtotal += line;
+    });
+    
+    // Calculate profit markup
+    const profitAmount = subtotal * (selectedProfitMargin / 100);
+    const subtotalWithProfit = subtotal + profitAmount;
+    
+    // Calculate overhead (8% with $1800 cap) - NOW ON TOTAL WITH PROFIT
+    const overheadRate = 0.08;
+    const overheadCap = 1800;
+    let overhead = subtotalWithProfit * overheadRate;
+    if (overhead > overheadCap) overhead = overheadCap;
+    
+    // Calculate tax
+    const taxRate = parseFloat((document.getElementById('taxRate').textContent||'7').replace(/[^0-9.\-]/g,''))||0;
+    const tax = (subtotalWithProfit + overhead) * (taxRate/100);
+    
+    const grand = subtotalWithProfit + overhead + tax;
+    
+    // Update display
+    document.getElementById('subtotal').textContent = fmt(subtotal);
+    document.getElementById('profitAmount').textContent = fmt(profitAmount);
+    document.getElementById('overhead').textContent = fmt(overhead);
+    document.getElementById('tax').textContent = fmt(tax);
+    document.getElementById('grand').textContent = fmt(grand);
+  }
+  
+  calculateDiversityTotals();
+
+  // Recalc on edits
+  document.addEventListener('input', (e)=>{
+    if(e.target.closest('#items') || e.target.id==='taxRate'){ calculateDiversityTotals(); }
+  });
+
+  // Add row
+  document.getElementById('addRow').addEventListener('click', ()=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td contenteditable="true">Description</td>
+      <td class="qty" contenteditable="true">1</td>
+      <td class="rate" contenteditable="true">0</td>
+      <td class="total">$0.00</td>
+    `;
+    document.querySelector('#items tbody').appendChild(tr);
+  });
+
+  // PDF Generation - Enhanced with Logo Support
+  function generatePDF() {
+    const status = document.getElementById('pdfStatus');
+    
+    try {
+      // Show generating status
+      status.textContent = '⏳ Generating PDF... Please wait...';
+      status.className = 'pdf-status generating';
+      status.style.display = 'block';
+      
+      setTimeout(() => {
+        try {
+          const { jsPDF } = window.jspdf;
+          
+          // Check if jsPDF is available
+          if (typeof jsPDF === 'undefined') {
+            throw new Error('jsPDF library not loaded');
+          }
+          
+          const doc = new jsPDF('p', 'mm', 'a4');
+          
+          // Colors
+          const primaryColor = [35, 73, 94]; // #23495E
+          const textColor = [27, 42, 54]; // #1b2a36
+          
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const margin = 15;
+          let currentY = margin;
+          
+          // Header with logo support
+          doc.setFillColor(...primaryColor);
+          doc.rect(0, 0, pageWidth, 25, 'F');
+          
+          // Try to add logo if it's an image
+          if (currentLogoSrc && currentLogoSrc !== 'user-logo.png' && !currentLogoSrc.includes('application/pdf')) {
+            try {
+              doc.addImage(currentLogoSrc, 'PNG', margin, 5, 20, 15);
+              
+              // Company info next to logo
+              doc.setTextColor(255, 255, 255);
+              doc.setFontSize(14);
+              doc.setFont('helvetica', 'bold');
+              doc.text('DIVERSITY ROOFING', margin + 25, 12);
+              
+              doc.setFontSize(8);
+              doc.text('Protecting Homes. Respecting People.', margin + 25, 18);
+            } catch (logoError) {
+              // Fallback without logo
+              doc.setTextColor(255, 255, 255);
+              doc.setFontSize(16);
+              doc.setFont('helvetica', 'bold');
+              doc.text('DIVERSITY ROOFING', margin, 12);
+              
+              doc.setFontSize(8);
+              doc.text('Protecting Homes. Respecting People.', margin, 18);
+            }
+          } else {
+            // Fallback without logo
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text('DIVERSITY ROOFING', margin, 12);
+            
+            doc.setFontSize(8);
+            doc.text('Protecting Homes. Respecting People.', margin, 18);
+          }
+          
+          currentY = 35;
+          
+          // Estimate title
+          doc.setTextColor(...primaryColor);
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.text('ESTIMATE', pageWidth - margin, currentY, { align: 'right' });
+          
+          currentY += 8;
+          doc.setFontSize(9);
+          doc.setTextColor(...textColor);
+          doc.setFont('helvetica', 'normal');
+          const estNum = document.getElementById('estimateNumber').textContent;
+          const estDate = document.getElementById('estDate').textContent;
+          doc.text(`No. ${estNum}`, pageWidth - margin, currentY, { align: 'right' });
+          currentY += 5;
+          doc.text(`Date: ${estDate}`, pageWidth - margin, currentY, { align: 'right' });
+          
+          currentY += 15;
+          
+          // Customer Info
+          doc.setTextColor(...primaryColor);
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Prepared For', margin, currentY);
+          
+          currentY += 8;
+          doc.setTextColor(...textColor);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          
+          const customerName = document.getElementById('customerName').textContent;
+          const customerPhone = document.getElementById('customerPhone').textContent;
+          const customerEmail = document.getElementById('customerEmail').textContent;
+          const propertyAddress = document.getElementById('propertyAddress').textContent;
+          
+          doc.text(`Client: ${customerName}`, margin, currentY);
+          currentY += 5;
+          doc.text(`Phone: ${customerPhone}`, margin, currentY);
+          currentY += 5;
+          doc.text(`Email: ${customerEmail}`, margin, currentY);
+          currentY += 5;
+          doc.text(`Property: ${propertyAddress}`, margin, currentY);
+          
+          currentY += 15;
+          
+          // Scope of Work
+          doc.setTextColor(...primaryColor);
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Scope of Work', margin, currentY);
+          
+          currentY += 8;
+          doc.setTextColor(...textColor);
+          doc.setFontSize(8);
+          
+          const scopeItems = [
+            "• Tear off existing roofing materials down to decking.",
+            "• Inspect decking and replace any damaged sheets (up to 3 included).",
+            "• Install synthetic underlayment; Ice & Water Shield in valleys.",
+            "• Install starter strip around perimeter; new architectural shingles with manufacturer warranty.",
+            "• Install new pipe boots and roof ventilation components.",
+            "• Jobsite protection, daily cleanup, and debris haul-off."
+          ];
+          
+          scopeItems.forEach(item => {
+            if (currentY > 280) {
+              doc.addPage();
+              currentY = margin;
+            }
+            doc.text(item, margin + 5, currentY);
+            currentY += 6;
+          });
+          
+          currentY += 10;
+          
+          // Line Items Table
+          if (currentY > 200) {
+            doc.addPage();
+            currentY = margin;
+          }
+          
+          doc.setTextColor(...primaryColor);
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Estimate Details', margin, currentY);
+          
+          currentY += 8;
+          
+          // Table header
+          doc.setFillColor(249, 250, 251);
+          doc.rect(margin, currentY - 4, pageWidth - 2 * margin, 8, 'F');
+          doc.setDrawColor(229, 234, 239);
+          doc.rect(margin, currentY - 4, pageWidth - 2 * margin, 8, 'S');
+          
+          doc.setTextColor(35, 73, 94);
+          doc.setFontSize(8);
+          doc.text('Description', margin + 2, currentY);
+          doc.text('Qty', margin + 80, currentY);
+          doc.text('Unit Price', margin + 100, currentY);
+          doc.text('Line Total', margin + 130, currentY);
+          
+          currentY += 8;
+          doc.setTextColor(...textColor);
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          
+          // Table rows
+          const rows = document.querySelectorAll('#items tbody tr');
+          rows.forEach(row => {
+            if (currentY > 280) {
+              doc.addPage();
+              currentY = margin;
+            }
+            
+            const desc = row.querySelector('td').textContent;
+            const qty = row.querySelector('.qty').textContent;
+            const rate = row.querySelector('.rate').textContent;
+            const total = row.querySelector('.total').textContent;
+            
+            const truncatedDesc = desc.length > 40 ? desc.substring(0, 37) + '...' : desc;
+            
+            doc.text(truncatedDesc, margin + 2, currentY);
+            doc.text(qty, margin + 80, currentY);
+            doc.text('$' + rate, margin + 100, currentY);
+            doc.text(total, margin + 130, currentY);
+            
+            currentY += 6;
+          });
+          
+          // Totals
+          if (currentY > 250) {
+            doc.addPage();
+            currentY = margin;
+          }
+          
+          const subtotal = document.getElementById('subtotal').textContent;
+          const profitAmount = document.getElementById('profitAmount').textContent;
+          const overhead = document.getElementById('overhead').textContent;
+          const tax = document.getElementById('tax').textContent;
+          const grand = document.getElementById('grand').textContent;
+          
+          doc.setFillColor(249, 250, 251);
+          doc.rect(pageWidth - margin - 50, currentY - 5, 50, 35, 'F');
+          doc.setDrawColor(229, 234, 239);
+          doc.rect(pageWidth - margin - 50, currentY - 5, 50, 35, 'S');
+          
+          doc.setTextColor(35, 73, 94);
+          doc.setFontSize(9);
+          doc.text('Subtotal:', pageWidth - margin - 48, currentY);
+          currentY += 6;
+          doc.text('Profit:', pageWidth - margin - 48, currentY);
+          currentY += 6;
+          doc.text('Overhead:', pageWidth - margin - 48, currentY);
+          currentY += 6;
+          doc.text('Tax:', pageWidth - margin - 48, currentY);
+          currentY += 6;
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Total:', pageWidth - margin - 48, currentY);
+          
+          doc.setTextColor(...textColor);
+          doc.setFontSize(9);
+          currentY = currentY - 24;
+          doc.text(subtotal, pageWidth - margin - 15, currentY, { align: 'right' });
+          currentY += 6;
+          doc.text(profitAmount, pageWidth - margin - 15, currentY, { align: 'right' });
+          currentY += 6;
+          doc.text(overhead, pageWidth - margin - 15, currentY, { align: 'right' });
+          currentY += 6;
+          doc.text(tax, pageWidth - margin - 15, currentY, { align: 'right' });
+          currentY += 6;
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.text(grand, pageWidth - margin - 15, currentY, { align: 'right' });
+          
+          // Footer
+          const footerY = pageHeight - 15;
+          doc.setFillColor(...primaryColor);
+          doc.rect(0, footerY - 5, pageWidth, 20, 'F');
+          
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(7);
+          doc.text('Diversity Contracting & Roofing LLC - Licensed, Insured, Professional', pageWidth / 2, footerY, { align: 'center' });
+          doc.text('904-979-0556 | Jacksonville@Diversity-Roofing.com | diversity-roofing.com', pageWidth / 2, footerY + 4, { align: 'center' });
+          
+          // Save PDF
+          const fileName = `Diversity-Roofing-Estimate-${customerName.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
+          doc.save(fileName);
+          
+          // Show success status
+          status.textContent = '✅ PDF generated successfully!';
+          status.className = 'pdf-status success';
+          
+          setTimeout(() => {
+            status.style.display = 'none';
+          }, 3000);
+          
+        } catch (innerError) {
+          console.error('PDF generation inner error:', innerError);
+          status.textContent = '❌ PDF generation failed. Please try again.';
+          status.className = 'pdf-status error';
+          
+          setTimeout(() => {
+            status.style.display = 'none';
+          }, 5000);
+        }
+      }, 100); // Small delay to show generating status
+      
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      status.textContent = '❌ PDF generation failed. Error: ' + error.message;
+      status.className = 'pdf-status error';
+      status.style.display = 'block';
+      
+      setTimeout(() => {
+        status.style.display = 'none';
+      }, 5000);
+    }
+  }
+
+  // Print function
+  function printEstimate() {
+    window.print();
+  }
+
+  // Save function
+  function saveEstimate() {
+    const estimateData = {
+      customer: {
+        name: document.getElementById('customerName').textContent,
+        phone: document.getElementById('customerPhone').textContent,
+        email: document.getElementById('customerEmail').textContent,
+        address: document.getElementById('propertyAddress').textContent
+      },
+      date: document.getElementById('estDate').textContent,
+      estimateNumber: document.getElementById('estimateNumber').textContent,
+      totals: {
+        subtotal: document.getElementById('subtotal').textContent,
+        profit: document.getElementById('profitAmount').textContent,
+        overhead: document.getElementById('overhead').textContent,
+        tax: document.getElementById('tax').textContent,
+        total: document.getElementById('grand').textContent
+      },
+      profitMargin: selectedProfitMargin,
+      logoSrc: currentLogoSrc
+    };
+    
+    localStorage.setItem('diversityRoofingEstimate', JSON.stringify(estimateData));
+    
+    const status = document.getElementById('pdfStatus');
+    status.textContent = '✅ Estimate saved successfully!';
+    status.className = 'pdf-status success';
+    status.style.display = 'block';
+    
+    setTimeout(() => {
+      status.style.display = 'none';
+    }, 3000);
+  }
+
+  // Copy HTML function
+  function copyHTML(){
+    const html = document.documentElement.outerHTML;
+    navigator.clipboard.writeText(html).then(() => {
+      const status = document.getElementById('pdfStatus');
+      status.textContent = '✅ HTML copied to clipboard!';
+      status.className = 'pdf-status success';
+      status.style.display = 'block';
+      
+      setTimeout(() => {
+        status.style.display = 'none';
+      }, 3000);
+    }).catch(err => {
+      const status = document.getElementById('pdfStatus');
+      status.textContent = '❌ Failed to copy HTML';
+      status.className = 'pdf-status error';
+      status.style.display = 'block';
+      
+      setTimeout(() => {
+        status.style.display = 'none';
+      }, 3000);
+    });
+  }
+
+  // Check if jsPDF is available on load
+  window.addEventListener('load', function() {
+    if (typeof jsPDF === 'undefined') {
+      const status = document.getElementById('pdfStatus');
+      status.textContent = '⚠️ PDF library not loaded. Use Print → Save as PDF instead.';
+      status.className = 'pdf-status warning';
+      status.style.display = 'block';
+      
+      // Change PDF button to use alternative method
+      const pdfBtn = document.querySelector('button[onclick="generatePDF()"]');
+      if (pdfBtn) {
+        pdfBtn.onclick = function() { 
+          status.textContent = '🖨️ Opening print dialog. Save as PDF from your browser.';
+          status.className = 'pdf-status success';
+          setTimeout(() => window.print(), 1000);
+        };
+        pdfBtn.textContent = 'Print to PDF';
+      }
+      
+      setTimeout(() => {
+        status.style.display = 'none';
+      }, 5000);
+    }
+  });
+</script>
+
+</body></html>
