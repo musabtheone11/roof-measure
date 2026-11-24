@@ -1,0 +1,8 @@
+{
+  "address": "4510 Kelliwood Manor Ln, Katy, TX 77450",
+  "source": "GAF QuickMeasure report dated 2026-04-01 (imagery 2025-12-09)",
+  "areaSqft": 6386, "facets": 26, "predominantPitch": 12,
+  "pitchAreas": { "3": 5, "4": 729, "5": 17, "8": 1657, "12": 3913, "14": 66 },
+  "ft": { "eave": 305, "rake": 151, "ridge": 124, "hip": 195, "valley": 144, "step": 73, "wall": 14, "transition": 48 },
+  "ourOriginalReport": { "areaSqft": 6471, "facets": 33, "ft": { "eave": 230, "rake": 256.4, "ridge": 59.2, "hip": 199.3, "valley": 147.2, "step": 153.2, "wall": 33.7, "transition": 260.5, "unspecified": 46 } }
+}
