@@ -49,6 +49,7 @@ var AT2 = {
   refitGateM: 0.5,     // first refit pass ignores pixels this far off the grown plane (canopy and chimney pixels filled into the region)
   occludedAboveM: 0.5, // a roof pixel this far above the nearest plane is canopy or a chimney, not roof surface
   occludedMinM2: 1.0,  // ... handled as an occluded blob when the blob is at least this big
+  eaveDropMinPitch: 13, eaveDropSteeperBy: 6, eaveDropMaxWidthM: 1.5, // eave drop-off strips: at least this steep, this much steeper than the roof behind, and no wider
   bandAspect: 3.5,     // ... and a band is a strip: length / width above this (hip-end triangles are compact)
 };
 
@@ -623,7 +624,12 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
         const P = regions[l].plane;
         for (const [q, c] of bigShare) { if (c / shTot >= 0.8) island = true; else if (tot && c / tot >= 0.8 && angleBetween(P.a, P.b, regions[q].plane.a, regions[q].plane.b) < 10) island = true; }
       }
-      if ((steepWall && (thin || outsideShare > 0.3)) || (thin && (!shareable || flatOnPitched)) || island) { bandIds.push(l); if (steepWall && outsideShare > 0.25 && !island) eaveBand.add(l); }
+      // blurred eave drop-off that is not quite wall-steep: a strip on the outline, much steeper than the roof plane
+      // behind it and facing the same way (a real lower roof would face its own way or be wider than a strip)
+      const Pl = regions[l].plane;
+      const eaveDrop = outsideShare > 0.3 && p12 >= AT2.eaveDropMinPitch && widthM < AT2.eaveDropMaxWidthM && lengthM / widthM > AT2.bandAspect &&
+        nbs.some(([q]) => { const Q = regions[q].plane, sq = slopeOf(q); return sq > 0.06 && (s - sq) * 12 >= AT2.eaveDropSteeperBy && (Pl.a * Q.a + Pl.b * Q.b) / (s * sq) > 0.9; });
+      if ((steepWall && (thin || outsideShare > 0.3)) || (thin && (!shareable || flatOnPitched)) || island || eaveDrop) { bandIds.push(l); if ((eaveDrop || (steepWall && outsideShare > 0.25)) && !island) eaveBand.add(l); }
     }
     if (!bandIds.length) break;
     const bandSet = new Set(bandIds);
