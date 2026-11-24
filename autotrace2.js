@@ -604,7 +604,10 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
       if (!nbs.length) continue;
       const s = slopeOf(l); const p12 = s * 12;
       const nbSlopes = nbs.map(([q]) => slopeOf(q));
-      const shareable = nbSlopes.some((q) => Math.abs(q - s) * 12 <= AT2.bandPitchTol) || big.some(([q]) => q !== l && Math.abs(slopeOf(q) - s) * 12 <= AT2.bandPitchTol * 0.6);
+      // a neighbour vouches for this pitch only if it is a real side of the region (two drop-off strips that touch at a
+      // corner used to vouch for each other)
+      const roofSide = nbs.reduce((a, [, c]) => a + c, 0);
+      const shareable = nbs.some(([q, c]) => c >= 0.2 * roofSide && Math.abs(slopeOf(q) - s) * 12 <= AT2.bandPitchTol) || big.some(([q]) => q !== l && Math.abs(slopeOf(q) - s) * 12 <= AT2.bandPitchTol * 0.6);
       const outsideShare = ((shared.get(l) || new Map()).get(-1) || 0) / Math.max(1, perim.get(l) || 1);
       const steepWall = p12 > AT2.bandSteep;                       // walls and eave drop-offs, never shingles
       const flatOnPitched = p12 < 1.5 && nbSlopes.every((q) => q * 12 >= 3);
