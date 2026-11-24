@@ -22,7 +22,10 @@ const EDGE_TYPES = {
   transition:  { label: 'Transition',    plural: 'Transitions',   color: '#e26ee6', slope: 'flat' },
   parapet:     { label: 'Parapet wall',  plural: 'Parapet wall',  color: '#f0a030', slope: 'flat' },
   unspecified: { label: 'Unspecified',   plural: 'Unspecified',   color: '#4fc3f7', slope: 'flat' },
+  // where the visible roof stops at tree canopy: NOT a roof edge. Never part of the eave / rake / ridge / valley / flashing totals.
+  obstruction: { label: 'Obstruction boundary', plural: 'Obstruction boundary (not a roof edge)', color: '#ff3b30', slope: 'flat', notRoof: true },
 };
+const ROOF_LINE_TYPES = Object.keys(EDGE_TYPES).filter((k) => !EDGE_TYPES[k].notRoof);
 const FACET_COLOR = '#00d8ff';
 const PITCH_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 24];
 const TOOL_KEYS = { s: 'select', f: 'facet', e: 'eave', v: 'valley', h: 'hip', r: 'ridge', k: 'rake', w: 'wall', t: 'step', n: 'transition', p: 'parapet', u: 'unspecified' };
@@ -36,6 +39,10 @@ const state = {
   waste: 10,
   facets: [],              // {id, name, pitch, shape(Polygon), twoStory, twoLayer, excluded}
   edges: [],               // {id, type, pitch(null=default), shape(Polyline)}
+  acceptedHidden: [],      // hidden zones a reviewer confirmed from another source: [{lat, lng, source, date, note}]
+  altFusion: null,         // second dated dataset the reviewer approved for the canopy-covered part: {quality, date, label, bbox, approved, check}
+  altViews: [],            // other views the reviewer opened: [{id, kind, label, date, georef, measurable, result, at}]
+  evidence: [],            // log of what each alternate view / dated image resolved or flagged
   trace: null,             // what the last auto-trace was made from: imagery, obstruction layer, repairs, raw geometry
   showRaw: false,          // overlay the raw (unstraightened) height-model outlines for audit
   showObstruction: true,   // overlay tree canopy / nearby structures found by the trace
@@ -79,22 +86,26 @@ function facetMetrics(f) {
   return { path, plan: m.plan, sloped: m.sloped, perimeterFt: m.perimeterFt, factor: m.factor, basis: m.basis, slope12: m.slope12 };
 }
 // pitch of the facet this line runs along (so rakes and hips on a 4/12 shed use 4/12, not the default)
-function adjoiningPitch(path) {
+function adjoiningFacet(path) {
   if (path.length < 2) return null;
   const mid = midpoint(path[0], path[1]);
   let best = null, bestD = 0.6;
   for (const f of state.facets) {
     if (f.excluded) continue;
     const fp = pathToLiteral(f.shape);
-    for (let i = 0; i < fp.length; i++) { const d = pointSegM(mid, fp[i], fp[(i + 1) % fp.length]); if (d < bestD) { bestD = d; best = f.pitch; } }
+    for (let i = 0; i < fp.length; i++) { const d = pointSegM(mid, fp[i], fp[(i + 1) % fp.length]); if (d < bestD) { bestD = d; best = f; } }
   }
   return best;
 }
+function adjoiningPitch(path) { const f = adjoiningFacet(path); return f ? f.pitch : null; }
 function edgeMetrics(e) {
   // true length = plan length x slope factor: from the roof plane for auto-traced lines, from the pitch for hand-drawn ones
   const path = pathToLiteral(e.shape);
-  const adj = e.pitch == null && !(e.factor != null && e.autoType === e.type) ? adjoiningPitch(path) : null;
-  const m = RM.lineMeasure({ type: e.type, path, pitch: e.pitch, factor: e.factor, autoType: e.autoType }, adj, state.defaultPitch);
+  // the plane factor holds only while the facet beside the line is still measured from its fitted plane: once its pitch is
+  // set by hand (slope cleared), the line follows that pitch like a hand-drawn one
+  const af = adjoiningFacet(path); const adj = af ? af.pitch : null;
+  const planeOk = e.factor != null && e.autoType === e.type && !(af && af.auto && af.slope == null);
+  const m = RM.lineMeasure({ type: e.type, path, pitch: e.pitch, factor: planeOk ? e.factor : null, autoType: e.autoType }, e.pitch == null && !planeOk ? adj : null, state.defaultPitch);
   return { path, planFt: m.planFt, trueFt: m.trueFt, factor: m.factor, pitch: m.pitch != null ? m.pitch : (adj != null ? adj : state.defaultPitch), basis: m.basis, lengthKind: m.lengthKind };
 }
 function centroid(path) {
@@ -167,15 +178,22 @@ function summarize(fs, cs, es) {
   const areaByStatus = { measured: 0, inferred: 0, unresolved: 0 };
   // an inferred or unresolved facet is mostly seen: only its hidden part counts as such when the trace measured that part
   for (const x of fs) { const st = RM.statusOf(x.f); if (st !== 'measured' && x.f.inferredSqft > 0 && x.f.inferredSqft < x.m.sloped && !x.f.edited) { areaByStatus[st] += x.f.inferredSqft; areaByStatus.measured += x.m.sloped - x.f.inferredSqft; } else areaByStatus[st] += x.m.sloped; }
+  // a cut-out (skylight, chimney) comes off the facet it sits on: that facet's pitch group and its status
+  const hostOf = (c) => { const p = centroid(c.m.path); const inside = (r) => { let k = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) if ((r[i].lat > p.lat) !== (r[j].lat > p.lat) && p.lng < (r[j].lng - r[i].lng) * (p.lat - r[i].lat) / (r[j].lat - r[i].lat) + r[i].lng) k = !k; return k; }; return fs.find((x) => inside(x.m.path)) || null; };
+  const hosts = cs.map(hostOf);
+  cs.forEach((c, i) => { const hst = hosts[i]; const st = hst ? RM.statusOf(hst.f) : 'measured'; const k = hst && st !== 'measured' && hst.f.inferredSqft > 0 && hst.f.inferredSqft < hst.m.sloped && !hst.f.edited ? 'measured' : st; areaByStatus[k] -= c.m.sloped; });
   const lineByStatus = { measured: 0, inferred: 0, unresolved: 0 };
-  for (const { e, m } of es) lineByStatus[RM.statusOf(e)] += m.trueFt;
+  for (const { e, m } of es) if (!EDGE_TYPES[e.type].notRoof) lineByStatus[RM.statusOf(e)] += m.trueFt;
   const unresolvedItems = fs.filter((x) => RM.statusOf(x.f) === 'unresolved').length + es.filter((x) => RM.statusOf(x.e) === 'unresolved').length;
+  // confirmed = seen and measured; estimate = evidence-backed inferred part; neither includes hidden zones
+  const roofLineFt = ROOF_LINE_TYPES.reduce((a, k) => a + byType[k].true, 0);
   const sum = (arr, k) => arr.reduce((s, x) => s + x.m[k], 0);
   const plan = sum(fs, 'plan') - sum(cs, 'plan');
   const sloped = sum(fs, 'sloped') - sum(cs, 'sloped');
   const pitchGroups = {};
   for (const x of fs) pitchGroups[x.f.pitch] = (pitchGroups[x.f.pitch] || 0) + x.m.sloped;
-  for (const x of cs) if (pitchGroups[x.f.pitch] != null) pitchGroups[x.f.pitch] -= x.m.sloped;
+  { const big = () => Object.keys(pitchGroups).sort((a, b) => pitchGroups[b] - pitchGroups[a])[0];
+    cs.forEach((c, i) => { const k = hosts[i] ? hosts[i].f.pitch : (pitchGroups[c.f.pitch] != null ? c.f.pitch : big()); if (k != null && pitchGroups[k] != null) pitchGroups[k] -= c.m.sloped; }); }
   const pitches = Object.keys(pitchGroups).map(Number).sort((a, b) => a - b);
   let predominant = null, predArea = -1;
   for (const p of pitches) if (pitchGroups[p] > predArea) { predArea = pitchGroups[p]; predominant = p; }
@@ -183,7 +201,7 @@ function summarize(fs, cs, es) {
   const twoStory = fs.filter((x) => x.f.twoStory).reduce((s, x) => s + x.m.sloped, 0);
   const twoLayer = fs.filter((x) => x.f.twoLayer).reduce((s, x) => s + x.m.sloped, 0);
   const wp = sloped > 0 ? fs.reduce((s, x) => s + x.m.sloped * x.f.pitch, 0) / sum(fs, 'sloped') : state.defaultPitch;
-  return { facets: fs, cutouts: cs, edges: es, plan, sloped, pitched: sloped - flat, flat, twoStory, twoLayer, byType, pitchGroups, pitches, predominant, predArea: Math.max(predArea, 0), facetCount: fs.length, weightedPitch: wp, areaByStatus, lineByStatus, unresolvedItems, complete: unresolvedItems === 0, squares: sloped / 100, squaresWaste: sloped / 100 * (1 + state.waste / 100) };
+  return { facets: fs, cutouts: cs, edges: es, plan, sloped, pitched: sloped - flat, flat, twoStory, twoLayer, byType, pitchGroups, pitches, predominant, predArea: Math.max(predArea, 0), facetCount: fs.length, weightedPitch: wp, areaByStatus, lineByStatus, unresolvedItems, complete: unresolvedItems === 0, confirmedSloped: areaByStatus.measured, inferredSloped: areaByStatus.inferred, obstructionFt: byType.obstruction.true, roofLineFt, squares: sloped / 100, squaresWaste: sloped / 100 * (1 + state.waste / 100) };
 }
 // Roofr-style recommended waste. Fitted to Roofr reports: cut edges (hips + valleys + rakes + step flashing) per square.
 // Matches Roofr on every structure checked: 6%, 7%, 10% (flat), 11%, 12% and 33%.
@@ -204,6 +222,11 @@ function computeTotals() {
   all.recWaste = roofrWaste(all);
   for (const g of groups) g.recWaste = roofrWaste(g);
   all.facetsAll = facetsAll;
+  // hidden zones (possible roof under canopy that nothing seen supports): never in the totals, reported as a range
+  const omitted = new Set(state.facets.filter((f) => f.omit).map((f) => f.structure || 1));
+  all.hiddenZones = state.trace && state.trace.hiddenZones ? state.trace.hiddenZones.filter((z) => !omitted.has(z.structure || 1)) : [];
+  all.hiddenUpperSloped = all.hiddenZones.reduce((a, z) => a + z.upperSqft, 0);
+  all.unresolvedItems += all.hiddenZones.length; all.complete = all.unresolvedItems === 0;
   return all;
 }
 
@@ -558,13 +581,13 @@ function facetStyle(f, selected) {
   if (f.omit) return { fillColor: '#888', fillOpacity: .08, strokeColor: '#bbb', strokeWeight: 1, strokeOpacity: .5 };
   if (f.excluded) return { fillColor: '#ffffff', fillOpacity: .35, strokeColor: selected ? '#ff7a00' : '#ffffff', strokeWeight: selected ? 3 : 2, strokeOpacity: .9 };
   const st = RM.statusOf(f);
-  return { fillColor: STATUS_COLOR[st] || FACET_COLOR, fillOpacity: st === 'measured' ? .22 : .3, strokeColor: selected ? '#ff7a00' : '#ffffff', strokeWeight: selected ? 3 : 2, strokeOpacity: 1 };
+  return { fillColor: STATUS_COLOR[st] || FACET_COLOR, fillOpacity: st === 'measured' ? .22 : .3, strokeColor: selected ? '#ff7a00' : '#ffffff', strokeWeight: selected ? 3 : (f.auto ? 1 : 2), strokeOpacity: selected ? 1 : (f.auto ? .35 : 1) };
 }
 function addFacet(path, pitch, name, flags = {}) {
   const id = nextId++;
   const f = { id, name: name || `F${state.facets.length + 1}`, pitch, twoStory: !!flags.twoStory, twoLayer: !!flags.twoLayer, excluded: !!flags.excluded, azimuth: flags.azimuth == null ? null : flags.azimuth,
-    status: flags.status || 'measured', level: flags.level || (flags.twoStory ? 2 : 1), slope: flags.slope == null ? null : flags.slope, rms: flags.rms == null ? null : flags.rms, auto: !!flags.auto, structure: flags.structure || null,
-    rangeSqft: flags.rangeSqft || null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', rawPath: flags.rawPath || null, inferredSqft: flags.inferredSqft || 0, omit: !!flags.omit, edited: !!flags.edited, plane: flags.plane || null, repaired: flags.repaired || 0 };
+    status: ['measured', 'inferred', 'unresolved'].includes(flags.status) ? flags.status : 'measured', level: flags.level || (flags.twoStory ? 2 : 1), slope: flags.slope == null ? null : +flags.slope, rms: flags.rms == null ? null : +flags.rms, auto: !!flags.auto, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null,
+    rangeSqft: flags.rangeSqft || null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', rawPath: flags.rawPath || null, inferredSqft: flags.inferredSqft || 0, omit: !!flags.omit, edited: !!flags.edited, plane: flags.plane || null, repaired: flags.repaired || 0, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, evidenceKind: flags.evidenceKind || null, altSqft: flags.altSqft || 0 };
   f.shape = new google.maps.Polygon({ map, paths: path, clickable: state.tool === 'select', zIndex: f.excluded ? 12 : 10, geodesic: false, ...facetStyle(f, false) });
   state.facets.push(f); attachShape(f, 'facet'); recompute();
   return f;
@@ -572,6 +595,8 @@ function addFacet(path, pitch, name, flags = {}) {
 function edgeStyle(e, selected) {
   const t = EDGE_TYPES[e.type]; const st = RM.statusOf(e); const w = selected ? 7 : 4;
   if (e.omit) return { strokeColor: '#bbb', strokeOpacity: .4, strokeWeight: 2, icons: [] };
+  // obstruction boundary: a gap in the roof outline. Only faint dots so it can still be clicked and re-typed once verified.
+  if (t.notRoof) return { strokeColor: t.color, strokeOpacity: 0, strokeWeight: selected ? 6 : 3, icons: [{ icon: { path: 'M 0,-0.3 0,0.3', strokeOpacity: selected ? 1 : .7, strokeColor: t.color, strokeWeight: 3, scale: 2 }, offset: '0', repeat: '14px' }] };
   // uncertain lines get their own style: inferred = long dashes in the type colour, unresolved = red dots
   if (st === 'unresolved') return { strokeColor: STATUS_COLOR.unresolved, strokeOpacity: 0, strokeWeight: w, icons: [{ icon: { path: 'M 0,-0.4 0,0.4', strokeOpacity: 1, strokeColor: STATUS_COLOR.unresolved, strokeWeight: 5, scale: 2.5 }, offset: '0', repeat: '9px' }] };
   if (st === 'inferred') return { strokeColor: t.color, strokeOpacity: 0, strokeWeight: w, icons: [{ icon: { path: 'M 0,-2 0,2', strokeOpacity: 1, strokeColor: t.color, strokeWeight: 4, scale: 2.5 }, offset: '0', repeat: '20px' }] };
@@ -582,7 +607,7 @@ function edgeStyle(e, selected) {
 function addEdge(type, path, pitch, name, flags = {}) {
   const id = nextId++;
   const e = { id, type, pitch: pitch == null ? null : pitch, name: name || '', status: flags.status || 'measured', factor: flags.factor == null ? null : flags.factor, basis: flags.basis || null, autoType: flags.autoType || null,
-    obscuredFt: flags.obscuredFt || 0, structure: flags.structure || null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', paired: flags.paired || null, omit: !!flags.omit };
+    obscuredFt: +flags.obscuredFt || 0, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', paired: flags.paired || null, omit: !!flags.omit, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, altFt: flags.altFt || 0 };
   e.shape = new google.maps.Polyline({ map, path, clickable: state.tool === 'select', zIndex: 20, ...edgeStyle(e, false) });
   state.edges.push(e); attachShape(e, 'edge'); recompute();
   return e;
@@ -613,7 +638,7 @@ function clearAll() {
   if (draft) cancelDraft();
   for (const f of state.facets) f.shape.setMap(null);
   for (const e of state.edges) e.shape.setMap(null);
-  state.facets = []; state.edges = []; state.selected = null; state.solar = null; state.otherSolar = []; state.trace = null; clearSolar();
+  state.facets = []; state.edges = []; state.selected = null; state.solar = null; state.otherSolar = []; state.trace = null; state.acceptedHidden = []; state.evidence = []; state.altFusion = null; state.altViews = []; clearSolar();
   $('#solarOut').innerHTML = ''; $('#jobName').value = ''; state.jobName = '';
   recompute();
 }
@@ -634,11 +659,13 @@ function baseLabels() {
   }
   for (const e of state.edges) {
     const m = edgeMetrics(e);
+    if (EDGE_TYPES[e.type].notRoof || e.omit) continue;
     for (let i = 1; i < m.path.length; i++) {
       const a = m.path[i - 1], b = m.path[i];
       items.push({ ...midpoint(a, b), cls: '', html: `<span style="color:${EDGE_TYPES[e.type].color}">&#9632;</span> ${ftIn(segFt(a, b) * m.factor)}` });
     }
   }
+  if (state.trace && state.trace.hiddenZones) for (const z of state.trace.hiddenZones) if (z.centre) items.push({ lat: z.centre.lat, lng: z.centre.lng, cls: 'facet cut', html: `${esc(z.id)} hidden<small>0 - ${fmt(z.upperSqft)} sf, not in totals</small>` });
   if (state.showSolar) {
     if (state.solar && state.solar.solarPotential) for (const s of state.solar.solarPotential.roofSegmentStats || []) {
       items.push({ lat: s.center.latitude, lng: s.center.longitude, cls: 'solar', html: `${pitchLabel(Math.round(degToPitch(s.pitchDegrees)))} &middot; ${fmt(s.stats.areaMeters2 * SQFT_PER_M2)} sf` });
@@ -706,7 +733,9 @@ function renderSelection() {
       <label style="display:block;margin-top:6px">Note (evidence, or what is missing) <input id="selNote" type="text" value="${esc(item.note || '')}" placeholder="shown in the report schedule"></label>
       ${item.evidence ? `<div class="muted small" style="margin-top:6px"><b>Evidence:</b> ${esc(item.evidence)}${item.rangeSqft ? ` Range ${fmt(item.rangeSqft[0])} to ${fmt(item.rangeSqft[1])} sf.` : ''}</div>` : ''}
       ${item.missing ? `<div class="small" style="margin-top:6px;color:#ffb4ae"><b>Unresolved:</b> ${esc(item.missing)}</div>` : ''}
+      ${selEvidenceButtons(item)}
       <div class="muted small" style="margin-top:6px">Plan ${fmt(m.plan)} sf &middot; slope factor ${fmt(m.factor, 3)} (${m.basis === 'fitted' ? `measured plane ${fmt(m.slope12, 1)}/12` : 'assigned pitch'}) &middot; <b>${fmt(m.sloped)} sf</b> ${item.excluded ? 'subtracted from the roof it sits on' : 'roof area'} &middot; perimeter ${fmt(m.perimeterFt, 1)} ft &middot; ${m.path.length} corners</div>`;
+    selEvidenceWire(item, 'facet');
     $('#selPitch').onchange = (e) => { item.pitch = +e.target.value; item.slope = null; item.edited = true; recompute(); };   // a hand-set pitch replaces the fitted slope
     $('#selStatus').onchange = (e) => { item.status = e.target.value; item.edited = true; item.shape.setOptions(facetStyle(item, true)); recompute(); };
     $('#selLevel').onchange = (e) => { item.level = +e.target.value; item.twoStory = item.level >= 2; recompute(); };
@@ -727,28 +756,49 @@ function renderSelection() {
       </div>
       ${item.evidence ? `<div class="muted small" style="margin-top:6px"><b>Evidence:</b> ${esc(item.evidence)}</div>` : ''}
       ${item.missing ? `<div class="small" style="margin-top:6px;color:#ffb4ae"><b>Unresolved:</b> ${esc(item.missing)}</div>` : ''}
+      ${selEvidenceButtons(item)}
       <div class="muted small" style="margin-top:6px">Plan ${fmt(m.planFt, 1)} ft &times; ${fmt(m.factor, 3)} = <b>${fmt(m.trueFt, 1)} ft</b> (${ftIn(m.trueFt)}) &middot; ${esc(m.lengthKind)} &middot; ${m.path.length - 1} segment${m.path.length === 2 ? '' : 's'}</div>`;
     $('#selStatus').onchange = (e) => { item.status = e.target.value; item.shape.setOptions(edgeStyle(item, true)); recompute(); };
     $('#selNote').onchange = (e) => { item.note = e.target.value.trim(); };
+    selEvidenceWire(item, 'edge');
     $('#selType').onchange = (e) => { item.type = e.target.value; item.shape.setOptions(edgeStyle(item, true)); recompute(); };
     $('#selPitch').onchange = (e) => { item.pitch = e.target.value === '' ? null : +e.target.value; recompute(); };
   }
   $('#selDel').onclick = () => removeItem(state.selected.kind, state.selected.id);
   const nameEl = $('#selName'); if (nameEl) nameEl.onchange = (e) => { item.name = e.target.value.trim() || item.name; recompute(); };
 }
+// evidence actions on the selected facet or line: confirm it on georeferenced imagery of another date, or mark it for
+// verification when another view shows it but cannot measure it
+function selEvidenceButtons(item) {
+  if (typeof reviewConfirm !== 'function') return '';
+  const st = RM.statusOf(item), av = typeof AV !== 'undefined' ? AV.active : null; const geo = av && av.georef && av.id !== 'solar';
+  return `<div class="row wrap" style="margin-top:8px;gap:6px">
+      ${st !== 'measured' ? `<button class="small" id="selConfirm" ${geo ? '' : 'disabled'} title="${geo ? 'Its position matches the roof edge in the imagery now shown on the map' : 'Show georeferenced overhead imagery of another date first (Review roof from other angles)'}">Confirm on ${geo ? esc(av.label) : 'other imagery'}</button>` : ''}
+      <button class="small ghost" id="selVerify" title="Another view shows this edge but cannot measure it reliably">${item.verify ? 'Marked for verification' : 'Mark for verification'}</button>
+    </div>${item.confirmedBy ? `<div class="muted small" style="margin-top:4px">Confirmed on ${esc(item.confirmedBy.source)}${item.confirmedBy.date ? ', ' + esc(item.confirmedBy.date) : ''}.</div>` : ''}`;
+}
+function selEvidenceWire(item, kind) {
+  const c = $('#selConfirm'), v = $('#selVerify'); const av = typeof AV !== 'undefined' ? AV.active : null;
+  if (c) c.onclick = () => { if (av) reviewConfirm(kind, item.id, av.label, av.date || '', ''); };
+  if (v) v.onclick = () => { if (item.verify) { item.verify = null; recompute(); return; } const src = av && av.id !== 'google' ? av.label : (typeof AV !== 'undefined' && AV.open3d ? 'Google 3D view (tilted)' : 'Another view'); reviewMarkVerify(kind, item.id, src, av && av.date ? av.date : '', ''); };
+}
 function renderSummary() {
   const t = computeTotals();
   const sOut = $('#summaryOut'), mOut = $('#materialsOut');
   if (!state.facets.length && !state.edges.length) { sOut.innerHTML = '<span class="muted">Trace facets and lines to see totals here.</span>'; mOut.innerHTML = ''; return; }
-  const rows = Object.entries(EDGE_TYPES).filter(([k]) => t.byType[k].count).map(([k, v]) => `<tr><td><span style="color:${v.color}">&#9632;</span> ${v.plural}</td><td class="num">${fmt(t.byType[k].plan, 1)}</td><td class="num"><b>${fmt(t.byType[k].true, 1)}</b></td></tr>`).join('');
-  const structRows = t.structures.length > 1 ? `<table style="margin-top:8px"><tr><th>Structure</th><th class="num">Facets</th><th class="num">Sq ft</th><th>Pitch</th></tr>${t.structures.map((s) => `<tr><td>Structure #${s.index}</td><td class="num">${s.facetCount}</td><td class="num">${fmt(s.sloped)}</td><td>${s.predominant == null ? '-' : pitchLabel(s.predominant)}</td></tr>`).join('')}</table>` : '';
+  const rows = Object.entries(EDGE_TYPES).filter(([k, v]) => t.byType[k].count && !v.notRoof).map(([k, v]) => `<tr><td><span style="color:${v.color}">&#9632;</span> ${v.plural}</td><td class="num">${fmt(t.byType[k].plan, 1)}</td><td class="num"><b>${fmt(t.byType[k].true, 1)}</b></td></tr>`).join('')
+    + (t.byType.obstruction.count ? `<tr><td colspan="2" class="muted"><span style="color:#ff3b30">&#9632;</span> Obstruction boundary (roof stops at canopy; in no total)</td><td class="num muted">${fmt(t.byType.obstruction.true, 1)}</td></tr>` : '');
+  // house and each detached structure get their own subtotals
+  const sName = (g) => (g.index === 1 ? 'House' : `Detached structure ${g.index - 1}`);
+  const structRows = t.structures.length > 1 ? `<table style="margin-top:8px"><tr><th>Structure</th><th class="num">Facets</th><th class="num">Confirmed sf</th><th class="num">+ inferred</th><th class="num">Eave+rake ft</th><th class="num">Ridge+hip ft</th></tr>${t.structures.map((g) => `<tr><td>${sName(g)}</td><td class="num">${g.facetCount}</td><td class="num">${fmt(g.areaByStatus.measured)}</td><td class="num">${fmt(g.areaByStatus.inferred)}</td><td class="num">${fmt(g.byType.eave.true + g.byType.rake.true)}</td><td class="num">${fmt(g.byType.ridge.true + g.byType.hip.true)}</td></tr>`).join('')}</table>` : '';
+  const hz = t.hiddenZones;
   sOut.innerHTML = `
     <div class="kpis">
-      <div class="kpi"><div class="v">${fmt(t.sloped)}</div><div class="l">roof sq ft</div></div>
-      <div class="kpi"><div class="v">${fmt(t.squares, 2)}</div><div class="l">squares</div></div>
-      <div class="kpi"><div class="v">${fmt(t.squaresWaste, 2)}</div><div class="l">sq with ${state.waste}% waste</div></div>
+      <div class="kpi"><div class="v">${fmt(t.confirmedSloped)}</div><div class="l">confirmed roof sq ft</div></div>
+      <div class="kpi"><div class="v" style="color:${t.inferredSloped > 0.5 ? '#ffb000' : 'inherit'}">${t.inferredSloped > 0.5 ? '+' + fmt(t.inferredSloped) : '0'}</div><div class="l">inferred (hidden, evidence-backed)</div></div>
+      <div class="kpi"><div class="v" style="color:${hz.length ? '#ff6b61' : 'inherit'}">${hz.length ? '0 - ' + fmt(t.hiddenUpperSloped) : 'none'}</div><div class="l">unresolved hidden sq ft</div></div>
     </div>
-    <div class="muted small">Footprint (plan) ${fmt(t.plan)} sf &middot; ${t.facetCount} facet${t.facetCount === 1 ? '' : 's'}${t.cutouts.length ? ` &middot; ${t.cutouts.length} excluded` : ''} &middot; ${t.structures.length} structure${t.structures.length === 1 ? '' : 's'} &middot; predominant pitch ${t.predominant == null ? '-' : pitchLabel(t.predominant)} &middot; recommended waste (Roofr method) <b>${t.recWaste}%</b>${t.flat ? ` &middot; flat ${fmt(t.flat)} sf` : ''}${t.twoStory ? ` &middot; two story ${fmt(t.twoStory)} sf` : ''}${t.twoLayer ? ` &middot; two layer ${fmt(t.twoLayer)} sf` : ''}</div>
+    <div class="muted small">Confirmed + inferred <b>${fmt(t.sloped)} sf</b> = ${fmt(t.squares, 2)} squares (${fmt(t.squaresWaste, 2)} with ${state.waste}% waste)${hz.length ? '; <b style="color:#ff6b61">hidden sections are not in this figure</b>' : ''} &middot; footprint (plan) ${fmt(t.plan)} sf &middot; ${t.facetCount} facet${t.facetCount === 1 ? '' : 's'}${t.cutouts.length ? ` &middot; ${t.cutouts.length} excluded` : ''} &middot; ${t.structures.length} structure${t.structures.length === 1 ? '' : 's'} &middot; predominant pitch ${t.predominant == null ? '-' : pitchLabel(t.predominant)} &middot; recommended waste (Roofr method) <b>${t.recWaste}%</b>${t.flat ? ` &middot; flat ${fmt(t.flat)} sf` : ''}${t.twoStory ? ` &middot; two story ${fmt(t.twoStory)} sf` : ''}${t.twoLayer ? ` &middot; two layer ${fmt(t.twoLayer)} sf` : ''}</div>
     ${structRows}
     ${rows ? `<table style="margin-top:8px"><tr><th>Line</th><th class="num">Plan ft</th><th class="num">Actual ft</th></tr>${rows}</table>` : ''}`;
   if (t.sloped > 0) {
@@ -763,9 +813,10 @@ function serialize() {
     app: 'roof-measure', version: 3, savedAt: new Date().toISOString(),
     jobName: state.jobName, address: state.address, location: state.location, defaultPitch: state.defaultPitch, waste: state.waste, mat: state.mat,
     facets: state.facets.map((f) => ({ name: f.name, pitch: f.pitch, twoStory: f.twoStory, twoLayer: f.twoLayer, excluded: f.excluded, azimuth: f.azimuth, path: pathToLiteral(f.shape),
-      status: RM.statusOf(f), level: f.level || 1, slope: f.slope, rms: f.rms, auto: f.auto, structure: f.structure, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, note: f.note, rawPath: f.rawPath, inferredSqft: f.inferredSqft, omit: f.omit, edited: f.edited, plane: f.plane, repaired: f.repaired })),
-    edges: state.edges.map((e) => ({ type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit })),
+      status: RM.statusOf(f), level: f.level || 1, slope: f.slope, rms: f.rms, auto: f.auto, structure: f.structure, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, note: f.note, rawPath: f.rawPath, inferredSqft: f.inferredSqft, omit: f.omit, edited: f.edited, plane: f.plane, repaired: f.repaired, verify: f.verify, confirmedBy: f.confirmedBy, evidenceKind: f.evidenceKind, altSqft: f.altSqft })),
+    edges: state.edges.map((e) => ({ type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit, verify: e.verify, confirmedBy: e.confirmedBy, altFt: e.altFt })),
     trace: state.trace,
+    acceptedHidden: state.acceptedHidden, evidence: state.evidence, altFusion: state.altFusion, altViews: state.altViews,
     solar: state.solar, otherSolar: state.otherSolar,
   };
 }
@@ -779,7 +830,7 @@ function restore(d) {
   if (d.mat) { Object.assign(state.mat, d.mat); for (const k of Object.keys(state.mat)) { const el = $('#m_' + k); if (el) el.value = state.mat[k]; } }
   for (const f of d.facets || []) addFacet(f.path, f.pitch, f.name, f);
   for (const e of d.edges || []) addEdge(EDGE_TYPES[e.type] ? e.type : 'unspecified', e.path, e.pitch, '', e);
-  state.solar = d.solar || null; state.otherSolar = d.otherSolar || []; state.trace = d.trace || null;
+  state.solar = d.solar || null; state.otherSolar = d.otherSolar || []; state.trace = d.trace || null; state.acceptedHidden = Array.isArray(d.acceptedHidden) ? d.acceptedHidden : []; state.evidence = Array.isArray(d.evidence) ? d.evidence : []; state.altFusion = d.altFusion || null; state.altViews = Array.isArray(d.altViews) ? d.altViews : [];
   drawSolar(); renderSolar(); $('#btnAuto').disabled = !state.solar;
   recompute();
   if (state.facets.length) { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 80); }
@@ -811,6 +862,7 @@ function download(name, text, type) {
 }
 function fileBase() { return ((state.jobName || state.address || 'roof').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_')) || 'roof'; }
 function exportCSV() {
+  if (typeof window.rmExportGate === 'function' && !window.rmExportGate()) return;
   const t = computeTotals();
   const L = [];
   L.push(['Roof Measure export', state.jobName, state.address, new Date().toLocaleString()].map(csv).join(','));
@@ -841,7 +893,8 @@ function wire() {
   const ps = $('#defaultPitch');
   ps.innerHTML = PITCH_OPTIONS.map((p) => `<option value="${p}" ${p === state.defaultPitch ? 'selected' : ''}>${pitchLabel(p)}</option>`).join('');
   ps.onchange = (e) => setDefaultPitch(+e.target.value);
-  $('#btnApplyPitch').onclick = () => { state.facets.forEach((f) => { f.pitch = state.defaultPitch; }); recompute(); };
+  // a pitch set by hand replaces the slope fitted from the height model (same as changing one facet's pitch)
+  $('#btnApplyPitch').onclick = () => { state.facets.forEach((f) => { f.pitch = state.defaultPitch; f.slope = null; f.edited = true; }); recompute(); };
 
   $('#apiKey').value = state.key;
   $('#btnSaveKey').onclick = () => {

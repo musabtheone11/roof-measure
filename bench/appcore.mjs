@@ -91,6 +91,7 @@ export async function runApp(prop, engineDir = ROOT, opt = {}) {
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(engineDir, f), 'utf8'), ctx, { filename: path.join(engineDir, f) });
   // the app keys its raster cache by building + radius; engines differ by a metre in how they round the radius
   const entry = { layers: prop.layers, maskT: prop.maskT, dsmT: prop.dsmT, rgbT: prop.rgbT }; ctx.__layerCache = {}; for (let d = -2; d <= 2; d++) ctx.__layerCache[prop.main.name + '|' + (prop.radius + d)] = entry;
+  if (opt.hook) opt.hook(ctx);          // debugging: wrap engine globals before the trace runs
   const t0 = Date.now();
   const info = await vm.runInContext('autoTraceRoof({ quiet: true' + (opt.plot ? ', plot: true' : '') + ' })', ctx);
   return { info, facets, edges, ms: Date.now() - t0, extra: ctx.state.traceExtra || ctx.__traceExtra || null, ctx };

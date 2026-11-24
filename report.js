@@ -116,6 +116,7 @@ function roofrDiagram(scope, mode, W, H, allShades) {
     const segKey = (A, B) => { const i = snapPts.indexOf(A), j = snapPts.indexOf(B); return i < j ? i + '-' + j : j + '-' + i; };
     const owner = new Map();
     scope.edges.forEach(({ e, m }, ei) => {
+      if (EDGE_TYPES[e.type].notRoof) return;                 // obstruction boundary: a gap in the outline
       const dashed = !!EDGE_TYPES[e.type].dashed;
       for (let i = 1; i < m.path.length; i++) {
         const A = P(m.path[i - 1]), B = P(m.path[i]); if (A === B) continue;
@@ -125,7 +126,7 @@ function roofrDiagram(scope, mode, W, H, allShades) {
     });
     const owns = (ei, a, b) => { const A = P(a), B = P(b); if (A === B) return false; const o = owner.get(segKey(A, B)); return !!o && o.ei === ei; };
     scope.edges.forEach(({ e, m }, ei) => {
-      const t = EDGE_TYPES[e.type];
+      const t = EDGE_TYPES[e.type]; if (t.notRoof) return;
       let run = [];
       const flush = () => { if (run.length > 1) s += `<polyline points="${run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="${t.color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="4" ${t.dashed ? 'stroke-dasharray="3 3"' : ''}/>`; run = []; };
       for (let i = 1; i < m.path.length; i++) {
@@ -157,7 +158,7 @@ function roofrDiagram(scope, mode, W, H, allShades) {
       s += label(a, b, segFt(a, b), '#888');
     }
   } else {
-    for (const { e, m } of scope.edges) s += `<polyline points="${ptsStr(m.path)}" fill="none" stroke="#4a9bd9" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4"/>`;
+    for (const { e, m } of scope.edges) if (!EDGE_TYPES[e.type].notRoof) s += `<polyline points="${ptsStr(m.path)}" fill="none" stroke="#4a9bd9" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4"/>`;
     for (const x of scope.facets) {
       const c = P(centroid(x.m.path));
       if (mode === 'areas') {
@@ -267,7 +268,7 @@ function diagramPage(R, n) {
 }
 function lengthPage(R, n) {
   const bt = R.t.byType;
-  const legend = `<div class="legend">${Object.entries(EDGE_TYPES).map(([k, v]) => `<span class="${v.dashed ? 'dashed' : ''}" style="--c:${v.color}">${v.plural}: ${ftInR(bt[k].true)}</span>`).join('')}</div>`;
+  const legend = `<div class="legend">${Object.entries(EDGE_TYPES).filter(([, v]) => !v.notRoof).map(([k, v]) => `<span class="${v.dashed ? 'dashed' : ''}" style="--c:${v.color}">${v.plural}: ${ftInR(bt[k].true)}</span>`).join('')}</div>`;
   return page(`${head(R, 'Length measurement report')}${legend}<div class="diagram">${roofrDiagram(R.t, 'lengths', 700, 640)}</div>
     <div class="note">Measurements in diagram are rounded up for display. Some edge lengths may be hidden from diagram to avoid overcrowding.</div>`, n);
 }
@@ -552,14 +553,16 @@ async function downloadPDF(what = "report") {
     try { await autoTraceRoof(); } catch (e) { toast('Auto-trace failed (' + e.message + '). Trace the roof by hand to get the diagram pages.', true); }
     return true;
   };
-  const run = (fn, btn) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace()) await fn(); } finally { b.disabled = false; } };
-  $('#btnReport').onclick = run(printReport, '#btnReport');
-  $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML');
+  const gateOk = () => { if (typeof reviewGate !== 'function' || reviewGate()) return true; toast('Export cancelled: see "5. Review before export"'); const p = $('#panelReview'); if (p) { p.open = true; p.scrollIntoView({ block: 'start' }); } return false; };
+  window.rmExportGate = gateOk;
+  const run = (fn, btn, gate) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace() && (!gate || gateOk())) await fn(); } finally { b.disabled = false; } };
+  $('#btnReport').onclick = run(printReport, '#btnReport', true);
+  $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML', true);
   // roof report PDFs are drawn as vectors with selectable text (roofpdf.js); the estimate-only PDF keeps its own layout.
   // Every export first passes the review gate, so incomplete totals are acknowledged, never exported silently.
   const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => {
     try {
-      if (what !== 'estimate' && typeof reviewGate === 'function' && !reviewGate()) { toast('Export cancelled: see "5. Review before export"'); const p = $('#panelReview'); if (p) { p.open = true; p.scrollIntoView({ block: 'start' }); } return; }
+      if (!gateOk()) return;                                   // the estimate is priced from the same totals, so it asks too
       if (what !== 'estimate' && typeof rpDownload === 'function' && state.facets.length) await rpDownload(what); else await downloadPDF(what);
     } catch (e) { console.error(e); toast('PDF failed: ' + e.message, true); } }, id); };
   pdfBtn('#btnReportPDF', 'report');

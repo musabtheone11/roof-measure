@@ -1,5 +1,6 @@
 // Headless address-to-PDF run through the real UI (same buttons a person clicks).
-//   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090]
+//   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090] [--alt]
+//   --alt also runs the reviewer's second look (3D views, dated imagery, configuration check, carry) and writes report-alt.pdf
 // Writes: map-clean.png, map-overlay.png, roof.json (Export JSON content), totals.json, report.pdf, console.log
 // The API key is read from the environment (Key or GOOGLE_MAPS_KEY) and is never written to disk.
 import fs from 'node:fs';
@@ -30,10 +31,11 @@ try {
   await page.locator('#map').screenshot({ path: path.join(out, 'map-clean.png') });
   await step('get roof data', async () => { await page.click('#btnSolar'); await page.waitForFunction(() => state.solar || /class="err"/.test(document.querySelector('#solarOut').innerHTML), null, { timeout: 30000 }); });
   await step('auto-trace', async () => { await page.click('#btnAuto'); await page.waitForFunction(() => state.facets.length > 0 && !document.querySelector('#btnAuto').disabled, null, { timeout: 180000 }); });
-  await page.evaluate(() => { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 60); });
+  await page.evaluate(() => { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); ((state.trace && state.trace.hiddenZones) || []).forEach((z) => z.path.forEach((p) => b.extend(p))); map.fitBounds(b, 60); });
   await page.waitForTimeout(5000);
   await page.locator('#map').screenshot({ path: path.join(out, 'map-overlay.png') });
-  const data = await page.evaluate(() => {
+  const snapshot = async (sfx) => {
+    const data = await page.evaluate(() => {
     const t = computeTotals(); const s = solarSummary();
     const byType = {}; for (const k of Object.keys(t.byType)) byType[k] = { planFt: t.byType[k].plan, trueFt: t.byType[k].true, count: t.byType[k].count };
     const audit = typeof window.rmAudit === 'function' ? window.rmAudit() : null;
@@ -41,16 +43,50 @@ try {
       facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch })) },
       solar: s ? { total: s.total, ground: s.ground, segs: s.segs.length, predominant: s.predominant, imageryDate: s.imageryDate, quality: s.quality } : null, audit };
   });
-  fs.writeFileSync(path.join(out, 'roof.json'), JSON.stringify(data.roof));
-  fs.writeFileSync(path.join(out, 'totals.json'), JSON.stringify({ address, ...data.totals, solar: data.solar, audit: data.audit }, null, 1));
-  await step('download PDF', async () => {
+    fs.writeFileSync(path.join(out, `roof${sfx}.json`), JSON.stringify(data.roof));
+    fs.writeFileSync(path.join(out, `totals${sfx}.json`), JSON.stringify({ address, ...data.totals, solar: data.solar, audit: data.audit }, null, 1));
+    return data;
+  };
+  const pdf = (name) => step('download PDF ' + name, async () => {
     const dl = page.waitForEvent('download', { timeout: 240000 }); dl.catch(() => {});
     await page.evaluate((id) => { const b = document.getElementById(id); for (let p = b; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; if (p.hidden) p.hidden = false; } b.scrollIntoView({ block: 'center' }); }, pdfWhat);
     if (process.argv.includes('--3d')) await page.evaluate(() => { const c = document.getElementById('chkPdf3d'); if (c) c.checked = true; });
     await page.click('#' + pdfWhat, { timeout: 15000 });
     const save = page.locator('#dlReadySave'); save.waitFor({ timeout: 240000 }).then(() => save.click()).catch(() => {});
-    const d = await dl; await d.saveAs(path.join(out, 'report.pdf'));
+    const d = await dl; await d.saveAs(path.join(out, name));
   });
+  const fit = async () => { await page.evaluate(() => { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); ((state.trace && state.trace.hiddenZones) || []).forEach((z) => z.path.forEach((p) => b.extend(p))); map.fitBounds(b, 60); }); await page.waitForTimeout(4000); };
+  let data = await snapshot('');
+  await pdf('report.pdf');
+  // --alt: the reviewer's second look, through the same controls a person uses (Review roof from other angles)
+  if (process.argv.includes('--alt')) {
+    const panel = page.locator('#avPanel'); const busy = () => page.waitForFunction(() => !window.rmAltView.state.busy, null, { timeout: 240000 });
+    await step('open "Review roof from other angles"', async () => { await page.evaluate(() => { const b = document.getElementById('btnAltView'); for (let p = b; p; p = p.parentElement) if (p.tagName === 'DETAILS') p.open = true; b.scrollIntoView({ block: 'center' }); }); await page.click('#btnAltView'); await panel.waitFor({ state: 'visible' }); });
+    const cov = await step('3D view + coverage check', async () => { await page.waitForFunction(() => { const a = window.rmAltView.state; return a.cov && !a.busy; }, null, { timeout: 240000 }); return page.evaluate(() => { const a = window.rmAltView.state; return { ok: a.cov.ok, why: a.cov.why, zones: a.cov.zones || [], ready: a.ready3d }; }); });
+    console.log('     3D: ' + JSON.stringify(cov));
+    if (cov.ready && cov.ok !== false) for (const v of ['top', 'n', 'e', 's', 'w']) await step('3D view ' + v, async () => { await page.click(`#avSide [data-view="${v}"]`); await page.waitForTimeout(v === 'top' ? 9000 : 16000); await panel.screenshot({ path: path.join(out, `alt-3d-${v}.png`) }); });
+    else await panel.screenshot({ path: path.join(out, 'alt-3d-unavailable.png') });
+    const tiers = await step('dated imagery list', async () => { await page.click('#avPanel [data-av="dated"]'); await page.waitForFunction(() => window.rmAltView.state.tiers && !window.rmAltView.state.busy, null, { timeout: 120000 }); await page.waitForTimeout(1500); await busy(); return page.evaluate(() => window.rmAltView.state.tiers.map((t) => ({ quality: t.quality, date: t.date, current: t.current, same: t.same, roofSqft: t.roofSqft }))); });
+    console.log('     tiers: ' + JSON.stringify(tiers)); fs.writeFileSync(path.join(out, 'alt-tiers.json'), JSON.stringify(tiers, null, 1));
+    await page.waitForTimeout(1500); await panel.screenshot({ path: path.join(out, 'alt-dated-swipe.png') });
+    if (await page.locator('#avProbe').count()) {
+      const chk = await step('roof configuration check', async () => { await page.click('#avProbe'); await page.waitForFunction(() => window.rmAltView.state.probe && !window.rmAltView.state.busy, null, { timeout: 240000 }); return page.evaluate(() => window.rmAltView.state.probe.check); });
+      console.log('     check: ' + JSON.stringify(chk)); fs.writeFileSync(path.join(out, 'alt-check.json'), JSON.stringify(chk, null, 1));
+      await panel.screenshot({ path: path.join(out, 'alt-dated-check.png') });
+      if (chk.ok) {
+        await step('carry edges into the sketch', async () => { await page.check('#avCfg'); await page.fill('#avNoteTxt', arg('altnote', 'same roof in both images; tree removed in the newer one')); await page.click('#avCarry'); await page.waitForFunction(() => state.trace && state.trace.alt && state.trace.alt.used && !window.rmAltView.state.busy, null, { timeout: 240000 }); });
+        await page.waitForTimeout(1000); await panel.screenshot({ path: path.join(out, 'alt-dated-after.png') });
+        await page.evaluate(() => { window.rmAltView.state.v.swipe = 0.04; }); await page.mouse.wheel(0, 0); await page.evaluate(() => avPaint()); await panel.screenshot({ path: path.join(out, 'alt-dated-after-newimage.png') });
+      }
+    }
+    // a third dated source: the newest public-domain USDA NAIP photo, compared by swipe (too coarse to measure on)
+    const naip = await page.evaluate(() => (window.rmAltView.state.naip || []).map((n) => ({ date: n.date, gsd: n.gsd })));
+    console.log('     NAIP flights: ' + JSON.stringify(naip)); fs.writeFileSync(path.join(out, 'alt-naip.json'), JSON.stringify(naip, null, 1));
+    if (naip.length) await step('compare newest USDA NAIP photo', async () => { await page.click('#avSide [data-src^="naip:"]'); await page.waitForFunction(() => { const a = window.rmAltView.state; return !a.busy && a.src[a.sel] && a.src[a.sel].naip; }, null, { timeout: 120000 }); await page.evaluate(() => { window.rmAltView.state.v.swipe = 0.5; avPaint(); }); await page.waitForTimeout(800); await panel.screenshot({ path: path.join(out, 'alt-dated-naip.png') }); });
+    await page.click('#avClose'); await fit();
+    await page.locator('#map').screenshot({ path: path.join(out, 'map-overlay-alt.png') });
+    data = await snapshot('-alt'); await pdf('report-alt.pdf');
+  }
   const t = data.totals; console.log(`${address}: ${Math.round(t.slopedSqft)} sqft, ${t.facetCount} facets, predominant ${t.predominant}/12, ${t.structures.length} structure(s)`);
 } catch (e) { code = 1; try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
 fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));

@@ -191,6 +191,7 @@
       <summary>5. Review before export</summary>
       <div class="body">
         <p class="muted" style="margin:0 0 8px">Compare the roofline with the photo. Click any facet or line to correct its corners, type, pitch, level or status; every total updates as you edit. The original auto-trace stays stored for audit.</p>
+        <button id="btnAltView" class="primary" style="width:100%;margin:0 0 8px" title="3D view from overhead, north, east, south and west with free orbit; dated aerial images; import of your own imagery">Review roof from other angles</button>
         <div id="reviewOut" class="out"><span class="muted">Trace a roof to see checks here.</span></div>
       </div>
     </details>
@@ -398,9 +399,24 @@
       <button id="btnFinish" class="tool" title="Finish shape (Enter)">Finish</button>
       <button id="btnUndo" class="tool" title="Undo last point (Backspace)">Undo pt</button>
       <button id="btnDelete" class="tool danger" title="Delete selected (Del)">Delete</button>
+      <span class="sep"></span>
+      <button id="btnAltViewTb" class="tool" title="Review roof from other angles: 3D views, dated imagery, import">Other angles</button>
     </div>
     <div id="hint"></div>
     <div id="crosshair" aria-hidden="true"></div>
+    <!-- Review roof from other angles: 3D views, dated imagery, imported imagery (altview.js) -->
+    <div id="avPanel" class="av" hidden>
+      <div class="av-head">
+        <strong>Review roof from other angles</strong>
+        <span class="av-tabs"><button data-av="3d" class="small">3D view</button><button data-av="dated" class="small">Dated imagery</button><button data-av="import" class="small">Import imagery</button></span>
+        <button id="avClose" class="small ghost">Close</button>
+      </div>
+      <div id="avBadge" class="av-badge"></div>
+      <div class="av-body">
+        <div id="avStage"><div id="av3d" hidden></div><div id="av2d" hidden><canvas id="avCanvas"></canvas></div><div id="avPhoto" hidden></div><div id="avVeil" hidden></div></div>
+        <div id="avSide"></div>
+      </div>
+    </div>
     <div id="nokey" class="overlay">
       <div class="card">
         <h2>Roof Measure</h2>
@@ -422,6 +438,7 @@
 <script src="obstruction.js"></script>
 <script src="report.js"></script>
 <script src="review.js"></script>
+<script src="altview.js"></script>
 <script src="roofpdf.js"></script>
 <script src="permits.js"></script>
 <script src="pin.js"></script>

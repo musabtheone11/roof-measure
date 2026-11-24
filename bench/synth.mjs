@@ -269,7 +269,7 @@ export function render(wings, r, opt = {}) {
   for (let i = 0; i < w * h; i++) {
     const n = (hsh(i, 1) - 0.5) * 24; let c;
     if (treePx[i]) c = [40 + hsh(i, 2) * 30, 78 + hsh(i, 3) * 40, 34 + hsh(i, 4) * 24];
-    else if (mask[i]) c = [118 + n, 116 + n, 124 + n];
+    else if (mask[i]) { const rc = opt.roofColor || [118, 116, 124]; c = [rc[0] + n, rc[1] + n, rc[2] + n]; }   // opt.roofColor: warm roofs (tan, olive, weathered wood) for colourtest.mjs
     else c = hsh(Math.floor((i % w) / 40) + 977 * Math.floor(i / w / 40), 5) < 0.6 ? [70 + n, 112 + n, 58 + n] : [150 + n, 148 + n, 144 + n];
     R[i] = Math.max(0, Math.min(255, c[0])); G[i] = Math.max(0, Math.min(255, c[1])); B[i] = Math.max(0, Math.min(255, c[2]));
   }

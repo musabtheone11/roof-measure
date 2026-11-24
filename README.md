@@ -38,11 +38,28 @@ Tested on 50 random Jacksonville houses; see `reports/_batch_results.json` for t
 
 **5. Review before export** (new panel). After a trace the panel shows what the totals are based on and lets you correct them on the photo:
 
-- **Status of every facet and line**: *Measured* (seen on the imagery), *Inferred* (hidden, placed from stated evidence, with a range) or *Unresolved* (hidden, no evidence). Inferred lines are drawn with long dashes, unresolved ones as red dots. Unresolved items are never reported as zero: they are listed, the totals are flagged as incomplete, and the export asks you to confirm.
-- **Tree canopy layer**: canopy is found from the height model plus the aerial colour layer (tall, rough, green) and is never traced as the roof edge. Each roof plane fitted to its visible part is continued under the canopy only down to that plane's own measured eave height (Inferred). Where the continued plane runs out of canopy before reaching its eave, the hidden edge is marked Unresolved with what would resolve it (leaf-off or oblique photo, drone photo, tape measurement). Trees near the roof and other structures are listed separately, with heights above the ground beside the house.
+- **Status of every facet and line**: *Measured* (confirmed: seen on georeferenced imagery), *Inferred* (hidden, placed from stated evidence, with a range; drawn dashed) or *Unresolved* (hidden, no evidence). Unresolved items are never reported as zero: they are listed, the totals are flagged, and every export (PDF, print, HTML, CSV, estimate) asks you to confirm.
+- **Tree canopy layer**: canopy is found from the height model plus the aerial colour layer (tall, rough, greener than this roof's own colour) and is never traced as the roof edge.
+  - Where the visible roof stops at the canopy, the outline is left **open**: that stretch is an *obstruction boundary*, not an eave or rake, and is counted in no line total.
+  - A roof plane is continued under the canopy only where something seen backs it: the same plane visible beyond the canopy, the opposite face of the same ridge, or Google's building outline, and only down to a measured eave height. That part is an *estimate* (Inferred) with a range.
+  - Everything else under the canopy is a **hidden zone**: hatched on the map and in the PDF, reported as "0 to N sq ft", and left out of every total until another source resolves it.
+  - Trees near the roof and other structures are listed separately, with heights above the ground beside the house. The house and each detached structure get their own subtotals.
 - **Geometry checks**: self-intersections, overlaps on the same roof level, doubled corners, near-miss joins, duplicate lines, tracing artifacts and outline with no line type. "Fix what can be fixed safely" joins corners and removes duplicates; overlaps and artifacts are left for you to decide. The raw auto-trace is kept (tick *Show raw trace*) and is saved in the JSON export for audit.
 - **Corrections**: click a facet or line to move corners, change type, pitch, roof level and status, or add a note. Untick a structure to leave it out. Every total recalculates.
 - **Imagery age**: Google's height model can be years old; the panel and the report say so when it is over 3 years.
+
+**Review roof from other angles** (button at the top of the review panel, and *Other angles* on the map toolbar). Opens a panel centred on the selected building with three tabs. Every source is shown with its name and date.
+
+- **3D view**: Google's photorealistic 3D model where it exists: *Overhead*, *From north / east / south / west* and free orbit. Use the tilted views to look for hidden eaves, corners and roof levels; the traced roofline is drawn on the model. It is a viewing aid: the model is too coarse to measure on, Google publishes no capture date for it and does not allow tracing from it. An edge you can see there but cannot measure gets *Mark edge for verification* (click the edge), which flags it in the review panel and the PDF. Where there is no 3D model the panel says so.
+- **Dated imagery**: lists every dated image of the building it can find and lets you swipe each against the image the trace was made from:
+  - *Google Solar datasets*: Google keeps one per quality tier, often flown years apart. A second dataset has its own height model. **Check roof configuration** compares it with the roof the trace image sees clearly (heights after removing the offset and tilt between the two models, outline, roof height above the ground). Only if that passes, and you tick that it is the same roof, **Carry edges into the sketch** re-traces using the second dataset for the canopy-covered part. Facets and lines taken from it are tagged with the source and date; the PDF lists them by line type and prints the check.
+  - *USDA NAIP aerial photos* (public domain, every 2 to 3 years, 30 to 100 cm per pixel): enough to see whether a tree is gone and what the roof looks like, too coarse to place an edge, so they are comparison-only. A nudge control lines the photo up with the trace image.
+  - Click a line to *Confirm on this image* (only on a height-model dataset or an image of 20 cm per pixel or finer) or *Mark for verification*; click a hatched zone to carry it in as an estimate when the other image shows the same roof there.
+- **Import imagery**: your own authorised imagery. A georeferenced GeoTIFF (drone orthomosaic, licensed export; WGS84, UTM or Web Mercator) is compared like dated imagery. A plain JPG / PNG (oblique or drone photo) is a viewing aid: what it shows can be marked for verification, not measured.
+
+Lengths and areas only ever come from georeferenced overhead imagery or a height model. The PDF's *Other views & evidence* page lists the views checked, what each one resolved, what is still open, and the reviewer log.
+
+Licence notes for the owner: Google's terms restrict tracing from its map imagery and limit Solar API use to certain purposes; Esri's dated imagery (Wayback) needs an ArcGIS subscription and was left out for that reason. Check that the company's Google agreement covers roof measurement before relying on this commercially.
 
 **Measurement rules** (one module, `roofmodel.js`, used by the screen, the PDF and the benchmark):
 
@@ -52,7 +69,7 @@ Tested on 50 random Jacksonville houses; see `reports/_batch_results.json` for t
 - Totals are sums of unrounded values; waste and order quantities are shown separately from the net area; the report prints its own reconciliation checks.
 - Distances use the WGS84 ellipsoid at the roof's latitude (the old spherical formula read north-south distances 0.4% long).
 
-**Download PDF report** now draws the report directly as vectors with selectable text: summary, aerial with roofline, to-scale roof plan (north arrow, scale bar), length / area / pitch diagrams with the same facet IDs, enlarged length-diagram windows for busy roofs, facet schedule, line schedule (every line keyed to the diagram), trees and obstructions, totals with counting rules and reconciliation, optional 3D view and material quantities. *Print* and *Download report* (HTML) keep the earlier layout.
+**Download PDF report** now draws the report directly as vectors with selectable text. The summary states the **confirmed sloped area first**, then any supported estimate for hidden roof with its evidence and range, and says the full roof area is unresolved when hidden zones remain. The aerial overlay and every plan use the same geometry and facet IDs (obstruction boundaries appear as gaps, hidden zones as hatching). Pages: summary, aerial with roofline, to-scale roof plan (north arrow, scale bar), length / area / pitch diagrams with the same facet IDs, enlarged length-diagram windows for busy roofs, facet schedule, line schedule (every line keyed to the diagram), trees and obstructions, other views and evidence, totals with subtotals by structure, counting rules and reconciliation, optional 3D view and material quantities. *Print* and *Download report* (HTML) keep the earlier layout.
 
 ## Commercial tab (flat / low-slope roofs)
 
@@ -113,7 +130,7 @@ Roof age counts from the issue date of the newest roofing permit. If no roofing 
 - **Flat roofs.** Use pitch 0 (Flat). Flat area is reported separately and excluded from shingle quantities.
 - **Line types** cover every Roofr category: eave, valley, hip, ridge, rake, wall flashing, step flashing, transition, parapet wall and unspecified. Hips, valleys and rakes take the pitch of the facet they run along; override per line if needed.
 
-**Company details** (name, phone, email, website, license, office address) are under *5. Report, save & export > Company details*. They are saved in the browser. The *Prepared by (rep)* field prints on the cover.
+**Company details** (name, phone, email, website, license, office address) are under *6. Report, save & export > Company details*. They are saved in the browser. The *Prepared by (rep)* field prints on the cover.
 
 A sample report is in `reports/Sample Roof Report.html`.
 
@@ -167,6 +184,7 @@ Check pitch with the **Street View** and **Google Earth 3D** links in the Proper
 - `report.js` - Roofr-format HTML report, company details, brand material catalog
 - `roofpdf.js` - the vector PDF report (Diversity Contracting header, schedules, diagrams)
 - `review.js` - "Review before export" panel, status and obstruction overlays, export gate
+- `altview.js` - "Review roof from other angles": 3D views, dated imagery (Google Solar tiers, USDA NAIP), imported imagery, second-dataset check
 - `autotrace.js`, `autotrace2.js` - automatic roof tracing from Google's roof height model
 - `obstruction.js` - tree canopy / nearby structure layer and inference of roof hidden under canopy
 - `bench/` - synthetic and real-house accuracy benchmarks (see `bench/README.md`, `bench/REAL_RESULTS.md`)

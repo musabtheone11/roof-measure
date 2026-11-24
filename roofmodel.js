@@ -113,18 +113,24 @@ var RM = (function () {
     // duplicate lines: same category on the same stretch
     { const seg = []; L.forEach((e, i) => { const r = Q[i]; for (let k = 1; k < r.length; k++) seg.push({ i, type: e.type, a: r[k - 1], b: r[k] }); });
       const seen = new Set();
-      for (let p = 0; p < seg.length; p++) for (let q = p + 1; q < seg.length; q++) { const s = seg[p], t = seg[q]; if (s.i === t.i || s.type !== t.type) continue;
+      const len = (g) => Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]);
+      for (let p = 0; p < seg.length; p++) for (let q = p + 1; q < seg.length; q++) { if (seg[p].i === seg[q].i || seg[p].type !== seg[q].type) continue;
+        // the longer piece is the base, so the result does not depend on drawing order; the overlap is the shared interval
+        // of the two pieces along it (a partial overlap counts, not only one piece lying wholly on the other)
+        const s = len(seg[p]) >= len(seg[q]) ? seg[p] : seg[q], t = s === seg[p] ? seg[q] : seg[p];
         const d = [s.b[0] - s.a[0], s.b[1] - s.a[1]]; const Ls = Math.hypot(d[0], d[1]); if (Ls < 0.05) continue;
-        if (pointSeg(t.a, s.a, s.b) > 0.25 || pointSeg(t.b, s.a, s.b) > 0.25) continue;
+        const off = (pt) => Math.abs((pt[0] - s.a[0]) * d[1] - (pt[1] - s.a[1]) * d[0]) / Ls; if (off(t.a) > 0.25 || off(t.b) > 0.25) continue;
         const u0 = ((t.a[0] - s.a[0]) * d[0] + (t.a[1] - s.a[1]) * d[1]) / Ls, u1 = ((t.b[0] - s.a[0]) * d[0] + (t.b[1] - s.a[1]) * d[1]) / Ls; const ov = Math.min(Ls, Math.max(u0, u1)) - Math.max(0, Math.min(u0, u1));
-        if (ov * FT >= o.dupFt) { const key = s.i + ',' + t.i; if (seen.has(key)) continue; seen.add(key); push('error', 'duplicate-line', `Two ${s.type} lines lie on the same ${(ov * FT).toFixed(0)} ft stretch (counted twice)`, { line: s.i, line2: t.i, dupFt: ov * FT, at: fr.ll([(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2]), fixable: true }); } } }
+        if (ov * FT >= o.dupFt) { const key = Math.min(s.i, t.i) + ',' + Math.max(s.i, t.i); if (seen.has(key)) continue; seen.add(key); push('error', 'duplicate-line', `Two ${s.type} lines lie on the same ${(ov * FT).toFixed(0)} ft stretch (counted twice)`, { line: s.i, line2: t.i, dupFt: ov * FT, at: fr.ll([(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2]), fixable: true }); } } }
     // lines that are not on any facet boundary, and facet outline that no line classifies
     let unclassified = 0;
     if (F.length) {
       L.forEach((e, i) => { const r = Q[i]; const mid = [(r[0][0] + r[r.length - 1][0]) / 2, (r[0][1] + r[r.length - 1][1]) / 2]; let best = Infinity; for (const fr2 of P) for (let k = 0; k < fr2.length; k++) { const d = pointSeg(mid, fr2[k], fr2[(k + 1) % fr2.length]); if (d < best) best = d; } if (best > 1.2 && lineLen(r) * FT > 3) push('info', 'floating-line', `A ${e.type} line (${(lineLen(r) * FT).toFixed(0)} ft) is not on any facet edge`, { line: i, at: e.path[0] }); });
       F.forEach((f, i) => { if (f.excluded) return; const r = P[i]; for (let k = 0; k < r.length; k++) { const a = r[k], b = r[(k + 1) % r.length]; const Ls = Math.hypot(b[0] - a[0], b[1] - a[1]); const n = Math.max(1, Math.round(Ls / 0.3));
-        for (let s = 0; s < n; s++) { const p = [a[0] + (b[0] - a[0]) * (s + 0.5) / n, a[1] + (b[1] - a[1]) * (s + 0.5) / n]; let cov = false; for (const q of Q) { for (let m = 1; m < q.length && !cov; m++) if (pointSeg(p, q[m - 1], q[m]) < o.coverM) cov = true; if (cov) break; } if (!cov) unclassified += Ls / n; } } });
-      // interior boundaries are walked from both facets: halve what two facets share. Good enough for a flag.
+        for (let s = 0; s < n; s++) { const p = [a[0] + (b[0] - a[0]) * (s + 0.5) / n, a[1] + (b[1] - a[1]) * (s + 0.5) / n]; let cov = false; for (const q of Q) { for (let m = 1; m < q.length && !cov; m++) if (pointSeg(p, q[m - 1], q[m]) < o.coverM) cov = true; if (cov) break; }
+          // a stretch shared with an earlier facet was already counted when that facet was walked
+          if (!cov) for (let j = 0; j < i && !cov; j++) { if (F[j].excluded) continue; const r2 = P[j]; for (let m = 0; m < r2.length && !cov; m++) if (pointSeg(p, r2[m], r2[(m + 1) % r2.length]) < 0.05) cov = true; }
+          if (!cov) unclassified += Ls / n; } } });
       if (unclassified * FT > 2) push('warn', 'unclassified-boundary', `${(unclassified * FT).toFixed(0)} ft of facet outline has no line type (not counted in any category; this is "not classified", not "none")`, { unclassifiedFt: unclassified * FT });
     }
     return { issues, unclassifiedFt: unclassified * FT, ok: !issues.some((x) => x.severity === 'error') };
@@ -138,13 +144,16 @@ var RM = (function () {
     P = P.map((r, i) => { const o = []; for (const p of r) { const q = o[o.length - 1]; if (q && Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.03) continue; o.push(p); } while (o.length > 3 && Math.hypot(o[0][0] - o[o.length - 1][0], o[0][1] - o[o.length - 1][1]) < 0.03) o.pop(); if (o.length !== r.length) log.push(`${facets[i].name}: removed ${r.length - o.length} doubled corner(s)`); return o; });
     // 2. corners within 30 cm of each other become one shared corner (cluster to the first one seen)
     { const pts = []; let moved = 0; const snap = (p) => { for (const s of pts) if (Math.hypot(s[0] - p[0], s[1] - p[1]) < 0.3) { if (s[0] !== p[0] || s[1] !== p[1]) moved++; return s; } pts.push(p); return p; };
-      P = P.map((r) => r.map(snap)); for (let i = 0; i < Q.length; i++) Q[i] = Q[i].map(snap);
+      const ring = (r) => { const used = new Set(); return r.map((p) => { const s = snap(p); if (s !== p && used.has(s)) return p; used.add(s); return s; }); };   // never two corners of one shape onto one point
+      P = P.map(ring); for (let i = 0; i < Q.length; i++) Q[i] = ring(Q[i]);
       if (moved) log.push(`Joined ${moved} near-miss corner(s) to their neighbour (moved less than 12 in.)`); }
     // 3. duplicate lines of the same type on the same stretch: keep the longer one
     const drop = new Set();
     for (let i = 0; i < Q.length; i++) for (let j = i + 1; j < Q.length; j++) {
       if (drop.has(i) || drop.has(j) || lines[i].type !== lines[j].type) continue; const a = Q[i], b = Q[j];
-      const inside = (r, s) => r.every((p) => { for (let k = 1; k < s.length; k++) if (pointSeg(p, s[k - 1], s[k]) < 0.25) return true; return false; });
+      // every part of r, not only its corner points, must lie on s (a line across a V of two others touches them only at its ends)
+      const on = (p, s) => { for (let k = 1; k < s.length; k++) if (pointSeg(p, s[k - 1], s[k]) < 0.25) return true; return false; };
+      const inside = (r, s) => { for (let k = 1; k < r.length; k++) for (const t of [0, 0.25, 0.5, 0.75, 1]) if (!on([r[k - 1][0] + (r[k][0] - r[k - 1][0]) * t, r[k - 1][1] + (r[k][1] - r[k - 1][1]) * t], s)) return false; return r.length > 1; };
       if (inside(b, a)) { drop.add(j); log.push(`Removed a duplicate ${lines[j].type} line (${(lineLen(b) * FT).toFixed(0)} ft) lying on another one`); } else if (inside(a, b)) { drop.add(i); log.push(`Removed a duplicate ${lines[i].type} line (${(lineLen(a) * FT).toFixed(0)} ft) lying on another one`); }
     }
     return { facets: P.map((r) => ({ path: r.map(fr.ll) })), lines: Q.map((r, i) => (drop.has(i) ? null : { path: r.map(fr.ll) })), log };
@@ -167,6 +176,17 @@ var RM = (function () {
     return { checks, ok: checks.every((c) => c.ok) };
   }
 
-  return { SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
+  // hatch lines for a polygon (unresolved zones): segments of parallel lines at `angleDeg`, `spacing` apart, clipped to the ring
+  function hatch(ring, spacing, angleDeg) {
+    const a = (angleDeg == null ? 45 : angleDeg) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a); const out = [];
+    const R = ring.map((p) => [p[0] * ca + p[1] * sa, -p[0] * sa + p[1] * ca]);           // rotate so hatch lines are horizontal
+    let y0 = Infinity, y1 = -Infinity; for (const p of R) { if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+    for (let y = y0 + spacing / 2; y < y1; y += spacing) { const xs = [];
+      for (let i = 0; i < R.length; i++) { const p = R[i], q = R[(i + 1) % R.length]; if ((p[1] > y) !== (q[1] > y)) xs.push(p[0] + (y - p[1]) * (q[0] - p[0]) / (q[1] - p[1])); }
+      xs.sort((p, q) => p - q);
+      for (let i = 0; i + 1 < xs.length; i += 2) out.push([[xs[i] * ca - y * sa, xs[i] * sa + y * ca], [xs[i + 1] * ca - y * sa, xs[i + 1] * sa + y * ca]]); }
+    return out;
+  }
+  return { hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = RM;

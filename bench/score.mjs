@@ -17,6 +17,7 @@ export function summarizeEngine(res, defaultPitch = 6, exact = false) {
   for (const f of facets) { const a = f.plan * (exact && f.slope != null ? Math.sqrt(1 + f.slope * f.slope) : pitchFactor(f.pitch)); sloped += a; pitchAreas[f.pitch] = (pitchAreas[f.pitch] || 0) + a; }
   const byType = {}; for (const t of TYPES) byType[t] = 0;
   for (const e of res.edges) {
+    if (e.type === 'obstruction') continue;                      // not a roof edge: counted in no category
     const L = e.line; let plan = 0; for (let i = 1; i < L.length; i++) plan += Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]);
     const mid = [(L[0][0] + L[1][0]) / 2, (L[0][1] + L[1][1]) / 2];
     let best = null, bd = 0.6;

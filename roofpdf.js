@@ -17,6 +17,7 @@ const RP = {
     transition: { c: [200, 80, 200], w: 1.3, dash: [6, 2, 1, 2] }, parapet: { c: [150, 110, 40], w: 1.5, dash: [1, 1.5] }, unspecified: { c: [80, 170, 220], w: 1.2, dash: [2, 2] },
   },
   STATUS_FILL: { measured: [232, 238, 247], inferred: [252, 240, 200], unresolved: [252, 222, 218] },
+  HATCH: [205, 50, 40], EST: [176, 120, 0], WARN: [190, 30, 20],
 };
 const rpFtIn = (ft) => { let f = Math.floor(ft + 1e-9), i = Math.round((ft - f) * 12); if (i === 12) { f += 1; i = 0; } return `${f}' ${i}"`; };
 const rpNum = (v, d = 0) => (Math.round(v * 10 ** d) / 10 ** d).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -25,43 +26,68 @@ const rpCap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 // ------------------------------------------------------------------ model: everything the pages draw, computed once
 function rpModel() {
   const t = computeTotals(); const rv = typeof reviewState === 'function' ? reviewState() : null; const tr = state.trace;
-  const paths = [...t.facetsAll.map((x) => x.m.path), ...t.edges.map((x) => x.m.path)];
+  const paths = [...t.facetsAll.map((x) => x.m.path), ...t.edges.map((x) => x.m.path), ...(t.hiddenZones || []).map((z) => z.path)];
   const fr = RM.frame(paths); if (!fr) return null;
   const ft = (v) => { const p = fr.xy(v); return [p[0] * RM.FT, p[1] * RM.FT]; };
   const facets = t.facetsAll.map((x) => ({ id: x.f.name, f: x.f, m: x.m, xy: x.m.path.map(ft), status: RM.statusOf(x.f), structure: structureOf(t, x.f.id) }));
-  const lines = t.edges.map((x, i) => ({ id: 'L' + (i + 1), n: i + 1, e: x.e, m: x.m, xy: x.m.path.map(ft), status: RM.statusOf(x.e), type: x.e.type }));
+  // roof lines carry key numbers and are counted; an obstruction boundary (visible roof stops at tree canopy) is neither
+  const lines = t.edges.filter((x) => !EDGE_TYPES[x.e.type].notRoof).map((x, i) => ({ id: 'L' + (i + 1), n: i + 1, e: x.e, m: x.m, xy: x.m.path.map(ft), status: RM.statusOf(x.e), type: x.e.type }));
+  const obLines = t.edges.filter((x) => EDGE_TYPES[x.e.type].notRoof).map((x, i) => ({ id: 'OB' + (i + 1), e: x.e, m: x.m, xy: x.m.path.map(ft) }));
+  // hidden zones: possible roof under canopy that nothing seen supports. Hatched, labelled H1.., never in a total
+  const zones = (t.hiddenZones || []).map((z) => { const F = facets.find((q) => q.id === z.facetName); return { ...z, xy: z.path.map(ft), group: F ? F.structure : null }; });
   // which facets each line borders (for the schedule)
-  for (const L of lines) { const mid = [(L.xy[0][0] + L.xy[L.xy.length - 1][0]) / 2, (L.xy[0][1] + L.xy[L.xy.length - 1][1]) / 2]; const a = L.xy[0], b = L.xy[1]; const m2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  for (const L of [...lines, ...obLines]) { const mid = [(L.xy[0][0] + L.xy[L.xy.length - 1][0]) / 2, (L.xy[0][1] + L.xy[L.xy.length - 1][1]) / 2]; const a = L.xy[0], b = L.xy[1]; const m2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     L.facets = facets.filter((F) => !F.f.excluded && F.xy.some((p, k) => RM.pointSeg(m2, p, F.xy[(k + 1) % F.xy.length]) < 1.6 || RM.pointSeg(mid, p, F.xy[(k + 1) % F.xy.length]) < 1.6)).map((F) => F.id).slice(0, 3); }
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const g of [...facets, ...lines]) for (const p of g.xy) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+  for (const g of [...facets, ...lines, ...obLines, ...zones]) for (const p of g.xy) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
   const ob = tr && tr.obstruction ? { ...tr.obstruction, trees: tr.obstruction.trees.map((o) => ({ ...o, xy: o.path.map(ft) })), structures: tr.obstruction.structures.map((o) => ({ ...o, xy: o.path.map(ft) })) } : null;
   const d = tr && tr.imageryDate ? tr.imageryDate : (state.solar && state.solar.imageryDate) || null;
   const imagery = { date: d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : null, quality: (tr && tr.imageryQuality) || (state.solar && state.solar.imageryQuality) || null, source: tr ? 'Google Solar API (aerial photo, building mask and 10 cm height model)' : 'Google satellite imagery (traced by hand)' };
-  return { t, rv, tr, fr, ft, facets, lines, box: [x0, y0, x1, y1], ob, imagery, address: state.address || '', job: state.jobName || '', auto: !!tr, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) };
+  // area, in the order the report states it: confirmed first, then the supported estimate for hidden roof, then what is unresolved
+  const ab = t.areaByStatus; let estLo = 0, estHi = 0, ranged = true;
+  for (const F of facets) { if (F.f.excluded || F.status !== 'inferred') continue; const full = F.m.sloped; const inf = F.f.inferredSqft > 0 && F.f.inferredSqft < full && !F.f.edited ? F.f.inferredSqft : full; const r = F.f.rangeSqft;
+    // the range is stated around the area this report prints for the facet (its outline), never around another figure
+    if (r && !F.f.edited) { const dd = Math.min(inf, (r[1] - r[0]) / 2); estLo += inf - dd; estHi += inf + dd; F.range = [full - dd, full + dd]; } else { estLo += inf; estHi += inf; ranged = false; } }
+  const area = { confirmed: ab.measured, estimate: ab.inferred, estLo, estHi, ranged, unresolvedTraced: ab.unresolved, zoneUpper: t.hiddenUpperSloped || 0, zoneCount: zones.length, altSqft: facets.reduce((a, F) => a + (F.f.excluded ? 0 : (F.f.altSqft || 0)), 0), obstructionFt: t.obstructionFt || 0 };
+  area.fullKnown = !zones.length && ab.unresolved < 0.5;
+  // outline located on the softer second image: about 1 ft of uncertainty per foot of eave or rake taken from it
+  area.altEdgeFt = lines.filter((L) => L.e.confirmedBy && (L.type === 'eave' || L.type === 'rake') && !L.e.paired).reduce((a, L) => a + L.m.planFt, 0); area.altRange = area.altEdgeFt * 1.0 * 1.05;
+  // subtotals by structure: the house and each detached structure are never merged silently
+  const structs = t.structures.map((g) => { const b = g.byType, zs = zones.filter((z) => z.group === g.index);
+    return { index: g.index, name: g.index === 1 ? 'House' : 'Detached structure ' + (g.index - 1), facets: g.facetCount, confirmed: g.confirmedSloped, estimate: g.inferredSloped, unresolved: g.areaByStatus.unresolved, zones: zs.length, zoneUpper: zs.reduce((a, z) => a + z.upperSqft, 0), eave: b.eave.true, rake: b.rake.true, ridge: b.ridge.true, hip: b.hip.true, valley: b.valley.true, flashing: b.step.true + b.wall.true, obstruction: b.obstruction ? b.obstruction.true : 0, pitch: g.predominant }; });
+  const alt = tr && tr.alt && tr.alt.used ? tr.alt : null;
+  return { t, rv, tr, fr, ft, facets, lines, obLines, zones, area, structs, alt, views: (state.altViews || []).slice(), evidence: (state.evidence || []).slice(), box: [x0, y0, x1, y1], ob, imagery, address: state.address || '', job: state.jobName || '', auto: !!tr, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) };
 }
 
 // ------------------------------------------------------------------ aerial photo, north up, with a known lat/lng -> pixel mapping
+function rpAerialFrom(M, rgb, credit) {
+  const padFt = 22; const [x0, y0, x1, y1] = M.box;
+  if (!rgb || !rgb.bands) return null;
+  const { w, h } = rgb; const o = rgb.toLL(0, 0), ex = rgb.toLL(w, 0), ey = rgb.toLL(0, h);
+  const ax = (ex.lng - o.lng) / w, ay = (ex.lat - o.lat) / w, bx = (ey.lng - o.lng) / h, by = (ey.lat - o.lat) / h, det = ax * by - bx * ay;
+  const toPx = (v) => { const dl = v.lng - o.lng, da = v.lat - o.lat; return [(dl * by - bx * da) / det, (ax * da - ay * dl) / det]; };
+  const pxPerFt = 1 / (Math.abs(rgb.rx) * RM.FT);
+  const cs = [[x0 - padFt, y0 - padFt], [x1 + padFt, y1 + padFt], [x0 - padFt, y1 + padFt], [x1 + padFt, y0 - padFt]].map((p) => toPx(M.fr.ll([p[0] / RM.FT, p[1] / RM.FT])));
+  const cx0 = Math.max(0, Math.floor(Math.min(...cs.map((p) => p[0])))), cx1 = Math.min(w, Math.ceil(Math.max(...cs.map((p) => p[0])))), cy0 = Math.max(0, Math.floor(Math.min(...cs.map((p) => p[1])))), cy1 = Math.min(h, Math.ceil(Math.max(...cs.map((p) => p[1]))));
+  const cw = cx1 - cx0, ch = cy1 - cy0; if (cw <= 20 || ch <= 20) return null;
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; const g = cv.getContext('2d'); const im = g.createImageData(cw, ch);
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) { const i = (cy0 + y) * w + cx0 + x, j = (y * cw + x) * 4; im.data[j] = rgb.bands[0][i]; im.data[j + 1] = rgb.bands[1][i]; im.data[j + 2] = rgb.bands[2][i]; im.data[j + 3] = 255; }
+  g.putImageData(im, 0, 0);
+  // each photo needs its own name in the PDF: jsPDF reuses the first picture stored under a name
+  rpAerialFrom.n = (rpAerialFrom.n || 0) + 1;
+  return { src: cv.toDataURL('image/jpeg', 0.9), alias: 'aerial' + rpAerialFrom.n, w: cw, h: ch, toPx: (v) => { const p = toPx(v); return [p[0] - cx0, p[1] - cy0]; }, pxPerFt, credit };
+}
+// the second dated photo, when the reviewer used one: same grid family, so the same roofline can be drawn on it
+function rpAerialAlt(M) {
+  try { if (!M.alt) return null; const cache = window.__altCache || {}; const key = Object.keys(cache).find((k) => k.startsWith(String(M.alt.quality) + '|')); const rgb = key && cache[key].rgbT;
+    return rpAerialFrom(M, rgb, 'Aerial photo: ' + M.alt.label + '. North up.'); } catch (e) { console.warn('alternate aerial unavailable', e); return null; }
+}
 async function rpAerial(M) {
-  const padFt = 22; const [x0, y0, x1, y1] = M.box; const c = M.fr.ll([((x0 + x1) / 2) / RM.FT, ((y0 + y1) / 2) / RM.FT]);
+  const [x0, y0, x1, y1] = M.box; const c = M.fr.ll([((x0 + x1) / 2) / RM.FT, ((y0 + y1) / 2) / RM.FT]);
   // 1. the Solar aerial layer of the same flight as the height model (exactly registered to the trace)
   try {
-    const cache = window.__layerCache || {}; const key = Object.keys(cache).find((k) => state.solar && k.startsWith(state.solar.name + '|')); const rgb = key && cache[key].rgbT;
-    if (rgb && rgb.bands) {
-      const { w, h } = rgb; const o = rgb.toLL(0, 0), ex = rgb.toLL(w, 0), ey = rgb.toLL(0, h);
-      const ax = (ex.lng - o.lng) / w, ay = (ex.lat - o.lat) / w, bx = (ey.lng - o.lng) / h, by = (ey.lat - o.lat) / h, det = ax * by - bx * ay;
-      const toPx = (v) => { const dl = v.lng - o.lng, da = v.lat - o.lat; return [(dl * by - bx * da) / det, (ax * da - ay * dl) / det]; };
-      const pxPerFt = 1 / (Math.abs(rgb.rx) * RM.FT);
-      const cs = [[x0 - padFt, y0 - padFt], [x1 + padFt, y1 + padFt], [x0 - padFt, y1 + padFt], [x1 + padFt, y0 - padFt]].map((p) => toPx(M.fr.ll([p[0] / RM.FT, p[1] / RM.FT])));
-      const cx0 = Math.max(0, Math.floor(Math.min(...cs.map((p) => p[0])))), cx1 = Math.min(w, Math.ceil(Math.max(...cs.map((p) => p[0])))), cy0 = Math.max(0, Math.floor(Math.min(...cs.map((p) => p[1])))), cy1 = Math.min(h, Math.ceil(Math.max(...cs.map((p) => p[1]))));
-      const cw = cx1 - cx0, ch = cy1 - cy0;
-      if (cw > 20 && ch > 20) {
-        const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; const g = cv.getContext('2d'); const im = g.createImageData(cw, ch);
-        for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) { const i = (cy0 + y) * w + cx0 + x, j = (y * cw + x) * 4; im.data[j] = rgb.bands[0][i]; im.data[j + 1] = rgb.bands[1][i]; im.data[j + 2] = rgb.bands[2][i]; im.data[j + 3] = 255; }
-        g.putImageData(im, 0, 0);
-        return { src: cv.toDataURL('image/jpeg', 0.9), w: cw, h: ch, toPx: (v) => { const p = toPx(v); return [p[0] - cx0, p[1] - cy0]; }, pxPerFt, credit: 'Aerial photo: Google Solar API' + (M.imagery.date ? ', flown ' + M.imagery.date : '') + '. North up.' };
-      }
-    }
+    const cache = window.__layerCache || {}; const keys = Object.keys(cache).filter((k) => state.solar && k.startsWith(state.solar.name + '|')); const key = keys[keys.length - 1]; const rgb = key && cache[key].rgbT;
+    const A = rpAerialFrom(M, rgb, 'Aerial photo: Google Solar API' + (M.imagery.date ? ', flown ' + M.imagery.date : '') + '. North up.'); if (A) return A;
   } catch (e) { console.warn('aerial layer unavailable', e); }
   // 2. Google Static Maps (Web Mercator, north up)
   if (!state.key) return null;
@@ -92,7 +118,7 @@ function rpRotText(doc, s, x, y, deg, size, color, bold) {
   doc.text(s, x - ca * w / 2 + sa * up, y + sa * w / 2 + ca * up, { angle: deg });
   return w;
 }
-function rpPoly(doc, pts, style) { if (pts.length < 2) return; const d = []; for (let i = 1; i < pts.length; i++) d.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]); doc.lines(d, pts[0][0], pts[0][1], [1, 1], style, style !== 'S' || false); }
+function rpPoly(doc, pts, style) { if (pts.length < 2) return; const d = []; for (let i = 1; i < pts.length; i++) d.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]); doc.lines(d, pts[0][0], pts[0][1], [1, 1], style, true); }   // a polygon: always closed (open lines use rpPolyline)
 function rpPolyline(doc, pts) { const d = []; for (let i = 1; i < pts.length; i++) d.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]); doc.lines(d, pts[0][0], pts[0][1], [1, 1], 'S', false); }
 function rpLineStyle(doc, type, status, k = 1) {
   const s = RP.LINE[type] || RP.LINE.unspecified;
@@ -170,8 +196,10 @@ function rpLegend(doc, M, x, y, w, withStatus) {
   const used = Object.keys(RP.LINE).filter((k) => M.t.byType[k] && M.t.byType[k].count); let cx = x, cy = y; const colW = 96;
   for (const k of used) { if (cx + colW > x + w + 1) { cx = x; cy += 11; } rpLineStyle(doc, k, 'measured'); doc.line(cx, cy - 2.5, cx + 20, cy - 2.5); rpText(doc, EDGE_TYPES[k].plural, cx + 24, cy, { size: 7, color: RP.INK }); cx += colW; }
   if (withStatus) { cy += 11; cx = x;
-    doc.setLineDashPattern([7, 3], 0); rpColor(doc, 'draw', RP.MUTE); doc.setLineWidth(1.4); doc.line(cx, cy - 2.5, cx + 20, cy - 2.5); rpText(doc, 'Inferred (position from evidence, not seen)', cx + 24, cy, { size: 7 }); if (w < 330) { cy += 11; } else cx += 190;
-    rpLineStyle(doc, 'eave', 'unresolved'); doc.line(cx, cy - 2.5, cx + 20, cy - 2.5); rpText(doc, 'Unresolved (not confirmed)', cx + 24, cy, { size: 7 }); }
+    doc.setLineDashPattern([7, 3], 0); rpColor(doc, 'draw', RP.MUTE); doc.setLineWidth(1.4); doc.line(cx, cy - 2.5, cx + 20, cy - 2.5); rpText(doc, 'Dashed = inferred (hidden; placed from stated evidence)', cx + 24, cy, { size: 7 }); if (w < 440) { cy += 11; } else cx += 232;
+    rpLineStyle(doc, 'eave', 'unresolved'); doc.line(cx, cy - 2.5, cx + 20, cy - 2.5); rpText(doc, 'Dotted red = marked unresolved', cx + 24, cy, { size: 7 });
+    if (M.zones.length || M.obLines.length) { cy += 11; cx = x; doc.setLineDashPattern([], 0); rpColor(doc, 'draw', RP.HATCH); doc.setLineWidth(0.55); for (let k = 0; k < 5; k++) doc.line(cx + k * 4, cy, cx + k * 4 + 5, cy - 6);
+      rpText(doc, 'Hatched = hidden zone under tree canopy: not in any total. Gap in the outline = visible roof stops at the canopy (not a roof edge).', cx + 28, cy, { size: 7, maxWidth: w - 28 }); if (w < 440) cy += 9; } }
   doc.setLineDashPattern([], 0); return cy + 6;
 }
 // draw the roof on a page. mode: 'plan' | 'lengths' | 'areas' | 'pitch' | 'trees'
@@ -185,8 +213,9 @@ function rpDrawRoof(doc, M, V, mode) {
     const pts = F.xy.map(P);
     if (F.f.excluded) { rpColor(doc, 'fill', [255, 255, 255]); rpColor(doc, 'draw', RP.MUTE); doc.setLineWidth(0.6); doc.setLineDashPattern([2, 2], 0); rpPoly(doc, pts, 'FD'); doc.setLineDashPattern([], 0); continue; }
     const fill = mode === 'pitch' ? shades[(rank[F.f.pitch] || 0) % shades.length] : mode === 'lengths' ? [250, 251, 253] : RP.STATUS_FILL[F.status];
-    rpColor(doc, 'fill', fill); rpColor(doc, 'draw', [150, 165, 185]); doc.setLineWidth(0.5); rpPoly(doc, pts, 'FD');
+    rpColor(doc, 'fill', fill); rpPoly(doc, pts, 'F'); rpColor(doc, 'draw', [150, 165, 185]); doc.setLineWidth(0.5); doc.setLineDashPattern([], 0); rpRingGap(doc, F.xy, M.obLines, P);
   }
+  rpDrawZones(doc, M, P, { spacingFt: Math.max(1.6, 4.2 / V.k) });
   // lines: on every page the same colours and dash patterns; thinner where the page is about areas or pitches
   const k = mode === 'lengths' || mode === 'plan' ? 1 : 0.6;
   // a height break is two lines on one plan line: offset the lower (flashing) one a hair so both stay visible
@@ -226,7 +255,26 @@ function rpDrawRoof(doc, M, V, mode) {
       if (mode === 'pitch' && F.f.pitch > 0 && F.f.azimuth != null && room > 30) { const a = F.f.azimuth * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a); const x1 = c[0] + dx * 11, y1 = c[1] + 3 + dy * 11, x2 = c[0] + dx * 21, y2 = c[1] + 3 + dy * 21; rpColor(doc, 'draw', RP.NAVY); rpColor(doc, 'fill', RP.NAVY); doc.setLineWidth(0.8); doc.line(x1, y1, x2, y2); const an = Math.atan2(dy, dx); doc.triangle(x2 + Math.cos(an) * 3, y2 + Math.sin(an) * 3, x2 + Math.cos(an + 2.5) * 3.5, y2 + Math.sin(an + 2.5) * 3.5, x2 + Math.cos(an - 2.5) * 3.5, y2 + Math.sin(an - 2.5) * 3.5, 'F'); }
     }
   }
+  rpZoneLabels(doc, M, P, mode === 'lengths' ? 'id' : 'range', inWin);
   if (V.ftBox) rpUnclip(doc);
+  return mode === 'lengths' ? M.lines.filter((L) => L.shown === false).map((L) => L.n) : [];
+}
+// facet outline with a real gap wherever it runs along an obstruction boundary (ring and lines in feet; P maps to the page)
+function rpRingGap(doc, ring, obLines, P) {
+  const onOb = (p) => obLines.some((L) => { for (let i = 1; i < L.xy.length; i++) if (RM.pointSeg(p, L.xy[i - 1], L.xy[i]) < 0.9) return true; return false; });
+  let run = []; const flush = () => { if (run.length > 1) rpPolyline(doc, run.map(P)); run = []; };
+  for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length];
+    if (obLines.length && onOb(a) && onOb(b) && onOb([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2])) { flush(); continue; }
+    if (!run.length) run.push(a); run.push(b); }
+  flush();
+}
+function rpDrawZones(doc, M, P, o = {}) {
+  if (!M.zones.length) return; rpColor(doc, 'draw', o.color || RP.HATCH); doc.setLineWidth(o.w || 0.55); doc.setLineDashPattern([], 0);
+  for (const Z of M.zones) for (const s of RM.hatch(Z.xy, o.spacingFt || 2.2, 45)) { const a = P(s[0]), b = P(s[1]); doc.line(a[0], a[1], b[0], b[1]); }
+}
+function rpZoneLabels(doc, M, P, kind, inWin) {
+  for (const Z of M.zones) { const c = P(rpLabelPoint(Z.xy).p); if (inWin && !inWin(c)) continue; const txt = kind === 'id' ? Z.id : `${Z.id}: 0-${rpNum(Z.upperSqft)} sf?`;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.2); const tw = doc.getTextWidth(txt); rpColor(doc, 'fill', [255, 255, 255]); rpColor(doc, 'draw', RP.HATCH); doc.setLineWidth(0.6); doc.setLineDashPattern([], 0); doc.roundedRect(c[0] - tw / 2 - 3, c[1] - 5.2, tw + 6, 9, 2, 2, 'FD'); rpText(doc, txt, c[0], c[1] + 1.4, { size: 6.2, bold: true, color: RP.WARN, align: 'center' }); }
 }
 function rpDrawObstruction(doc, M, mapPt, withLabels) {
   if (!M.ob) return;
@@ -240,15 +288,18 @@ function rpDrawObstruction(doc, M, mapPt, withLabels) {
 function rpDrawAerial(doc, M, A, box, o = {}) {
   if (!A) { rpColor(doc, 'fill', RP.PALE); doc.rect(box.x, box.y, box.w, box.h, 'F'); rpText(doc, 'Aerial photo unavailable', box.x + box.w / 2, box.y + box.h / 2, { size: 9, color: RP.MUTE, align: 'center' }); return null; }
   const k = Math.min(box.w / A.w, box.h / A.h); const w = A.w * k, h = A.h * k, x = box.x + (box.w - w) / 2, y = box.y + (box.h - h) / 2;
-  doc.addImage(A.src, 'JPEG', x, y, w, h, 'aerial', 'FAST');
+  doc.addImage(A.src, 'JPEG', x, y, w, h, A.alias || 'aerial', 'FAST');
   const mp = (v) => { const p = A.toPx(v); return [x + p[0] * k, y + p[1] * k]; }; const fromFt = (p) => mp(M.fr.ll([p[0] / RM.FT, p[1] / RM.FT]));
   rpClip(doc, x, y, w, h);
   if (o.obstruction) rpDrawObstruction(doc, M, fromFt, o.labels);
-  for (const F of M.facets) { if (F.f.excluded) continue; rpColor(doc, 'draw', [255, 255, 255]); doc.setLineWidth(0.5); doc.setLineDashPattern([], 0); rpPoly(doc, F.m.path.map(mp), 'S'); }
+  for (const F of M.facets) { if (F.f.excluded) continue; rpColor(doc, 'draw', [255, 255, 255]); doc.setLineWidth(0.5); doc.setLineDashPattern([], 0); rpRingGap(doc, F.xy, M.obLines, fromFt); }
+  rpDrawZones(doc, M, fromFt, { spacingFt: Math.max(1.6, 4.2 / (A.pxPerFt * k)), color: [255, 70, 50], w: 0.7 });
   for (const L of M.lines) { rpLineStyle(doc, L.type, L.status, o.thin ? 0.75 : 1.05); rpPolyline(doc, L.m.path.map(mp)); }
   doc.setLineDashPattern([], 0); rpUnclip(doc);
   if (o.ids) for (const F of M.facets) { if (F.f.excluded) continue; const c = fromFt(rpLabelPoint(F.xy).p); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.2); const tw = doc.getTextWidth(F.id); rpColor(doc, 'fill', RP.NAVY); doc.roundedRect(c[0] - tw / 2 - 2, c[1] - 4.2, tw + 4, 8, 1.5, 1.5, 'F'); rpText(doc, F.id, c[0], c[1] + 2.1, { size: 6.2, bold: true, color: [255, 255, 255], align: 'center' }); }
-  rpColor(doc, 'draw', RP.NAVY); doc.setLineWidth(0.8); doc.rect(x, y, w, h, 'S');
+  if (o.ids || o.zones) rpZoneLabels(doc, M, fromFt, o.ids ? 'range' : 'id');
+  if (o.caption) { doc.setFont('helvetica', 'bold'); doc.setFontSize(7); const cw2 = doc.getTextWidth(o.caption); rpColor(doc, 'fill', RP.NAVY); doc.rect(x, y, cw2 + 10, 12, 'F'); rpText(doc, o.caption, x + 5, y + 8.6, { size: 7, bold: true, color: [255, 255, 255] }); }
+  rpColor(doc, 'draw', RP.NAVY); doc.setLineWidth(0.8); doc.setLineDashPattern([], 0); doc.rect(x, y, w, h, 'S');
   // north arrow + scale bar on the photo
   const ftLen = [10, 20, 25, 40, 50, 100].reduce((b, s) => (Math.abs(s * A.pxPerFt * k - 70) < Math.abs(b * A.pxPerFt * k - 70) ? s : b), 10); const bl = ftLen * A.pxPerFt * k;
   rpColor(doc, 'fill', [255, 255, 255]); doc.roundedRect(x + 6, y + h - 22, bl + 46, 16, 2, 2, 'F'); rpColor(doc, 'fill', RP.NAVY); doc.rect(x + 12, y + h - 13, bl, 2.5, 'F'); rpText(doc, ftLen + ' ft', x + 16 + bl, y + h - 10, { size: 6.5, color: RP.NAVY });
@@ -278,52 +329,72 @@ function rpLogo(doc, x, y, h, color, full) {
 }
 
 // ------------------------------------------------------------------ pages
-function rpKpi(doc, x, y, w, h, value, label, warn) { rpColor(doc, 'fill', RP.PALE); doc.roundedRect(x, y, w, h, 3, 3, 'F'); rpColor(doc, 'fill', warn ? [220, 40, 30] : RP.GOLD); doc.rect(x, y, 3, h, 'F'); rpText(doc, value, x + 11, y + h / 2 + 2, { size: 15, bold: true, color: warn ? [190, 30, 20] : RP.NAVY }); rpText(doc, label, x + 11, y + h - 7, { size: 7, color: RP.MUTE }); }
+function rpKpi(doc, x, y, w, h, value, label, warn, accent) { rpColor(doc, 'fill', RP.PALE); doc.roundedRect(x, y, w, h, 3, 3, 'F'); rpColor(doc, 'fill', warn ? [220, 40, 30] : (accent || RP.GOLD)); doc.rect(x, y, 3, h, 'F'); rpText(doc, value, x + 11, y + h / 2 + 2, { size: h < 40 ? 13 : 15, bold: true, color: warn ? [190, 30, 20] : (accent || RP.NAVY) }); rpText(doc, label, x + 11, y + h - 7, { size: 7, color: RP.MUTE }); }
+const rpSrc = (c) => (!c ? '' : typeof c === 'string' ? c : [c.source, c.date].filter(Boolean).join(', '));
+function rpStructTable(doc, M, x, y, W, o = {}) {
+  const S = M.structs; const tot = (k) => S.reduce((a, q) => a + q[k], 0); const n1 = (v) => rpNum(v, 1);
+  const row = (q, bold) => ({ cells: [q.name, q.facets, rpNum(q.confirmed), q.estimate > 0.5 ? '+ ' + rpNum(q.estimate) : '-', q.zones ? '0-' + rpNum(q.zoneUpper) : '-', n1(q.eave), n1(q.rake), n1(q.ridge), n1(q.hip), n1(q.valley), n1(q.flashing)], bold });
+  const rows = S.map((q) => row(q, false)); if (S.length > 1) rows.push(row({ name: 'All structures', facets: tot('facets'), confirmed: tot('confirmed'), estimate: tot('estimate'), zones: tot('zones'), zoneUpper: tot('zoneUpper'), eave: tot('eave'), rake: tot('rake'), ridge: tot('ridge'), hip: tot('hip'), valley: tot('valley'), flashing: tot('flashing') }, true));
+  const cw = (W - 118 - 36) / 9;
+  return rpTable(doc, x, y, [{ t: 'Structure', w: 118 }, { t: 'Facets', w: 36, a: 'r' }, { t: 'Confirmed sf', w: cw, a: 'r' }, { t: 'Estimate sf', w: cw, a: 'r' }, { t: 'Hidden sf', w: cw, a: 'r' }, { t: 'Eaves ft', w: cw, a: 'r' }, { t: 'Rakes ft', w: cw, a: 'r' }, { t: 'Ridges ft', w: cw, a: 'r' }, { t: 'Hips ft', w: cw, a: 'r' }, { t: 'Valleys ft', w: cw, a: 'r' }, { t: 'Flashing ft', w: cw, a: 'r' }], rows, { size: o.size || 7.2 });
+}
 function rpPageSummary(doc, M, A) {
-  const t = M.t, x = RP.M, W = RP.W - 2 * RP.M; let y = 80;
-  const incomplete = M.rv && (M.rv.unresolved.length > 0);
-  // left: aerial with roofline. right: headline numbers
-  const ph = { x, y, w: 322, h: 262 }; rpDrawAerial(doc, M, A, ph, { thin: true });
+  const t = M.t, R = M.area, x = RP.M, W = RP.W - 2 * RP.M; let y = 80;
+  // left: aerial with the roofline. right: the area, confirmed first
+  const ph = { x, y, w: 322, h: 262 }; rpDrawAerial(doc, M, A, ph, { thin: true, zones: true });
   rpText(doc, A ? A.credit : '', x, y + ph.h + 10, { size: 6.5, color: RP.MUTE });
-  const rx = x + 336, rw = W - 336; const kh = 44;
-  rpKpi(doc, rx, y, rw, kh, rpNum(t.sloped) + ' sq ft', 'Net roof area (sloped surface, no waste)' + (incomplete ? ' - INCOMPLETE' : ''), incomplete);
-  rpKpi(doc, rx, y + kh + 6, (rw - 6) / 2, kh, t.predominant == null ? '-' : t.predominant === 0 ? 'Flat' : t.predominant + '/12', 'Predominant pitch');
-  rpKpi(doc, rx + (rw - 6) / 2 + 6, y + kh + 6, (rw - 6) / 2, kh, String(t.facetCount), 'Roof facets');
-  rpKpi(doc, rx, y + 2 * (kh + 6), (rw - 6) / 2, kh, rpNum(t.sloped / 100, 2), 'Squares (net)');
-  rpKpi(doc, rx + (rw - 6) / 2 + 6, y + 2 * (kh + 6), (rw - 6) / 2, kh, rpNum(t.plan), 'Plan area, sq ft');
-  let yy = y + 3 * (kh + 6) + 10; yy = rpSection(doc, 'Property & imagery', rx, yy, rw);
+  const rx = x + 336, rw = W - 336, half = (rw - 6) / 2; let ky = y;
+  const kh = (R.estimate > 0.5 ? 1 : 0) + (R.fullKnown ? 0 : 1) === 2 ? 38 : 44, k2 = 36;
+  rpKpi(doc, rx, ky, rw, kh, rpNum(R.confirmed) + ' sq ft', 'Confirmed roof area (sloped, measured, no waste)'); ky += kh + 5;
+  if (R.estimate > 0.5) { rpKpi(doc, rx, ky, rw, kh, '+ ' + rpNum(R.estimate) + ' sq ft', 'Estimate for hidden roof' + (R.ranged ? `, range ${rpNum(R.estLo)}-${rpNum(R.estHi)}` : ' (no range available)'), false, RP.EST); ky += kh + 5; }
+  if (!R.fullKnown) { rpKpi(doc, rx, ky, rw, kh, 'Unresolved', R.zoneCount ? `Full roof area: ${R.zoneCount} hidden zone${R.zoneCount > 1 ? 's' : ''}, 0-${rpNum(R.zoneUpper)} sq ft` : `Full roof area: ${rpNum(R.unresolvedTraced)} sq ft not confirmed`, true); ky += kh + 5; }
+  rpKpi(doc, rx, ky, half, k2, t.predominant == null ? '-' : t.predominant === 0 ? 'Flat' : t.predominant + '/12', 'Predominant pitch');
+  rpKpi(doc, rx + half + 6, ky, half, k2, String(t.facetCount), 'Roof facets'); ky += k2 + 5;
+  rpKpi(doc, rx, ky, half, k2, rpNum(t.sloped / 100, 2), R.estimate > 0.5 ? 'Squares (confirmed + est.)' : 'Squares (net)');
+  rpKpi(doc, rx + half + 6, ky, half, k2, rpNum(t.plan), 'Plan area, sq ft'); ky += k2 + 5;
+  let yy = ky + 8; yy = rpSection(doc, 'Property & imagery', rx, yy, rw);
   const kv = (k, v) => { rpText(doc, k, rx, yy, { size: 7.5, color: RP.MUTE }); yy = rpText(doc, v, rx + 62, yy, { size: 7.5, maxWidth: rw - 62 }); yy += 1; };
   kv('Property', M.address || '-'); if (M.job) kv('Job', M.job);
   const ageY = M.imagery.date ? (Date.now() - new Date(M.imagery.date + 'T00:00:00').getTime()) / 3.15576e10 : null;
-  kv('Image date', M.imagery.date ? M.imagery.date + (ageY > 3 ? ` (${rpNum(ageY, 1)} years old: changes to the roof since then are not shown)` : '') : 'not reported by the source'); kv('Image source', M.imagery.source + (M.imagery.quality ? ' - ' + String(M.imagery.quality).toLowerCase() + ' quality' : ''));
-  kv('Structures', String(t.structures.length) + (t.structures.length > 1 ? ' (each summarised in the facet schedule)' : ''));
+  kv('Image date', M.imagery.date ? M.imagery.date + (ageY > 3 ? ` (${rpNum(ageY, 1)} years old: later changes to the roof are not shown)` : '') : 'not reported by the source'); kv('Image source', M.imagery.source + (M.imagery.quality ? ' - ' + String(M.imagery.quality).toLowerCase() + ' quality' : ''));
+  if (M.alt) kv('Also used', `${M.alt.label}: ${rpNum(R.altSqft)} sq ft that the first image has under tree canopy`);
+  kv('Structures', M.structs.map((q) => q.name).join(', '));
   kv('Method', M.auto ? 'Automatic trace of the height model, reviewed on the photo' + (M.facets.some((F) => F.f.edited) ? ', edited by hand' : '') : 'Hand trace on the satellite photo');
   y = Math.max(y + ph.h + 24, yy + 6);
-  // status strip
-  y = rpSection(doc, 'What these totals are based on', x, y, W);
-  const ab = t.areaByStatus, gross = ab.measured + ab.inferred + ab.unresolved || 1;
-  const bar = (label, v, col, bx, bw) => { rpColor(doc, 'fill', col); doc.rect(bx, y, bw, 9, 'F'); };
-  let bx = x; for (const [k, col] of [['measured', [70, 120, 180]], ['inferred', [230, 180, 40]], ['unresolved', [220, 60, 50]]]) { const bw = W * ab[k] / gross; if (bw > 0.3) bar(k, ab[k], col, bx, bw); bx += bw; }
-  y += 20;
-  const col3 = W / 3; [['Measured', ab.measured, 'seen and measured on the imagery'], ['Inferred', ab.inferred, 'hidden; position from stated evidence'], ['Unresolved', ab.unresolved, 'hidden; no evidence - not confirmed']].forEach(([k, v, d], i) => { rpText(doc, `${k}: ${rpNum(v)} sq ft (${rpNum(v / gross * 100, 1)}%)`, x + i * col3, y, { size: 8.5, bold: true, color: i === 2 && v > 0 ? [190, 30, 20] : RP.INK }); rpText(doc, d, x + i * col3, y + 10, { size: 7, color: RP.MUTE }); });
-  y += 26;
+  // what the area is based on
+  y = rpSection(doc, 'What the area is based on', x, y, W);
+  const gross = R.confirmed + R.estimate + R.unresolvedTraced + R.zoneUpper || 1; let bx = x;
+  for (const [v, col] of [[R.confirmed, [70, 120, 180]], [R.estimate, [230, 180, 40]], [R.unresolvedTraced, [220, 60, 50]], [R.zoneUpper, null]]) { const bw = W * v / gross; if (bw > 0.3) { if (col) { rpColor(doc, 'fill', col); doc.rect(bx, y, bw, 9, 'F'); } else { rpClip(doc, bx, y, bw, 9); rpColor(doc, 'draw', RP.HATCH); doc.setLineWidth(0.5); doc.setLineDashPattern([], 0); for (let q = bx - 10; q < bx + bw; q += 4) doc.line(q, y + 9, q + 9, y); rpUnclip(doc); rpColor(doc, 'draw', RP.HATCH); doc.rect(bx, y, bw, 9, 'S'); } } bx += bw; }
+  y += 20; const col3 = W / 3;
+  const c3 = [['Confirmed: ' + rpNum(R.confirmed) + ' sq ft', 'seen and measured on the imagery' + (R.altSqft > 0.5 ? `; ${rpNum(R.altSqft)} sq ft of it on the second, softer image (+/- ${rpNum(R.altRange)} sq ft)` : ''), RP.INK],
+    [R.estimate > 0.5 ? 'Estimate: + ' + rpNum(R.estimate) + ' sq ft' : 'Estimate for hidden roof: none', R.estimate > 0.5 ? 'hidden by canopy; evidence listed below' + (R.ranged ? `; range ${rpNum(R.estLo)}-${rpNum(R.estHi)}` : '') : 'no roof area was placed from evidence alone', R.estimate > 0.5 ? RP.EST : RP.INK],
+    [R.fullKnown ? 'Unresolved: none' : R.zoneCount ? `Unresolved: 0 to ${rpNum(R.zoneUpper)} sq ft` : `Unresolved: ${rpNum(R.unresolvedTraced)} sq ft`, R.fullKnown ? 'no hidden zones' : R.zoneCount ? 'hidden zones (hatched): no evidence; in no total' : 'traced but not confirmed', R.fullKnown ? RP.INK : RP.WARN]];
+  c3.forEach(([k, d, col], i) => { rpText(doc, k, x + i * col3, y, { size: 8.5, bold: true, color: col }); rpText(doc, d, x + i * col3, y + 10, { size: 6.8, color: RP.MUTE, maxWidth: col3 - 8 }); });
+  y += 30;
+  const ids = M.zones.map((z) => z.id).join(', ');
+  const verdict = R.fullKnown ? (R.estimate > 0.5 ? `Confirmed + estimate: ${rpNum(R.confirmed + R.estimate)} sq ft` + (R.ranged ? ` (range ${rpNum(R.confirmed + R.estLo)}-${rpNum(R.confirmed + R.estHi)})` : '') + '. The estimate rests on the evidence listed below.' : `Full roof area: ${rpNum(R.confirmed)} sq ft. Every facet was measured on the imagery.`)
+    : `The full roof area is unresolved. Confirmed: ${rpNum(R.confirmed)} sq ft` + (R.estimate > 0.5 ? `, plus an estimated ${rpNum(R.estimate)} sq ft` : '') + '. ' + (R.zoneCount ? `Hidden zone${R.zoneCount > 1 ? 's' : ''} ${ids} could add anything from 0 to ${rpNum(R.zoneUpper)} sq ft; nothing seen supports a figure. Another view or a site measurement is needed.` : 'Part of the trace is marked unresolved by the reviewer.');
+  y = rpText(doc, verdict, x, y, { size: 8.2, bold: true, color: R.fullKnown ? RP.NAVY : RP.WARN, maxWidth: W }) + 6;
   // unresolved / inferred items that affect the totals
   y = rpSection(doc, 'Items that affect the totals', x, y, W);
   const items = [];
   if (M.rv) for (const u of M.rv.unresolved) items.push({ cells: [u.label, 'Unresolved', u.qty, u.missing], color: [150, 25, 15] });
-  for (const F of M.facets) if (F.status === 'inferred') items.push([F.id, 'Inferred', rpNum(F.m.sloped) + ' sq ft' + (F.f.rangeSqft ? ` (range ${rpNum(F.f.rangeSqft[0])}-${rpNum(F.f.rangeSqft[1])})` : ''), F.f.evidence || F.f.note || 'Marked inferred']);
-  const infL = M.lines.filter((L) => L.status === 'inferred'); if (infL.length) items.push([infL.length + ' line' + (infL.length > 1 ? 's' : ''), 'Inferred', rpNum(infL.reduce((s, L) => s + L.m.trueFt, 0), 1) + ' ft', 'Lines under tree canopy; positions follow the continued roof planes (see the line schedule).']);
+  if (M.obLines.length) items.push({ cells: [M.obLines.length + ' boundar' + (M.obLines.length > 1 ? 'ies' : 'y'), 'Not a roof edge', rpNum(R.obstructionFt, 1) + ' ft', 'Where the visible roof stops at tree canopy. Left open in the outline; counted in no eave, rake, ridge, valley or flashing total.'], color: [150, 25, 15] });
+  for (const F of M.facets) if (F.status === 'inferred') items.push([F.id, 'Inferred', rpNum(F.f.inferredSqft > 0 && F.f.inferredSqft < F.m.sloped ? F.f.inferredSqft : F.m.sloped) + ' of ' + rpNum(F.m.sloped) + ' sq ft' + (F.range ? ` (facet ${rpNum(F.range[0])}-${rpNum(F.range[1])})` : ''), F.f.evidence || F.f.note || 'Marked inferred']);
+  const infL = M.lines.filter((L) => L.status === 'inferred'); if (infL.length) items.push([infL.length + ' line' + (infL.length > 1 ? 's' : ''), 'Inferred', rpNum(infL.reduce((a, L) => a + L.m.trueFt, 0), 1) + ' ft', 'Lines under tree canopy (dashed); positions follow the continued roof planes. Keys: ' + infL.map((L) => L.n).slice(0, 14).join(', ') + (infL.length > 14 ? ', ...' : '') + '.']);
   if (M.rv && M.rv.errors) items.push({ cells: ['Geometry', 'Check', M.rv.errors + ' error' + (M.rv.errors > 1 ? 's' : ''), M.rv.audit.issues.filter((i) => i.severity === 'error').slice(0, 3).map((i) => i.message).join('; ')], color: [150, 25, 15] });
   if (M.rv && M.rv.audit.unclassifiedFt > 2) items.push(['Outline', 'Not classified', rpNum(M.rv.audit.unclassifiedFt) + ' ft', 'Facet outline without a line type. It is not counted in any category and is not a confirmed zero.']);
   if (!items.length) { rpText(doc, 'None. Every facet and line in this report was measured on the imagery; no totals are flagged.', x, y, { size: 8.5 }); y += 14; }
-  else y = rpTable(doc, x, y - 4, [{ t: 'Item', w: 70 }, { t: 'Status', w: 62 }, { t: 'Quantity', w: 118 }, { t: 'Evidence / what is missing', w: W - 250, wrap: true }], items.slice(0, 9), { size: 7.2 }) + 4;
-  if (items.length > 9) { rpText(doc, `+ ${items.length - 9} more: see the facet and line schedules.`, x, y + 6, { size: 7, color: RP.MUTE }); y += 12; }
-  // line totals
-  y += 8; if (y < RP.H - 150) { y = rpSection(doc, 'Line totals (true length)', x, y, W);
-    const keys = Object.keys(EDGE_TYPES).filter((k) => !['parapet', 'unspecified'].includes(k) || t.byType[k].count); const cw = W / 4; let i = 0;
+  else { const room = Math.max(3, Math.min(8, Math.floor((RP.H - 120 - y) / 22))); y = rpTable(doc, x, y - 4, [{ t: 'Item', w: 84, wrap: true }, { t: 'Status', w: 66 }, { t: 'Quantity', w: 118 }, { t: 'Evidence / what is missing', w: W - 268, wrap: true }], items.slice(0, room), { size: 7 }) + 4;
+    if (items.length > room) { rpText(doc, `+ ${items.length - room} more: see the facet and line schedules.`, x, y + 6, { size: 7, color: RP.MUTE }); y += 12; } }
+  // subtotals by structure, then line totals, when the page has room (both are repeated in full on the totals page)
+  if (M.structs.length > 1 && y < RP.H - 150) { y += 8; y = rpSection(doc, 'Subtotals by structure', x, y, W); y = rpStructTable(doc, M, x, y - 4, W, { size: 6.8 }) + 4; }
+  y += 8; if (y < RP.H - 120) { y = rpSection(doc, 'Line totals (true length)', x, y, W);
+    const keys = ROOF_LINE_TYPES.filter((k) => !['parapet', 'unspecified'].includes(k) || t.byType[k].count); const cw = W / 4; let i = 0;
     for (const k of keys) { const cx = x + (i % 4) * cw, cy = y + Math.floor(i / 4) * 24; rpLineStyle(doc, k, 'measured'); doc.line(cx, cy - 3, cx + 16, cy - 3); doc.setLineDashPattern([], 0); rpText(doc, EDGE_TYPES[k].plural, cx + 20, cy, { size: 7.5, color: RP.MUTE }); rpText(doc, rpFtIn(t.byType[k].true) + (t.byType[k].unresolved > 0 ? ' *' : ''), cx + 20, cy + 10, { size: 9, bold: true }); i++; }
     y += Math.ceil(keys.length / 4) * 24;
-    if (keys.some((k) => t.byType[k].unresolved > 0)) rpText(doc, '* includes unresolved length (not confirmed)', x, y + 2, { size: 6.8, color: [190, 30, 20] }); }
+    if (keys.some((k) => t.byType[k].unresolved > 0)) { rpText(doc, '* includes unresolved length (not confirmed)', x, y + 2, { size: 6.8, color: RP.WARN }); y += 9; }
+    if (M.obLines.length) rpText(doc, `Not included above: ${rpNum(R.obstructionFt, 1)} ft of obstruction boundary (visible roof stops at tree canopy; not a roof edge).`, x, y + 2, { size: 6.8, color: RP.WARN }); }
 }
 function rpPageAerial(doc, M, A) {
   const box = { x: RP.M, y: 78, w: RP.W - 2 * RP.M, h: 580 }; const r = rpDrawAerial(doc, M, A, box, { ids: true });
@@ -333,57 +404,111 @@ function rpPageAerial(doc, M, A) {
 function rpPagePlan(doc, M, mode, note, win) {
   const box = { x: RP.M, y: 100, w: RP.W - 2 * RP.M, h: 566 }; const V = rpView(M, box, win ? { ftBox: win, padFt: 1 } : {});
   let y = 80;
-  if (mode === 'lengths') { const t = M.t; const keys = Object.keys(EDGE_TYPES).filter((k) => t.byType[k].count); rpText(doc, keys.map((k) => `${EDGE_TYPES[k].plural} ${rpFtIn(t.byType[k].true)}`).join('   |   '), RP.M, y, { size: 7.6, maxWidth: RP.W - 2 * RP.M }); }
-  else if (mode === 'areas') rpText(doc, `Net sloped area ${rpNum(M.t.sloped)} sq ft   |   Plan (projected) area ${rpNum(M.t.plan)} sq ft   |   ${M.t.facetCount} facets   |   fill colour = measurement status`, RP.M, y, { size: 7.6 });
+  if (mode === 'lengths') { const t = M.t; const keys = ROOF_LINE_TYPES.filter((k) => t.byType[k].count); rpText(doc, keys.map((k) => `${EDGE_TYPES[k].plural} ${rpFtIn(t.byType[k].true)}`).join('   |   ') + (M.obLines.length ? `   |   obstruction boundary ${rpNum(M.area.obstructionFt, 1)} ft (not counted, drawn as a gap)` : ''), RP.M, y, { size: 7.6, maxWidth: RP.W - 2 * RP.M }); }
+  else if (mode === 'areas') rpText(doc, `Confirmed ${rpNum(M.area.confirmed)} sq ft` + (M.area.estimate > 0.5 ? `   |   estimate for hidden roof + ${rpNum(M.area.estimate)} sq ft` : '') + (M.area.zoneCount ? `   |   hidden zones 0-${rpNum(M.area.zoneUpper)} sq ft (in no total)` : '') + `   |   plan area ${rpNum(M.t.plan)} sq ft   |   ${M.t.facetCount} facets   |   fill = status`, RP.M, y, { size: 7.6, maxWidth: RP.W - 2 * RP.M });
   else if (mode === 'pitch') rpText(doc, 'Pitch per facet (rise per 12 in. of run), arrow = down-slope direction. ' + M.t.pitches.map((p) => `${p}/12: ${rpNum(M.t.pitchGroups[p])} sq ft`).join('   |   '), RP.M, y, { size: 7.6, maxWidth: RP.W - 2 * RP.M });
   else rpText(doc, 'To-scale roof plan, north up. Facet IDs (F1, F2, ...) and line colours are the same on every page.', RP.M, y, { size: 7.6 });
-  rpDrawRoof(doc, M, V, mode);
+  const missed = rpDrawRoof(doc, M, V, mode);
+  if (missed && missed.length && !win) rpText(doc, `Keys with no room on this diagram (lengths are in the line schedule): ${missed.join(', ')}`, RP.M, 92, { size: 6.6, color: RP.WARN, maxWidth: RP.W - 2 * RP.M });
   rpNorthScale(doc, V, RP.M + 14, RP.H - 60);
-  let ly = 684; if (mode === 'areas') { let cx = RP.M + 250; for (const [k, lab] of [['measured', 'Measured'], ['inferred', 'Inferred'], ['unresolved', 'Unresolved']]) { rpColor(doc, 'fill', RP.STATUS_FILL[k]); rpColor(doc, 'draw', [150, 165, 185]); doc.setLineWidth(0.5); doc.rect(cx, ly - 7, 12, 8, 'FD'); rpText(doc, lab, cx + 16, ly, { size: 7 }); cx += 76; } }
+  let ly = 684; if (mode === 'areas') { let cx = RP.M + 250; for (const [k, lab] of [['measured', 'Measured'], ['inferred', 'Inferred'], ['unresolved', 'Unresolved']]) { rpColor(doc, 'fill', RP.STATUS_FILL[k]); rpColor(doc, 'draw', [150, 165, 185]); doc.setLineWidth(0.5); doc.rect(cx, ly - 7, 12, 8, 'FD'); rpText(doc, lab, cx + 16, ly, { size: 7 }); cx += 70; }
+    if (M.zones.length) { rpClip(doc, cx, ly - 7, 12, 8); rpColor(doc, 'draw', RP.HATCH); doc.setLineWidth(0.5); for (let q = cx - 8; q < cx + 12; q += 3.5) doc.line(q, ly + 1, q + 8, ly - 7); rpUnclip(doc); rpText(doc, 'Hidden zone (in no total)', cx + 16, ly, { size: 7 }); } }
   else rpLegend(doc, M, RP.M + 250, ly, RP.W - 2 * RP.M - 250, mode !== 'pitch');
   if (note) rpText(doc, note, RP.M + 250, RP.H - 50, { size: 6.4, color: RP.MUTE, maxWidth: RP.W - 2 * RP.M - 250 });
 }
 function rpPageTrees(doc, M, A) {
   const ob = M.ob, x = RP.M, W = RP.W - 2 * RP.M; let y = 74;
   const box = { x, y: y + 6, w: W, h: 300 }; const r = rpDrawAerial(doc, M, A, box, { obstruction: true, labels: true, thin: true });
-  if (!r) { const V = rpView(M, box, { padFt: 26 }); rpDrawRoof(doc, M, V, 'trees'); rpDrawObstruction(doc, M, V.P, true); }
+  if (!r) { const V = rpView(M, box, { padFt: 26 }); rpClip(doc, box.x, box.y, box.w, box.h); rpDrawRoof(doc, M, V, 'trees'); rpDrawObstruction(doc, M, V.P, true); rpUnclip(doc); }
   y = box.y + box.h + 12;
   // legend
   const G = doc.GState ? (o) => doc.setGState(new doc.GState(o)) : () => {};
   let cx = x; for (const [col, lab, op] of [[[235, 120, 20], 'Tree canopy over the roof (T)', 0.5], [[40, 160, 80], 'Tree canopy near the roof (T)', 0.3], [[150, 160, 175], 'Other structure nearby (S)', 0.45]]) { G({ opacity: op }); rpColor(doc, 'fill', col); doc.rect(cx, y - 7, 14, 9, 'F'); G({ opacity: 1 }); rpText(doc, lab, cx + 18, y, { size: 7.2 }); cx += 150; }
   y += 14; y = rpSection(doc, 'Effect on the measurements', x, y, W);
   const affected = M.lines.filter((L) => (L.e.obscuredFt || 0) > 0.5 || L.status !== 'measured'); const obsFt = affected.reduce((s, L) => s + (L.e.obscuredFt || 0), 0);
+  const infF = M.facets.filter((F) => F.status === 'inferred');
   const rows = [
     ['Roof footprint hidden by canopy', `${rpNum(ob.inferredPlanSqft)} sq ft plan (${rpNum(ob.footprintObscuredPct, 1)}% of the footprint)`],
-    ['Lines hidden or blocked', affected.length ? `${affected.map((L) => L.id).slice(0, 18).join(', ')}${affected.length > 18 ? ', ...' : ''}  -  ${rpNum(obsFt, 1)} ft obscured` : 'None'],
-    ['Facets inferred / unresolved', `${M.facets.filter((F) => F.status === 'inferred').map((F) => F.id).join(', ') || 'none'} / ${M.facets.filter((F) => F.status === 'unresolved').map((F) => F.id).join(', ') || 'none'}`],
-    ['How hidden roof was handled', 'The canopy is never traced as the roof edge. Each roof plane fitted to its visible part is continued under the canopy only down to that plane\'s own measured eave height; such area is marked Inferred with a range. Where no plane evidence exists the edge is marked Unresolved and the totals are flagged.'],
+    ['Roof lines under canopy', affected.length ? `${affected.map((L) => L.id).slice(0, 18).join(', ')}${affected.length > 18 ? ', ...' : ''}  -  ${rpNum(obsFt, 1)} ft hidden (dashed on the plans)` : 'None'],
+    ['Obstruction boundaries', M.obLines.length ? `${M.obLines.map((L) => L.id).join(', ')}  -  ${rpNum(M.area.obstructionFt, 1)} ft where the visible roof stops at the canopy. Not roof edges: left open in the outline and counted in no line total.` : 'None'],
+    ['Facets with an estimated part', infF.length ? infF.map((F) => `${F.id} (${rpNum(F.f.inferredSqft > 0 && F.f.inferredSqft < F.m.sloped ? F.f.inferredSqft : F.m.sloped)} sf)`).join(', ') : 'None'],
+    ['Hidden zones (hatched)', M.zones.length ? M.zones.map((z) => `${z.id}: 0 to ${rpNum(z.upperSqft)} sq ft${z.facetName ? ' beside ' + z.facetName : ''}`).join('; ') + '. In no total.' : 'None'],
+    ['How hidden roof was handled', 'The canopy is never traced as the roof edge. Where the visible roof stops at the canopy the outline is left open and the ground under the canopy beyond it is hatched as a hidden zone. A roof plane is continued under the canopy only where something seen supports it (the same plane visible beyond the canopy, the opposite face of the same ridge, or the building outline), down to a measured eave height; that part is an estimate with a range. Everything else stays out of the totals until another view or a site measurement confirms it.'],
   ];
   y = rpTable(doc, x, y - 4, [{ t: 'Item', w: 150 }, { t: 'Finding', w: W - 150, wrap: true }], rows, { size: 7.4 }) + 12;
   y = rpSection(doc, 'Canopy and structures (heights above the ground beside the house)', x, y, W);
   const list = [...ob.trees.map((o, i) => ['T' + (i + 1), o.kind === 'overlap' ? 'Tree over roof' : 'Tree near roof', rpNum(o.overlapSqft) + ' sq ft', rpNum(o.distFt) + ' ft', rpNum(o.topFt) + ' ft', ob.ridgeFt != null && o.topFt > ob.ridgeFt + 1 ? rpNum(o.topFt - ob.ridgeFt) + ' ft above the ridge' : 'below the ridge']),
     ...ob.structures.map((o, i) => ['S' + (i + 1), 'Other structure', '-', rpNum(o.distFt) + ' ft', rpNum(o.topFt) + ' ft', rpNum(o.areaSqft) + ' sq ft footprint in view'])];
-  if (list.length > 9) list.splice(8, list.length - 8, ['...', `${list.length - 8} more`, '', '', '', 'smaller canopy areas; all are drawn on the photo']);
-  if (list.length) y = rpTable(doc, x, y - 4, [{ t: 'ID', w: 34 }, { t: 'Type', w: 96 }, { t: 'Over the roof', w: 80, a: 'r' }, { t: 'Distance', w: 62, a: 'r' }, { t: 'Top height', w: 68, a: 'r' }, { t: 'Note', w: W - 340 }], list.slice(0, 9), { size: 7.4 }) + 8;
+  { const nT = ob.trees.length, keep = Math.max(3, 9 - ob.structures.length - 1); if (nT > keep + 1) list.splice(keep, nT - keep, ['...', `${nT - keep} more canopy areas`, '', '', '', 'smaller ones; all are drawn on the photo']); }
+  if (list.length) y = rpTable(doc, x, y - 4, [{ t: 'ID', w: 34 }, { t: 'Type', w: 96 }, { t: 'Over the roof', w: 80, a: 'r' }, { t: 'Distance', w: 62, a: 'r' }, { t: 'Top height', w: 68, a: 'r' }, { t: 'Note', w: W - 340 }], list.slice(0, 10), { size: 7.4 }) + 8;
   else { rpText(doc, 'No tree canopy or other structures were found close to the roof.', x, y, { size: 8 }); y += 12; }
   rpText(doc, `Heights come from the same 10 cm height model as the roof trace (${ob.source}). Reference: ${ob.heightReference}. Roof ridge: ${ob.ridgeFt != null ? rpNum(ob.ridgeFt) + ' ft' : 'n/a'}. Typical error about 1-2 ft; canopy heights are tops of canopy, not trunk or limb clearances - clearance under a limb is not measurable from above and is not reported.`, x, y + 2, { size: 6.8, color: RP.MUTE, maxWidth: W });
+}
+// which views were checked, what each one resolved, and what is still open
+function rpPageEvidence(doc, M, A, ctx) {
+  const x = RP.M, W = RP.W - 2 * RP.M; let y = 78; const title = 'Other views & evidence';
+  const brk = () => { ctx.newPage(title + ' (continued)'); return 80; }; const need = (hh) => { if (y + hh > RP.H - 50) y = brk(); };
+  const A2 = rpAerialAlt(M);
+  if (A2 && A) { const bw = (W - 10) / 2, bh = 196;
+    rpDrawAerial(doc, M, A, { x, y, w: bw, h: bh }, { thin: true, zones: true, caption: 'Image used for the trace' + (M.imagery.date ? ': ' + M.imagery.date : '') });
+    rpDrawAerial(doc, M, A2, { x: x + bw + 10, y, w: bw, h: bh }, { thin: true, zones: true, caption: 'Second image' + (M.alt.date ? ': ' + M.alt.date : '') });
+    y += bh + 9; y = rpText(doc, 'The same roofline and facet IDs on both georeferenced photos. Where the first image has tree canopy over the roof, heights and edges were taken from the second image after the configuration check below.', x, y, { size: 6.8, color: RP.MUTE, maxWidth: W }) + 6; }
+  y = rpSection(doc, 'Views and sources checked', x, y, W);
+  const vrows = [[M.imagery.source, M.imagery.date || 'not reported', 'Georeferenced, overhead', 'Measurement', M.alt ? 'Tree canopy over part of the roof; that part was measured on the second image' : (M.ob && M.ob.inferredPlanSqft > 1 || M.zones.length ? 'Tree canopy over part of the roof' : 'Roof clear of canopy')]];
+  for (const v of M.views) vrows.push([v.label, v.date || 'not published', v.georef ? (v.kind === 'solar' ? 'Georeferenced, overhead, with height model' : v.kind === 'naip' ? 'Georeferenced, overhead, public domain' : 'Georeferenced, overhead') : (v.kind === '3d' ? 'Tilted 3D view' : 'Photo, not georeferenced'), v.measurable ? (v.used ? 'Measurement (hidden part)' : 'Comparison') : (v.georef ? 'Comparison (too coarse to measure)' : 'Viewing aid only'), (v.result || '') + (v.aligned ? ' Image ' + v.aligned + '.' : '')]);
+  y = rpTable(doc, x, y - 4, [{ t: 'Source', w: 132, wrap: true }, { t: 'Image date', w: 58 }, { t: 'Type', w: 104, wrap: true }, { t: 'Used for', w: 92, wrap: true }, { t: 'Result', w: W - 386, wrap: true }], vrows, { size: 7, onBreak: brk }) + 12;
+  // what each view resolved, by line type
+  need(70); y = rpSection(doc, 'What each view resolved', x, y, W);
+  const by = new Map(); const add = (src, key, v) => { if (!by.has(src)) by.set(src, { lines: {}, facets: [], sqft: 0, verify: [] }); const q = by.get(src); if (key === 'facet') { q.facets.push(v.id); q.sqft += v.sqft; } else if (key === 'verify') q.verify.push(v); else { (q.lines[key] = q.lines[key] || []).push(v); } };
+  for (const L of M.lines) { if (L.e.confirmedBy) add(rpSrc(L.e.confirmedBy), L.type, L); if (L.e.verify) add(rpSrc(L.e.verify), 'verify', L.id); }
+  for (const F of M.facets) { if (F.f.excluded) continue; if (F.f.confirmedBy) add(rpSrc(F.f.confirmedBy), 'facet', { id: F.id, sqft: F.f.altSqft || F.m.sloped }); if (F.f.verify) add(rpSrc(F.f.verify), 'verify', F.id); }
+  const rrows = [];
+  for (const [src, q] of by) { let first = true; const lab = () => { const v = first ? src : ''; first = false; return v; };
+    if (q.facets.length) rrows.push([lab(), 'Roof area', q.facets.join(', '), rpNum(q.sqft) + ' sq ft']);
+    for (const k of ROOF_LINE_TYPES) if (q.lines[k]) rrows.push([lab(), EDGE_TYPES[k].plural, q.lines[k].map((L) => L.n).join(', '), rpNum(q.lines[k].reduce((a, L) => a + L.m.trueFt, 0), 1) + ' ft']);
+    if (q.verify.length) rrows.push({ cells: [lab(), 'Seen, not measurable', q.verify.join(', '), 'marked for verification'], color: RP.WARN }); }
+  for (const v of M.views) if (![...by.keys()].some((k) => k.startsWith(v.label))) rrows.push([v.label, '-', '-', v.measurable ? 'nothing carried into the sketch' : (v.georef ? 'compared; too coarse to carry an edge' : 'no edge marked; viewing aid')]);
+  if (rrows.length) y = rpTable(doc, x, y - 4, [{ t: 'Source', w: 170, wrap: true }, { t: 'Measurement type', w: 100 }, { t: 'Facets / line keys', w: W - 420, wrap: true }, { t: 'Quantity', w: 150, a: 'r' }], rrows, { size: 7, onBreak: brk }) + 12;
+  else { y = rpText(doc, 'No other view was used: every figure in this report comes from the image named on the summary page.', x, y, { size: 7.6, maxWidth: W }) + 10; }
+  if (M.alt && M.alt.check) { const c = M.alt.check; need(170); y = rpSection(doc, 'Roof configuration check before anything was carried in', x, y, W);
+    y = rpTable(doc, x, y - 4, [{ t: 'Check (only where the first image sees the roof clearly)', w: 270 }, { t: 'Result', w: 110, a: 'r' }, { t: 'Needed', w: W - 380 }], [
+      ['Visible roof compared', rpNum(c.roofSqft) + ' sq ft', 'at least 160 sq ft'],
+      ['Same height in both datasets (within 1 ft; roof interior, 2.6 ft in from its edges)', rpNum(c.heightAgreePct, 1) + '%', '80% or more'],
+      ['Visible roof inside the second building outline', rpNum(c.outlineAgreePct, 1) + '%', '85% or more'],
+      ['Change in roof height above the ground', c.heightChangeM == null ? 'not measurable' : rpNum(Math.abs(c.heightChangeM) * RM.FT, 1) + ' ft', '1.6 ft or less'],
+      ['Horizontal offset between the datasets (corrected)', rpNum(c.shiftM * RM.FT, 1) + ' ft', 'reported'],
+      ['Tilt between the two height models (corrected)', c.tiltPer10m == null ? '-' : rpNum(c.tiltPer10m * 12, 1) + ' in. per 10 ft', '14 in. per 10 ft or less'],
+    ], { size: 7 }) + 4;
+    y = rpText(doc, 'Result: same roof configuration' + (M.alt.approved ? `; confirmed by the reviewer${M.alt.approved.at ? ' on ' + String(M.alt.approved.at).slice(0, 10) : ''}${M.alt.approved.note ? ' ("' + M.alt.approved.note + '")' : ''}` : '') + '. The second image is softer than the first, so edges taken from it are less sharp (about 1 ft).', x, y + 6, { size: 7, color: RP.MUTE, maxWidth: W }) + 10; }
+  need(60); y = rpSection(doc, 'Still unresolved', x, y, W);
+  const open = [...M.zones.map((z) => [z.id, 'Hidden zone', '0 to ' + rpNum(z.upperSqft) + ' sq ft', 'Under tree canopy; no view checked so far shows this part of the roof.']), ...M.obLines.map((L) => [L.id, 'Obstruction boundary', rpNum(L.m.planFt, 1) + ' ft', 'Visible roof stops at the canopy; the real edge and its type are not located.']), ...M.lines.filter((L) => L.e.verify).map((L) => ['L' + L.n, EDGE_TYPES[L.type].label, rpFtIn(L.m.trueFt), 'Marked for verification: ' + (L.e.verify.note || rpSrc(L.e.verify))])];
+  if (open.length) y = rpTable(doc, x, y - 4, [{ t: 'Item', w: 50 }, { t: 'What', w: 110 }, { t: 'Quantity', w: 90, a: 'r' }, { t: 'Why', w: W - 250, wrap: true }], open, { size: 7, onBreak: brk }) + 12;
+  else { y = rpText(doc, 'Nothing. No hidden zone, obstruction boundary or verification mark remains.', x, y, { size: 7.6 }) + 8; }
+  if (M.evidence.length) { need(60); y = rpSection(doc, 'Reviewer log', x, y, W);
+    y = rpTable(doc, x, y - 4, [{ t: 'When', w: 84 }, { t: 'Item', w: 70 }, { t: 'Action', w: 170, wrap: true }, { t: 'Source', w: 110, wrap: true }, { t: 'Image date', w: 56 }, { t: 'Note', w: W - 490, wrap: true }], M.evidence.slice(-24).map((e) => [String(e.at || '').slice(0, 16).replace('T', ' '), e.target || '', e.action || '', e.source || '', e.date || '', e.note || '']), { size: 6.6, onBreak: brk }) + 6; }
 }
 function rpPageTotals(doc, M, ctx) {
   const t = M.t, x = RP.M, W = RP.W - 2 * RP.M; let y = 84;
   y = rpSection(doc, 'Area', x, y, W);
   const ab = t.areaByStatus;
-  y = rpTable(doc, x, y - 4, [{ t: 'Quantity', w: 250 }, { t: 'Value', w: 110, a: 'r' }, { t: 'How it is calculated', w: W - 360, wrap: true }], [
+  const R = M.area;
+  y = rpTable(doc, x, y - 4, [{ t: 'Quantity', w: 220 }, { t: 'Value', w: 110, a: 'r' }, { t: 'How it is calculated', w: W - 330, wrap: true }], [
+    { cells: ['Confirmed sloped area', rpNum(R.confirmed, 1) + ' sq ft', 'Seen and measured on georeferenced imagery. Each facet: plan area x sqrt(1 + slope^2); unrounded facets summed' + (R.altSqft > 0.5 ? `. ${rpNum(R.altSqft, 1)} sq ft of it was measured on the second image (${M.alt.label}); that image is softer, its ${rpNum(R.altEdgeFt)} ft of outline is located to about 1 ft, so that part carries about +/- ${rpNum(R.altRange)} sq ft` : '')], bold: true },
+    ['Estimate for hidden roof', R.estimate > 0.5 ? '+ ' + rpNum(R.estimate, 1) + ' sq ft' : 'none', R.estimate > 0.5 ? 'Under tree canopy, placed from the evidence in the facet schedule' + (R.ranged ? `. Range ${rpNum(R.estLo)} to ${rpNum(R.estHi)} sq ft` : '') : 'No area was placed from evidence alone'],
+    ...(R.unresolvedTraced > 0.5 ? [{ cells: ['Traced but not confirmed', rpNum(R.unresolvedTraced, 1) + ' sq ft', 'Marked unresolved by the reviewer. NOT CONFIRMED - verify before ordering'], color: RP.WARN }] : []),
+    { cells: ['Net sloped area used below', rpNum(t.sloped, 1) + ' sq ft', 'Confirmed + estimate. Basis for squares, waste and materials'], bold: true },
+    ...(M.zones.length ? [{ cells: ['Hidden zones (in no total)', '0 to ' + rpNum(R.zoneUpper) + ' sq ft', `${M.zones.map((z) => z.id).join(', ')}: under tree canopy with no evidence either way. The full roof area is unresolved until these are checked`], color: RP.WARN }] : []),
     ['Projected (plan) area', rpNum(t.plan, 1) + ' sq ft', 'Facet outlines on the horizontal plane (cut-outs subtracted)'],
-    { cells: ['Net sloped roof area', rpNum(t.sloped, 1) + ' sq ft', 'Each facet: plan area x sqrt(1 + slope^2); sum of unrounded facets'], bold: true },
-    ['   of which measured', rpNum(ab.measured, 1) + ' sq ft', 'Seen on the imagery'], ['   of which inferred', rpNum(ab.inferred, 1) + ' sq ft', 'Hidden; from stated evidence'], ['   of which unresolved', rpNum(ab.unresolved, 1) + ' sq ft', ab.unresolved > 0 ? 'NOT CONFIRMED - verify before ordering' : 'None'],
     ['Net squares', rpNum(t.sloped / 100, 2) + ' sq', 'Net sloped area / 100. No waste included'],
   ], { size: 7.4 }) + 12;
+  if (M.structs.length > 1) { y = rpSection(doc, 'Subtotals by structure', x, y, W); y = rpStructTable(doc, M, x, y - 4, W) + 12; }
   y = rpSection(doc, 'Pitch', x, y, W);
   y = rpTable(doc, x, y - 4, [{ t: 'Pitch', w: 80 }, { t: 'Sloped area', w: 110, a: 'r' }, { t: 'Share', w: 70, a: 'r' }, { t: 'Squares', w: 70, a: 'r' }, { t: '', w: W - 330 }], t.pitches.map((p) => [p === 0 ? 'Flat' : p + '/12' + (p === t.predominant ? '  (predominant)' : ''), rpNum(t.pitchGroups[p], 1) + ' sq ft', rpNum(t.pitchGroups[p] / (t.sloped || 1) * 100, 1) + '%', rpNum(t.pitchGroups[p] / 100, 2), '']), { size: 7.4 }) + 12;
   y = rpSection(doc, 'Lines', x, y, W);
   const kinds = { eave: 'horizontal', ridge: 'horizontal', wall: 'horizontal', transition: 'horizontal', parapet: 'horizontal', unspecified: 'horizontal', rake: 'sloped', step: 'sloped', hip: 'sloped', valley: 'sloped' };
-  const rows = Object.keys(EDGE_TYPES).map((k) => { const b = t.byType[k]; const none = !b.count; return [EDGE_TYPES[k].plural, b.count, none ? '-' : rpNum(b.plan, 1), none ? (M.rv && M.rv.audit.unclassifiedFt > 2 ? 'none traced' : '0.0') : rpNum(b.true, 1), none ? '-' : rpFtIn(b.true), none ? '-' : kinds[k], none ? '-' : `${rpNum(b.measured, 1)} / ${rpNum(b.inferred, 1)} / ${rpNum(b.unresolved, 1)}`]; });
+  const rows = ROOF_LINE_TYPES.map((k) => { const b = t.byType[k]; const none = !b.count; return [EDGE_TYPES[k].plural, b.count, none ? '-' : rpNum(b.plan, 1), none ? (M.rv && M.rv.audit.unclassifiedFt > 2 ? 'none traced' : '0.0') : rpNum(b.true, 1), none ? '-' : rpFtIn(b.true), none ? '-' : kinds[k], none ? '-' : `${rpNum(b.measured, 1)} / ${rpNum(b.inferred, 1)} / ${rpNum(b.unresolved, 1)}`]; });
   rows.push({ cells: ['Hips + ridges (cap)', '', '', rpNum(t.byType.hip.true + t.byType.ridge.true, 1), rpFtIn(t.byType.hip.true + t.byType.ridge.true), '', ''], bold: true }, { cells: ['Eaves + rakes (drip edge / starter)', '', '', rpNum(t.byType.eave.true + t.byType.rake.true, 1), rpFtIn(t.byType.eave.true + t.byType.rake.true), '', ''], bold: true });
+  if (M.obLines.length) rows.push({ cells: ['Obstruction boundary', M.obLines.length, rpNum(M.obLines.reduce((a, L) => a + L.m.planFt, 0), 1), 'not counted', '', 'not a roof edge', 'excluded from every category above'], color: RP.WARN });
   y = rpTable(doc, x, y - 4, [{ t: 'Category', w: 136 }, { t: 'Lines', w: 34, a: 'r' }, { t: 'Plan ft', w: 52, a: 'r' }, { t: 'True ft', w: 52, a: 'r' }, { t: 'ft-in', w: 58, a: 'r' }, { t: 'Kind', w: 56 }, { t: 'Measured / inferred / unresolved, ft', w: W - 388, a: 'r' }], rows, { size: 7.4 }) + 6;
   if (M.rv && M.rv.audit.unclassifiedFt > 2) { rpText(doc, `${rpNum(M.rv.audit.unclassifiedFt)} ft of facet outline has no line type. Categories shown as "none traced" are therefore not confirmed zeros.`, x, y + 4, { size: 7, color: [190, 30, 20] }); y += 12; }
   y += 8; y = rpSection(doc, 'Waste and order quantity (separate from the net area)', x, y, W);
@@ -395,7 +520,9 @@ function rpPageTotals(doc, M, ctx) {
   const rules = ['Each facet is counted once. Cut-outs (skylights, chimneys) are subtracted. Facets on the same roof level may not overlap; the review step blocks silent double counting and lists any overlap.',
     'Each line is counted once, in one category. Where an upper roof ends above a lower roof, two physical lines exist on one plan line: the upper roof\'s eave or rake, and the wall or step flashing on the lower roof. Both are counted, each in its own category.',
     'True length = plan length x slope factor. Auto-traced lines take the factor from the fitted roof plane they lie in; hand-drawn lines from the adjoining facet\'s pitch. Eaves, ridges and wall flashing are level; rakes, hips, valleys and step flashing are sloped.',
-    'Status: Measured = seen on the imagery. Inferred = hidden, placed from stated evidence, with a range when known. Unresolved = hidden with no evidence; listed, flagged, never shown as zero.'];
+    'Status: Measured (confirmed) = seen on georeferenced imagery. Inferred (estimate) = hidden, placed from stated evidence, with a range; drawn dashed. Unresolved = hidden with no evidence; listed, flagged, never shown as zero.',
+    'An obstruction boundary is where the visible roof stops at tree canopy. It is not an eave, rake, ridge, valley or flashing line and is counted in none of them. The canopy-covered ground beyond it is a hidden zone: hatched, reported as a range starting at zero, and left out of every total until another source verifies the edge and its type.',
+    'A tilted or 3D view can show that an edge exists, but it is not used to measure. Lengths and areas come only from georeferenced overhead imagery or a height model; an edge seen only in a tilted view is marked for verification.'];
   for (const r of rules) { rpText(doc, '-', x, y, { size: 7.2 }); y = rpText(doc, r, x + 8, y, { size: 7.2, maxWidth: W - 8 }) + 2; }
   if (M.rv) { y += 6; y = rpSection(doc, 'Reconciliation', x, y, W); for (const c of M.rv.reconcile.checks) { rpText(doc, (c.ok ? 'OK   ' : 'FAIL ') + c.name + `: ${rpNum(c.a, 2)} = ${rpNum(c.b, 2)} ${c.unit}`, x, y, { size: 7.2, color: c.ok ? RP.INK : [190, 30, 20] }); y += 10; } }
 }
@@ -442,16 +569,19 @@ async function rpBuild(opts = {}) {
     ['Area diagram', (d) => rpPagePlan(d, M, 'areas', 'Sloped area per facet, sq ft. Small facets show the ID only; their areas are in the facet schedule.')], ['Pitch diagram', (d) => rpPagePlan(d, M, 'pitch')]];
   const doc = rpDoc(); const W = RP.W - 2 * RP.M;
   // schedules can run over several pages: render them in a first pass to count pages, then stamp frames with "n of total"
-  const facetRows = () => M.facets.map((F) => ({ cells: [F.id, M.t.structures.length > 1 ? 'S' + (F.structure || 1) : '', F.f.excluded ? 'cut-out' : 'L' + (F.f.level || 1), F.f.pitch === 0 ? 'Flat' : F.f.pitch + '/12', F.m.basis === 'fitted' ? rpNum(F.m.slope12, 2) + '/12 fitted' : 'assigned', rpNum(F.m.plan, 1), rpNum(F.m.factor, 4), (F.f.excluded ? '-' : '') + rpNum(F.m.sloped, 1), F.f.excluded ? 'excluded' : rpCap(F.status), F.status === 'inferred' && F.f.rangeSqft ? `range ${rpNum(F.f.rangeSqft[0])}-${rpNum(F.f.rangeSqft[1])} sf. ${F.f.note || ''}` : F.status === 'unresolved' ? (F.f.missing || F.f.note || '') : (F.f.note || (F.f.repaired ? 'outline rebuilt from the height model' : ''))], fill: F.status === 'unresolved' ? RP.STATUS_FILL.unresolved : F.status === 'inferred' ? RP.STATUS_FILL.inferred : null }));
-  const lineRows = () => M.lines.map((L) => ({ cells: [L.n, EDGE_TYPES[L.type].label, L.facets.join(', '), rpNum(L.m.planFt, 2), rpNum(L.m.factor, 4), rpNum(L.m.trueFt, 2), rpFtIn(L.m.trueFt), L.m.factor < 1.002 ? 'horizontal' : (L.m.basis === 'plane' ? 'sloped: plane' : 'sloped: pitch'), rpCap(L.status), (L.e.obscuredFt || 0) > 0.5 ? rpNum(L.e.obscuredFt, 1) + ' ft hidden' : (L.e.note || '')], fill: L.status === 'unresolved' ? RP.STATUS_FILL.unresolved : L.status === 'inferred' ? RP.STATUS_FILL.inferred : null }));
+  const facetRows = () => M.facets.map((F) => ({ cells: [F.id, M.t.structures.length > 1 ? 'S' + (F.structure || 1) : '', F.f.excluded ? 'cut-out' : 'L' + (F.f.level || 1), F.f.pitch === 0 ? 'Flat' : F.f.pitch + '/12', F.m.basis === 'fitted' ? rpNum(F.m.slope12, 2) + '/12 fitted' : 'assigned', rpNum(F.m.plan, 1), rpNum(F.m.factor, 4), (F.f.excluded ? '-' : '') + rpNum(F.m.sloped, 1), F.f.excluded ? 'excluded' : rpCap(F.status), F.status === 'inferred' ? `${rpNum(F.f.inferredSqft > 0 && F.f.inferredSqft < F.m.sloped ? F.f.inferredSqft : F.m.sloped)} sf estimated` + (F.range ? `; facet range ${rpNum(F.range[0])}-${rpNum(F.range[1])} sf` : '') + '. ' + (F.f.evidence || F.f.note || '') : F.status === 'unresolved' ? (F.f.missing || F.f.note || '') : ((F.f.altSqft > 0.5 ? `${rpNum(F.f.altSqft)} sf measured on ${rpSrc(F.f.confirmedBy)}. ` : F.f.confirmedBy ? `confirmed on ${rpSrc(F.f.confirmedBy)}. ` : '') + (F.f.verify ? `VERIFY (${rpSrc(F.f.verify)}). ` : '') + (F.f.note || (F.f.repaired ? 'outline rebuilt from the height model' : '')))], fill: F.status === 'unresolved' ? RP.STATUS_FILL.unresolved : F.status === 'inferred' ? RP.STATUS_FILL.inferred : null }))
+    .concat(M.zones.map((Z) => ({ cells: [Z.id, '', '-', Z.pitch != null ? Z.pitch + '/12 if roof' : '-', 'not measured', '-', '-', '0 to ' + rpNum(Z.upperSqft), 'Hidden zone', `Under tree canopy${Z.facetName ? ' beside ' + Z.facetName : ''}. Nothing seen shows whether roof continues here. In no total.`], fill: RP.STATUS_FILL.unresolved })));
+  const lineRows = () => M.lines.map((L) => ({ cells: [L.n, EDGE_TYPES[L.type].label, L.facets.join(', '), rpNum(L.m.planFt, 2), rpNum(L.m.factor, 4), rpNum(L.m.trueFt, 2), rpFtIn(L.m.trueFt), L.m.factor < 1.002 ? 'horizontal' : (L.m.basis === 'plane' ? 'sloped: plane' : 'sloped: pitch'), rpCap(L.status), (L.e.verify ? `VERIFY (${rpSrc(L.e.verify)}). ` : '') + (L.e.confirmedBy ? `located on ${rpSrc(L.e.confirmedBy)}` : (L.e.obscuredFt || 0) > 0.5 ? rpNum(L.e.obscuredFt, 1) + ' ft hidden' : (L.e.note || ''))], fill: L.status === 'unresolved' ? RP.STATUS_FILL.unresolved : L.status === 'inferred' ? RP.STATUS_FILL.inferred : null }))
+    .concat(M.obLines.map((L) => ({ cells: [L.id, 'Obstruction', L.facets.join(', '), rpNum(L.m.planFt, 2), '-', 'not counted', '-', 'not a roof edge', 'Unresolved', 'Visible roof stops at tree canopy here; the real edge is not located.'], fill: RP.STATUS_FILL.unresolved })));
   const fCols = [{ t: 'ID', w: 30 }, { t: 'Str.', w: 26 }, { t: 'Level', w: 36 }, { t: 'Pitch', w: 38 }, { t: 'Slope basis', w: 72 }, { t: 'Plan sq ft', w: 56, a: 'r' }, { t: 'Factor', w: 44, a: 'r' }, { t: 'Sloped sq ft', w: 62, a: 'r' }, { t: 'Status', w: 56 }, { t: 'Note', w: W - 420, wrap: true }];
   const lCols = [{ t: 'Key', w: 28 }, { t: 'Type', w: 72 }, { t: 'Facets', w: 66 }, { t: 'Plan ft', w: 46, a: 'r' }, { t: 'Factor', w: 44, a: 'r' }, { t: 'True ft', w: 46, a: 'r' }, { t: 'ft-in', w: 46, a: 'r' }, { t: 'Length kind', w: 66 }, { t: 'Status', w: 54 }, { t: 'Note', w: W - 468, wrap: true }];
   const queue = [...pages];
   const sched = (title, cols, rowsFn, footer) => queue.push([title, (d, ctx) => { let y = 80; const end = rpTable(d, RP.M, y, cols, rowsFn(), { size: 7.2, rh: 12.5, onBreak: () => { ctx.newPage(title + ' (continued)'); return 80; } }); if (footer) footer(d, end + 10); }]);
-  sched('Facet schedule', fCols, facetRows, (d, y) => { const t = M.t; rpText(d, `Totals: plan ${rpNum(t.plan, 1)} sq ft, net sloped ${rpNum(t.sloped, 1)} sq ft (${M.facets.filter((F) => !F.f.excluded).length} facets${M.t.cutouts.length ? ', ' + M.t.cutouts.length + ' cut-out(s) subtracted' : ''}). "Fitted" slope is the plane fitted to the height model; the pitch column is that slope rounded to the framing pitch.`, RP.M, y, { size: 7, color: RP.MUTE, maxWidth: W }); });
+  sched('Facet schedule', fCols, facetRows, (d, y) => { const t = M.t; rpText(d, `Totals: plan ${rpNum(t.plan, 1)} sq ft, net sloped ${rpNum(t.sloped, 1)} sq ft = confirmed ${rpNum(M.area.confirmed, 1)} + estimate ${rpNum(M.area.estimate, 1)}${M.area.unresolvedTraced > 0.5 ? ' + not confirmed ' + rpNum(M.area.unresolvedTraced, 1) : ''} (${M.facets.filter((F) => !F.f.excluded).length} facets${M.t.cutouts.length ? ', ' + M.t.cutouts.length + ' cut-out(s) subtracted' : ''}). "Fitted" slope is the plane fitted to the height model; the pitch column is that slope rounded to the framing pitch.`, RP.M, y, { size: 7, color: RP.MUTE, maxWidth: W }); });
   sched('Line schedule', lCols, lineRows, (d, y) => { rpText(d, 'Key numbers match the length diagram. True ft = plan ft x factor. "sloped: plane" factors come from the fitted roof plane; "sloped: pitch" from the adjoining facet pitch.', RP.M, y, { size: 7, color: RP.MUTE, maxWidth: W }); });
   const hasOb = M.ob && (M.ob.trees.length || M.ob.structures.length || M.ob.inferredPlanSqft > 1);
   if (hasOb) queue.push(['Trees & obstructions', (d) => rpPageTrees(d, M, A)]);
+  if (M.views.length || M.evidence.length || M.alt || M.zones.length || M.obLines.length) queue.push(['Other views & evidence', (d, ctx) => rpPageEvidence(d, M, A, ctx)]);
   queue.push(['Totals & waste', (d, ctx) => rpPageTotals(d, M, ctx)]);
   if (opts.view3d) queue.push(['3D view', (d) => rpPage3D(d, M)]);
   if (opts.materials !== false && typeof MATERIAL_CATALOG !== 'undefined') queue.push(['Material order quantities', (d) => rpPageMaterials(d, M)]);
@@ -465,7 +595,7 @@ async function rpBuild(opts = {}) {
 }
 // the "Download PDF report" button: vector report; "both" appends the insurance estimate pages (rendered as before)
 async function rpDownload(what = 'report') {
-  const wantEst = what === 'both';
+  const wantEst = what === 'both' || (typeof xm !== 'undefined' && !!xm.appendToReport);
   if (wantEst && typeof xmEnsureRoof === 'function' && !await xmEnsureRoof()) return;
   toast('Building PDF...');
   if (typeof permitEnsure === 'function') { try { await permitEnsure(); } catch (_) { /* optional */ } }

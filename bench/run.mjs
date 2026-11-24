@@ -20,7 +20,9 @@ export function runOne(ctx, seed) {
   let res;
   try { res = trace(ctx, sc); } catch (e) { return { seed, error: String(e && e.message || e) }; }
   const en = summarizeEngine(res, 6, EXACT);
-  const tagged = { inferred: res.facets.filter((f) => f.status === 'inferred').length, unresolved: res.facets.filter((f) => f.status === 'unresolved').length, repaired: (res.repairs || []).length, obscPct: res.obstruction ? res.obstruction.footprintObscuredPct : null };
+  const tagged = { inferred: res.facets.filter((f) => f.status === 'inferred').length, unresolved: res.facets.filter((f) => f.status === 'unresolved').length, repaired: (res.repairs || []).length, obscPct: res.obstruction ? res.obstruction.footprintObscuredPct : null,
+    zones: res.obstruction && res.obstruction.hiddenZones ? res.obstruction.hiddenZones.length : 0, hiddenUpperSqft: res.obstruction && res.obstruction.hiddenZones ? res.obstruction.hiddenZones.reduce((a, z) => a + z.upperSqft, 0) : 0, gtSloped: gt.sloped, enSloped: en.sloped,
+    obstFt: res.edges.filter((e) => e.type === 'obstruction').reduce((a, e) => { const L = e.line; let d = 0; for (let i = 1; i < L.length; i++) d += Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]); return a + d * 3.28084; }, 0) };
   // paired: the same trace scored with exact math (fitted slope, plane slope factors) -> x_ fields
   const ex = compare(gt, summarizeEngine(res, 6, true)); const x = { x_areaErrPct: ex.areaErrPct }; for (const t of ['rake', 'hip', 'valley', 'step', 'eave', 'ridge']) x['x_en_' + t] = ex['en_' + t];
   return { seed, wings: wings.length, levels: new Set(wings.map((w) => w.eaveZ)).size, meta: sc.meta, ms: Date.now() - t0, ...tagged, ...x, ...compare(gt, en) };

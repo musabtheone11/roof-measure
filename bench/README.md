@@ -52,10 +52,34 @@ Everything under `bench/private/` (customer addresses, report numbers, sketches)
 node modeltest.mjs                            # measurement and audit rules in roofmodel.js
 node run.mjs --n 1600 --out results/new.jsonl # synthetic houses now carry an aerial colour layer (trees are green)
 node treecmp.mjs results/now.jsonl results/new.jsonl   # area accuracy on tree-covered synthetic roofs, paired seeds
+node colourtest.mjs                           # tan, olive, red-brown and dark roofs must trace like a grey one, with and without trees
 Key=... node ../tools/dev/run-app.mjs --address "..." --out ../.devcache/runs/name   # the real UI, address to PDF
+Key=... node ../tools/dev/run-app.mjs --address "..." --out ../.devcache/runs/name --alt   # ... plus the reviewer's second look
+python3 -I sectioncmp.py private/refs/<house>/sections.json "Before=a/roof.json" "After=b/roof.json" --out cmp.md --png cmp.png
 ```
 
-## Results on 2026-11-24 (previous engine -> this branch)
+`--alt` drives *Review roof from other angles* through the real controls: the five 3D views, the dated imagery list, the
+roof configuration check, *Carry edges into the sketch*, the newest USDA photo, and a second PDF (`report-alt.pdf`).
+`sectioncmp.py` compares several exports of one house by roof section and by line type against reference values kept in
+a private `sections.json` (the sections are the facets of one named export; other exports are cut against those outlines).
+
+## Results on 2026-11-24, hidden-zone engine (second update)
+
+Synthetic, 598 paired houses (seeds 1-1000). The previous engine is scored with its rounded pitches, the two updates
+with their fitted slopes (`results/now.jsonl`, `final.jsonl`, `v4.jsonl`):
+
+| Set | Houses | Area within 3%, previous engine | first update | this update | Mean abs. area error, previous | first | this |
+|---|---|---|---|---|---|---|---|
+| Clear roofs | 398 | 92.5% | 92.5% | 93.0% | 1.01% | 1.26% | 1.15% |
+| Tree-covered roofs | 200 | 44.5% | 52.0% | 71.0% | 4.91% | 4.33% | 2.65% |
+
+- No clear roof is flagged. Hidden zones appear on 87 of the 200 tree-covered roofs; their area is in no total.
+- Roof colour: tan, warm grey, olive, red-brown and charcoal roofs trace exactly like the grey one in `colourtest.mjs`
+  (before this update a tan or olive roof lost facets to the canopy test).
+- Real houses (23, trace image only): median area error 5.8% (was 6.9% on the previous engine), rake length error 36%
+  (was 46%; 63% after the first update), step flashing 25% (was 46%). See `REAL_RESULTS.md`.
+
+## Results on 2026-11-24 (previous engine -> first update)
 
 Synthetic, 954 paired houses (seeds 1-1600), area scored the way the app scores it:
 
