@@ -40,6 +40,7 @@
   async function openCash() {
     if (typeof xmEnsureRoof === 'function') { if (!await xmEnsureRoof()) return; }      // traces the roof first when needed (existing behaviour)
     else if (!state.facets.length) { toast('Measure the roof first.', true); return; }
+    if (typeof window.rmExportGate === 'function' && !window.rmExportGate()) return;     // unresolved roof: ask before pricing from it
     localStorage.setItem('currentEstimate', JSON.stringify(buildCashHandoff(computeTotals(), state)));
     window.open('cash/index.html', '_blank', 'noopener');
   }

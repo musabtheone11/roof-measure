@@ -66,7 +66,7 @@ try {
     console.log('     3D: ' + JSON.stringify(cov));
     if (cov.ready && cov.ok !== false) for (const v of ['top', 'n', 'e', 's', 'w']) await step('3D view ' + v, async () => { await page.click(`#avSide [data-view="${v}"]`); await page.waitForTimeout(v === 'top' ? 9000 : 16000); await panel.screenshot({ path: path.join(out, `alt-3d-${v}.png`) }); });
     else await panel.screenshot({ path: path.join(out, 'alt-3d-unavailable.png') });
-    const tiers = await step('dated imagery list', async () => { await page.click('#avPanel [data-av="dated"]'); await page.waitForFunction(() => window.rmAltView.state.tiers && !window.rmAltView.state.busy, null, { timeout: 120000 }); await page.waitForTimeout(1500); await busy(); return page.evaluate(() => window.rmAltView.state.tiers.map((t) => ({ quality: t.quality, date: t.date, current: t.current, same: t.same, roofSqft: t.roofSqft }))); });
+    const tiers = await step('dated imagery list', async () => { await page.click('#avPanel [data-av="dated"]'); await page.waitForFunction(() => { const a = window.rmAltView.state; return a.tiers && !a.busy && !a.listing && (a.sel || !a.tiers.some((t) => !t.current)); }, null, { timeout: 120000 }); await page.waitForTimeout(800); await busy(); return page.evaluate(() => window.rmAltView.state.tiers.map((t) => ({ quality: t.quality, date: t.date, current: t.current, same: t.same, roofSqft: t.roofSqft }))); });
     console.log('     tiers: ' + JSON.stringify(tiers)); fs.writeFileSync(path.join(out, 'alt-tiers.json'), JSON.stringify(tiers, null, 1));
     await page.waitForTimeout(1500); await panel.screenshot({ path: path.join(out, 'alt-dated-swipe.png') });
     if (await page.locator('#avProbe').count()) {
@@ -83,6 +83,25 @@ try {
     const naip = await page.evaluate(() => (window.rmAltView.state.naip || []).map((n) => ({ date: n.date, gsd: n.gsd })));
     console.log('     NAIP flights: ' + JSON.stringify(naip)); fs.writeFileSync(path.join(out, 'alt-naip.json'), JSON.stringify(naip, null, 1));
     if (naip.length) await step('compare newest USDA NAIP photo', async () => { await page.click('#avSide [data-src^="naip:"]'); await page.waitForFunction(() => { const a = window.rmAltView.state; return !a.busy && a.src[a.sel] && a.src[a.sel].naip; }, null, { timeout: 120000 }); await page.evaluate(() => { window.rmAltView.state.v.swipe = 0.5; avPaint(); }); await page.waitForTimeout(800); await panel.screenshot({ path: path.join(out, 'alt-dated-naip.png') }); });
+    // a ground-rectified public-record orthophoto where one exists (Florida): comparison only
+    const fdot = await page.evaluate(() => (window.rmAltView.state.fdot || []).map((n) => ({ year: n.year, from: n.from, to: n.to, gsd: n.gsd })));
+    console.log('     county orthophotos: ' + JSON.stringify(fdot)); fs.writeFileSync(path.join(out, 'alt-county.json'), JSON.stringify(fdot, null, 1));
+    if (fdot.length) await step('compare newest county orthophoto', async () => { await page.click('#avSide [data-src^="fdot:"]'); await page.waitForFunction(() => { const a = window.rmAltView.state; return !a.busy && a.src[a.sel] && a.src[a.sel].fdot; }, null, { timeout: 120000 }); await page.evaluate(() => { window.rmAltView.state.v.swipe = 0.5; avPaint(); }); await page.waitForTimeout(800); await panel.screenshot({ path: path.join(out, 'alt-dated-county.png') }); }).catch(() => {});
+    // --verify-lowslope "<note>": the reviewer clicks the outline of a low-slope section taken from the second dataset and marks it for verification
+    const vnote = arg('verify-lowslope', null);
+    if (vnote && await page.locator('#avSide [data-src^="solar:"]').count()) {
+      await step('mark low-slope outline for verification', async () => {
+        const again = page.locator('#avSide [data-src^="solar:"]').first(); await again.click(); await busy(); await page.evaluate(() => { window.rmAltView.state.v.swipe = 0.04; avPaint(); });
+        const targets = await page.evaluate(() => { const r = state.trace.ref, cv = document.getElementById('avCanvas'), b = cv.getBoundingClientRect(), V = window.rmAltView.state.v, W = cv.clientWidth, H = cv.clientHeight;
+          const en = (q) => [(q.lng() - r.lng) * r.kx, (q.lat() - r.lat) * r.ky]; const ring = (sh) => { const o = []; sh.getPath().forEach((q) => o.push(en(q))); return o; };
+          const low = state.facets.filter((f) => !f.omit && !f.excluded && (f.structure || 1) === 1 && f.pitch <= 2 && (f.altSqft || 0) > 20).map((f) => ring(f.shape)); const out = [];
+          for (const e of state.edges) { if (e.omit || !['eave', 'rake'].includes(e.type) || e.verify) continue; const p = ring(e.shape); const mid = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2];
+            if (low.some((fp) => fp.some((a, k) => RM.pointSeg(mid, a, fp[(k + 1) % fp.length]) < 0.4))) out.push({ id: e.id, x: b.left + W / 2 + (mid[0] - V.cx) * V.s, y: b.top + H / 2 - (mid[1] - V.cy) * V.s }); }
+          return out; });
+        let n = 0; for (const t of targets) { await page.mouse.click(t.x, t.y); await page.waitForTimeout(250); const ok = await page.evaluate((id) => { const p = window.rmAltView.state.pick; return !!(p && p.kind === 'edge' && p.id === id); }, t.id); if (!ok || !await page.locator('#avPkVerify').count()) continue; await page.fill('#avPkNote', vnote); await page.click('#avPkVerify'); n++; await page.waitForTimeout(150); }
+        console.log(`     marked ${n} of ${targets.length} low-slope outline lines for verification`); await panel.screenshot({ path: path.join(out, 'alt-dated-verify.png') });
+      });
+    }
     await page.click('#avClose'); await fit();
     await page.locator('#map').screenshot({ path: path.join(out, 'map-overlay-alt.png') });
     data = await snapshot('-alt'); await pdf('report-alt.pdf');

@@ -275,6 +275,7 @@ function lengthPage(R, n) {
 function areaPage(R, n) {
   const t = R.t;
   return page(`${head(R, 'Area measurement report')}
+    ${t.unresolvedItems || t.inferredSloped > 0.5 ? `<div style="margin:6px 0;padding:6px 8px;border:1.5px solid #c0392b;color:#8a1c12;font-weight:600;font-size:11px">${t.unresolvedItems ? 'NOT FULLY MEASURED. ' : ''}Confirmed ${sqftUp(t.confirmedSloped)} sqft${t.inferredSloped > 0.5 ? '; estimated under tree canopy ' + sqftUp(t.inferredSloped) + ' sqft' : ''}${t.areaByStatus.unresolved > 0.5 ? '; marked unresolved ' + sqftUp(t.areaByStatus.unresolved) + ' sqft' : ''}${t.hiddenZones && t.hiddenZones.length ? '; hidden zones of 0 to ' + sqftUp(t.hiddenUpperSloped) + ' sqft are in no total' : ''}. The PDF report shows where and on what evidence.</div>` : ''}
     <div class="stats"><div>Total roof area: ${sqftUp(t.sloped)} sqft</div><div>Predominant pitch: ${t.predominant == null ? '-' : t.predominant === 0 ? 'Flat' : pitchLabel(t.predominant)}</div>
     <div>Pitched roof area: ${sqftUp(t.pitched)} sqft</div><div>Predominant pitch area: ${sqftUp(t.predArea)} sqft</div>
     <div>Flat roof area: ${sqftUp(t.flat)} sqft</div><div>Unspecified pitch area: 0 sqft</div>

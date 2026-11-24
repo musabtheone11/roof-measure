@@ -961,7 +961,9 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
   const EV = { 1: 'the same plane is visible up or down the slope from the hidden part', 2: 'the opposite face of the same ridge is visible beside the hidden part', 3: 'Google\'s building outline covers the hidden part', 4: 'a reviewer confirmed from another image that the roof continues here', 5: 'the wall lines on both sides of a hidden corner were extended until they meet' };
   // pixels whose heights were carried in from another dated, georeferenced source (reviewer-approved; see autotrace.js)
   const altUsed = env && env.opts && env.opts.alt && env.opts.alt.used && env.opts.alt.used.length === w * h ? env.opts.alt : null;
-  const altN = altUsed ? new Map() : null; if (altUsed) for (let i = 0; i < w * h; i++) { const l = label[i]; if (l >= 0 && altUsed.used[i] && !(st && st.inferred[i])) altN.set(l, (altN.get(l) || 0) + 1); }
+  const altN = altUsed ? new Map() : null;
+  if (altUsed) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, l = label[i]; if (l < 0 || !altUsed.used[i] || (st && st.inferred[i])) continue; let a = altN.get(l); if (!a) altN.set(l, (a = { n: 0, edge: 0 })); a.n++;
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || label[i - 1] < 0 || label[i + 1] < 0 || label[i - w] < 0 || label[i + w] < 0) a.edge++; }
   for (const f of facets) {
     f.status = 'measured'; f.inferredSqft = 0; f.evidence = null;
     const sf = Math.sqrt(1 + f.slope * f.slope); const q = fstat.get(f.id);
@@ -975,7 +977,13 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
       f.evidenceKind = top;
       f.evidence = 'Tree canopy hides ' + Math.round(infM2 * SQFT) + ' sq ft (plan) of this plane. Evidence that the roof continues there: ' + EV[top] + '. The fitted plane was continued down to ' + ['its own measured eave height', 'the eave height measured on the opposite face of the same ridge', 'the lowest point of its visible outline (no level eave of this plane is visible, so this may be high)', 'the typical eave height of this building'][src] + '.'; f.eaveSource = src;
     }
-    if (altN) { const an = altN.get(f.id) || 0; if (an * geo.pxM2 >= 0.5) { f.altSqft = an * geo.pxM2 * sf * SQFT; f.confirmedBy = altUsed.label; } }
+    if (altN) { const a = altN.get(f.id); if (a && a.n * geo.pxM2 >= 0.5) { f.altSqft = a.n * geo.pxM2 * sf * SQFT; f.confirmedBy = altUsed.label;
+      // A softer second dataset (anything below Google's HIGH quality) places an edge to about 0.4 m and its building outline
+      // runs large. What it supplies is reported as an estimate with a range (dashed), never as a confirmed measurement.
+      const nPx = pxCount.get(f.id) || regions[f.id].n; const full = nPx * geo.pxM2 * sf * SQFT;
+      if (altUsed.soft && a.n >= Math.max(0.5 / geo.pxM2, 0.03 * nPx)) { const d0 = f.rangeSqft ? (f.rangeSqft[1] - f.rangeSqft[0]) / 2 : 0;
+        f.status = 'inferred'; f.inferredSqft = Math.min(full, f.inferredSqft + f.altSqft); const d = Math.min(f.inferredSqft, d0 + a.edge * pxM * 0.4 * sf * SQFT); f.rangeSqft = [full - d, full + d]; f.evidenceKind = 6;
+        f.evidence = (f.evidence ? f.evidence + ' ' : '') + Math.round(a.n * geo.pxM2 * SQFT) + ' sq ft (plan) of this plane is under tree canopy in the trace image and was taken from ' + (altUsed.text || altUsed.label) + ' after the roof configuration check. That dataset is softer: its edges are good to about 1.3 ft, so this part is an estimate.'; } } }
     // raw (unstraightened) outline of the height-model region, kept for audit
     try { const loop = regionOuterLoop(label, w, h, f.id); if (loop.length >= 8) { const P = loop.map((e) => [geo.E(e.a[0]), geo.N(e.a[1])]); const half = Math.floor(P.length / 2); f.rawPath = dpM(P.slice(0, half + 1), 0.12).slice(0, -1).concat(dpM(P.slice(half).concat([P[0]]), 0.12).slice(0, -1)).map(toLL); } } catch (_) { /* audit copy only */ }
     delete f.m;
@@ -994,7 +1002,8 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
         for (let k = 0; k <= steps; k++) { const px = Math.floor(geo.X(a[0] + (b[0] - a[0]) * k / steps)), py = Math.floor(geo.Y(a[1] + (b[1] - a[1]) * k / steps)); n++; let any = false;
           for (let dy = -3; dy <= 3 && !any; dy++) for (let dx = -3; dx <= 3; dx++) { const xx = px + dx, yy = py + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h && altUsed.used[yy * w + xx]) { any = true; break; } }
           if (any) hit++; } }
-      if (n && hit / n >= 0.5) { e.confirmedBy = altUsed.label; e.altFt = hit / n * e.planM * e.factor * FT; } }
+      if (n && hit / n >= 0.5) { e.confirmedBy = altUsed.label; e.altFt = hit / n * e.planM * e.factor * FT;
+        if (altUsed.soft && e.status === 'measured') { e.status = 'inferred'; e.evidence = 'Located on ' + (altUsed.text || altUsed.label) + ' (softer image: position good to about 1.3 ft).'; } } }
     e.facets = (e.regions || []).filter((l) => l >= 0 && idName.has(l)).map((l) => idName.get(l));
     delete e.g; delete e.pl; delete e.regions; delete e.underCanopy;
   }
@@ -1002,7 +1011,7 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
   if (ob && st) { try {
     obstruction = obSummarize(dsmRaw, w, h, geo, env.mask, label, regions, ob, st, toLL); obstruction.canopyOnMaskSqft = st.canopyOnMaskPx * geo.pxM2 * SQFT;
     // hidden zones: where a plane could continue under the canopy but nothing seen supports it. Not roof; an upper bound.
-    obstruction.hiddenZones = obHiddenZones(st.ghost, label, w, h, geo, regions, obstSegs, toLL).map((z, i) => ({ id: 'H' + (i + 1), path: z.path, centre: z.centre, planSqft: z.planSqft, upperSqft: z.upperSqft, pitch: z.pitch, facet: idName.has(z.region) ? idName.get(z.region) : null }));
+    obstruction.hiddenZones = obHiddenZones(st.ghost, label, w, h, geo, regions, obstSegs, toLL, st.maskGhost).map((z, i) => ({ id: 'H' + (i + 1), path: z.path, centre: z.centre, planSqft: z.planSqft, upperSqft: z.upperSqft, pitch: z.pitch, facet: idName.has(z.region) ? idName.get(z.region) : null }));
     obstruction.obstructionBoundaryFt = edges.filter((e) => e.type === 'obstruction').reduce((a, e) => a + e.planM * FT, 0);
   } catch (e) { console.warn('obstruction summary failed', e); } }
   const plot = env && env.opts && env.opts.plot && ob ? { w, h, label: env.opts.plot === 'full' ? Array.from(label) : null, ids: env.opts.plot === 'full' ? facets.map((f) => f.id) : null, tree: (() => { const o = []; for (let y = 0; y < h; y++) { const r = []; for (let x = 0; x < w; x++) { const i = y * w + x; r.push(st.ghost[i] > 0 && label[i] < 0 ? 4 : st.unresolved[i] ? 3 : st.inferred[i] && label[i] >= 0 ? 2 : ob.tree[i] === 1 ? 1 : 0); } o.push(r); } return o; })() } : null;

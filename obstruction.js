@@ -159,9 +159,14 @@ function obInferHidden(dsm, label, regions, member, mask, w, h, geo, lp, ob, hal
   // hidden candidates: canopy pixels with no roof plane (on the mask or beside it, never on another building), plus the
   // tall pixels in and right around the canopy that the colour / roughness test missed (holes in the canopy class would
   // otherwise cut a hidden roof column in two). Rule 1 below still requires something standing above the roof plane.
-  const cand = new Uint8Array(N); let nCand = 0;
+  // candT: what the canopy test itself found (and its rim). cand also takes anything else tall standing off every
+  // building, whatever its texture or colour: a tree top that reads smooth after the height model's blur is not classed as
+  // canopy, yet the roof beside it is just as hidden. Rule 1 still requires the thing to stand above the roof plane, so
+  // the blurred band outside every eave, hedges and fences below the eave never pass.
+  const cand = new Uint8Array(N), candT = new Uint8Array(N); let nCand = 0;
   for (let i = 0; i < N; i++) { if (label[i] >= 0) continue;
-    if ((ob.tree[i] === 1 && (member[i] || !mask[i])) || (!mask[i] && halo && halo[i] && dsm[i] - ob.ground >= OB.tallM)) { cand[i] = 1; if (ob.tree[i] === 1) nCand++; } }
+    if ((ob.tree[i] === 1 && (member[i] || !mask[i])) || (!mask[i] && halo && halo[i] && dsm[i] - ob.ground >= OB.tallM)) { cand[i] = 1; candT[i] = 1; nCand++; }
+    else if (!mask[i] && dsm[i] > -1000 && dsm[i] - ob.ground >= OB.tallM) { cand[i] = 1; nCand++; } }
   if (!nCand) return { label, memberEff, inferred, unresolved, ghost, ev, canopyOnMaskPx: 0, eaveZ: new Map(), fallbackEave: null };
   let canopyOnMask = 0; for (let i = 0; i < N; i++) if (cand[i] && member[i]) canopyOnMask++;
   // roof pixels around the canopy that carry no plane yet take their neighbour's plane; planes that now touch may be one
@@ -171,11 +176,17 @@ function obInferHidden(dsm, label, regions, member, mask, w, h, geo, lp, ob, hal
   const BIN = 0.2; const frame = new Map();
   const frameOf = (l) => { let f = frame.get(l); if (f !== undefined) return f; const pl = regions[l].plane, s = Math.hypot(pl.a, pl.b); f = s > 0.06 ? { s, gx: pl.a / s, gy: pl.b / s, cx: -pl.b / s, cy: pl.a / s } : null; frame.set(l, f); return f; };
   const edgeZ = new Map(), own = new Map(), size = new Map(), zTop = new Map();
+  const sE = lp.Ecol[Math.min(1, w - 1)] >= lp.Ecol[0] ? 1 : -1, sN = lp.Nrow[Math.min(1, h - 1)] >= lp.Nrow[0] ? 1 : -1;      // which way east and north run in pixel steps
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x, l = label[i]; if (l < 0) continue; size.set(l, (size.get(l) || 0) + 1);
     { const z = zOf(regions[l].plane, x, y); if (!(zTop.get(l) >= z)) zTop.set(l, z); }
     const f = frameOf(l); if (f) { let b = own.get(l); if (!b) own.set(l, (b = new Set())); b.add(Math.round((f.cx * lp.Ecol[x] + f.cy * lp.Nrow[y]) / BIN)); }
-    for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) { if (j < 0 || (label[j] < 0 && !member[j] && !cand[j])) { let a = edgeZ.get(l); if (!a) edgeZ.set(l, (a = [])); a.push(zOf(regions[l].plane, x, y)); break; } }
+    for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) { if (j < 0 || (label[j] < 0 && !member[j] && !candT[j])) {
+      // an eave is the edge the plane runs DOWN to: keep the sample only where open space lies down-slope of the pixel
+      // (the level high edge of a mono-pitch roof, and rakes, are outline too but say nothing about the eave height)
+      if (f) { let ox = 0, oy = 0; for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= w || yy >= h) { ox += dx; oy += dy; continue; } const q = yy * w + xx; if (label[q] < 0 && !member[q] && !candT[q]) { ox += dx; oy += dy; } }
+        const oE = ox * sE, oN = oy * sN, on = Math.hypot(oE, oN); if (on > 0 && (oE * f.gx + oN * f.gy) / on > -0.7) break; }
+      let a = edgeZ.get(l); if (!a) edgeZ.set(l, (a = [])); a.push(zOf(regions[l].plane, x, y)); break; } }
   }
   // eave height of a plane = low percentile of its height along its visible outline. It is RELIABLE only when a level
   // stretch of outline (a real eave, at least 2.5 m) is visible; a plane seen only along a rake reads too high.
@@ -287,6 +298,15 @@ function obInferHidden(dsm, label, regions, member, mask, w, h, geo, lp, ob, hal
       const nx = []; for (let k = 0; k < add.length; k += 2) ghost[add[k]] = add[k + 1] + 1;
       for (let k = 0; k < add.length; k += 2) for (const j of nb4(add[k])) if (j >= 0 && cand[j] && out[j] < 0 && !ghost[j] && !seen[j]) { seen[j] = 1; nx.push(j); }
       fr = nx; } }
+  // Canopy on Google's building outline that no plane could be continued under (a lower wing whose own roof is wholly
+  // hidden, for example): the outline says "building", nothing seen says what the roof is. It must not vanish without a
+  // flag: each such patch of 1 m2 or more that touches the traced roof or a hidden zone becomes a hidden zone itself.
+  const maskGhost = new Uint8Array(N);
+  { const seen = new Uint8Array(N);
+    for (let s0 = 0; s0 < N; s0++) { if (seen[s0] || !(cand[s0] && member[s0] && out[s0] < 0 && !ghost[s0] && !notCanopy[s0] && ob.tree[s0] === 1)) continue;
+      const blob = [s0]; seen[s0] = 1; let host = -1;
+      for (let k = 0; k < blob.length; k++) for (const j of nb4(blob[k])) { if (j < 0) continue; if (out[j] >= 0) { if (host < 0) host = out[j]; } else if (ghost[j] > 0) { if (host < 0) host = ghost[j] - 1; } else if (!seen[j] && cand[j] && member[j] && !notCanopy[j] && ob.tree[j] === 1) { seen[j] = 1; blob.push(j); } }
+      if (host >= 0 && blob.length * geo.pxM2 >= 1) for (const i of blob) { ghost[i] = host + 1; maskGhost[i] = 1; } } }
   // a reviewer confirmed, from another source, that the roof continues in a hidden zone: that zone becomes inferred roof
   const accept = opts && opts.acceptHidden ? opts.acceptHidden : null;
   if (accept && accept.length) { const comp = new Int32Array(N).fill(-1); let nc = 0; const take = new Set();
@@ -298,7 +318,7 @@ function obInferHidden(dsm, label, regions, member, mask, w, h, geo, lp, ob, hal
   // effective roof mask: inferred pixels are roof; canopy on the mask that nothing supports is not (the mask followed the tree)
   for (let i = 0; i < N; i++) { if (inferred[i]) memberEff[i] = 1; else if (cand[i] && member[i] && !unresolved[i] && !notCanopy[i]) memberEff[i] = 0; }
   const dbg = { pairs: [...new Set([...pairsOf.values()].flat())].map((pr) => ({ l: pr.l, m: pr.m, nearL: pr.nearL, nearM: pr.nearM, binsL: pr.binsL.size, binsM: pr.binsM.size })), ez: [...size.keys()].map((l) => ({ l, own: eaveZ.get(l), ok: !!eaveOk.get(l), use: ezOf(l) })) };
-  return { label: out, memberEff, inferred, unresolved, ghost, ev, borrowed, canopyOnMaskPx: canopyOnMask, eaveZ, fallbackEave, dbg };
+  return { label: out, memberEff, inferred, unresolved, ghost, maskGhost, ev, borrowed, canopyOnMaskPx: canopyOnMask, eaveZ, fallbackEave, dbg };
 }
 // roof pixels on the footprint boundary that touch a ghost pixel: there the visible roof ends at an obstruction
 function obContact(label, ghost, w, h) {
@@ -308,16 +328,18 @@ function obContact(label, ghost, w, h) {
 }
 // hidden zones for the report: connected ghost areas that lie against an obstruction boundary
 // obstSegs: [[a, b], ...] obstruction boundary segments in metres. Returns [{ path, planSqft, upperSqft, region, pitch }]
-function obHiddenZones(ghost, label, w, h, geo, regions, obstSegs, toLL) {
+function obHiddenZones(ghost, label, w, h, geo, regions, obstSegs, toLL, keep) {
   const N = w * h, SQFT = 10.7639104; const comp = new Int32Array(N).fill(-1); const zones = [];
   const dSeg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1]; const l2 = dx * dx + dy * dy || 1e-12; let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
   for (let s0 = 0; s0 < N; s0++) {
-    if (!(ghost[s0] > 0) || label[s0] >= 0 || comp[s0] >= 0) continue; const id = zones.length; const stack = [s0]; comp[s0] = id; let n = 0, up = 0, near = false; const byPlane = new Map();
-    while (stack.length) { const i = stack.pop(); n++; const l = ghost[i] - 1; const pl = regions[l].plane; up += Math.sqrt(1 + pl.a * pl.a + pl.b * pl.b); byPlane.set(l, (byPlane.get(l) || 0) + 1);
+    if (!(ghost[s0] > 0) || label[s0] >= 0 || comp[s0] >= 0) continue; const id = zones.length; const stack = [s0]; comp[s0] = id; let n = 0, up = 0, near = false, kept = 0; const byPlane = new Map();
+    while (stack.length) { const i = stack.pop(); n++; if (keep && keep[i]) kept++; const l = ghost[i] - 1; const pl = regions[l].plane; up += Math.sqrt(1 + pl.a * pl.a + pl.b * pl.b); byPlane.set(l, (byPlane.get(l) || 0) + 1);
       const x = i % w, y = (i - x) / w;
       if (!near && n % 7 === 1) { const p = [geo.E(x + 0.5), geo.N(y + 0.5)]; for (const sg of obstSegs) if (dSeg(p, sg[0], sg[1]) < 1.0) { near = true; break; } }
       for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) if (j >= 0 && ghost[j] > 0 && label[j] < 0 && comp[j] < 0) { comp[j] = id; stack.push(j); } }
     let region = -1, bn = 0; for (const [l, c] of byPlane) if (c > bn) { bn = c; region = l; }
+    // a patch the building outline covers is kept even when the roof edge beside it looked straight enough to be a real edge
+    if (kept * geo.pxM2 >= 1) near = true;
     zones.push({ n, near, planSqft: n * geo.pxM2 * SQFT, upperSqft: up * geo.pxM2 * SQFT, region, pitch: Math.round(Math.hypot(regions[region].plane.a, regions[region].plane.b) * 12) });
   }
   const out = [];
@@ -392,7 +414,7 @@ function obSummarize(dsm, w, h, geo, mask, label, regions, ob, st, toLL) {
   const tallest = (a) => (a.length ? Math.max(...a.map((t) => t.topFt)) : null);
   return {
     source: ob.hasRgb ? 'Google Solar height model (10 cm) + aerial RGB colour' : 'Google Solar height model (10 cm); no aerial colour layer',
-    heightReference: 'ground beside the house (5th percentile of the height model outside all buildings)',
+    heightReference: 'lowest ground in the frame (5th percentile of the height model outside all buildings)',
     roofPlanSqft: roofPx * geo.pxM2 * SQFT, inferredPlanSqft: infPx * geo.pxM2 * SQFT, unresolvedContactFt: unrPx * px * FT,
     footprintObscuredPct: roofPx ? infPx / roofPx * 100 : 0,
     trees, structures,

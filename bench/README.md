@@ -66,18 +66,21 @@ a private `sections.json` (the sections are the facets of one named export; othe
 ## Results on 2026-11-24, hidden-zone engine (second update)
 
 Synthetic, 598 paired houses (seeds 1-1000). The previous engine is scored with its rounded pitches, the two updates
-with their fitted slopes (`results/now.jsonl`, `final.jsonl`, `v4.jsonl`):
+with their fitted slopes (`results/now.jsonl`, `final.jsonl`, `v6.jsonl`):
 
 | Set | Houses | Area within 3%, previous engine | first update | this update | Mean abs. area error, previous | first | this |
 |---|---|---|---|---|---|---|---|
 | Clear roofs | 398 | 92.5% | 92.5% | 93.0% | 1.01% | 1.26% | 1.15% |
-| Tree-covered roofs | 200 | 44.5% | 52.0% | 71.0% | 4.91% | 4.33% | 2.65% |
+| Tree-covered roofs | 200 | 44.5% | 52.0% | 77.5% | 4.91% | 4.33% | 2.09% |
 
-- No clear roof is flagged. Hidden zones appear on 87 of the 200 tree-covered roofs; their area is in no total.
+- No clear roof is flagged. Of the 200 tree-covered roofs, 181 carry a flag (an estimated part, a hidden zone or an
+  obstruction boundary). Of the 19 with no flag, 3 are more than 5% short of the true area (worst -10.5%): canopy the
+  tracer did not recognise. Before the last two fixes (any tall object beside the roof is a candidate obstruction; eave
+  height taken only from down-slope edges) it was 12 of 43.
 - Roof colour: tan, warm grey, olive, red-brown and charcoal roofs trace exactly like the grey one in `colourtest.mjs`
   (before this update a tan or olive roof lost facets to the canopy test).
-- Real houses (23, trace image only): median area error 5.8% (was 6.9% on the previous engine), rake length error 36%
-  (was 46%; 63% after the first update), step flashing 25% (was 46%). See `REAL_RESULTS.md`.
+- Real houses (23, trace image only): median area error 6.0% (was 6.9% on the previous engine), rake length error 36%
+  (was 46%; 63% after the first update), step flashing 21% (was 46%). See `REAL_RESULTS.md`.
 
 ## Results on 2026-11-24 (previous engine -> first update)
 

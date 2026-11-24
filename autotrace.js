@@ -572,14 +572,14 @@ async function autoTraceRoof(opts = {}) {
     const chk = altCheck(dsmT.data, al, r1.roofMask, r1.treeMask, mask, w, h, geo);
     const d = A.layers.imageryDate; const date = d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : null;
     const srcName = 'Google Solar API, ' + String(A.layers.imageryQuality || altReq.quality).toLowerCase() + ' quality';
-    altInfo = { quality: A.layers.imageryQuality || altReq.quality, date, source: srcName, label: srcName + (date ? ', flown ' + date : ''), check: chk, used: false };
+    altInfo = { quality: A.layers.imageryQuality || altReq.quality, date, source: srcName, label: srcName + (date ? ', flown ' + date : ''), check: chk, used: false, soft: String(A.layers.imageryQuality || altReq.quality).toUpperCase() !== 'HIGH' };
     if (opts.altProbe) return { alt: altInfo, hiddenZones: (r1.obstruction && r1.obstruction.hiddenZones) || [] };
     if (chk.ok && altReq.approved) {
       // carry the other dataset in only where the current one has canopy (plus its blurred rim); everything else stays as flown
       const sh = chk.shiftPx[1] * w + chk.shiftPx[0]; const zone = altDilate(r1.treeMask, w, h, Math.round(1.2 / Math.sqrt(geo.pxM2)));
       const d2 = Float32Array.from(dsmT.data), m2 = Uint8Array.from(mask), used = new Uint8Array(w * h); const rb = opts.rgb && al.rgb ? opts.rgb.map((b) => Uint8Array.from(b)) : opts.rgb; let n = 0;
       for (let y = 7; y < h - 7; y++) for (let x = 7; x < w - 7; x++) { const i = y * w + x; if (!zone[i]) continue; const j = i + sh; if (!al.valid[j]) continue; d2[i] = al.dsm[j] + chk.offsetM + chk.tilt[0] * (x - chk.centre[0]) + chk.tilt[1] * (y - chk.centre[1]); m2[i] = al.mask[j]; used[i] = 1; n++; if (rb && al.rgb) { rb[0][i] = al.rgb[0][j]; rb[1][i] = al.rgb[1][j]; rb[2][i] = al.rgb[2][j]; } }
-      dsmUse = { ...dsmT, data: d2 }; mask = m2; opts = { ...opts, rgb: rb, alt: { used, label: altInfo.source } };
+      dsmUse = { ...dsmT, data: d2 }; mask = m2; opts = { ...opts, rgb: rb, alt: { used, label: altInfo.source, text: altInfo.label, soft: altInfo.soft } };
       altInfo.used = true; altInfo.approved = altReq.approved;
     }
   }

@@ -18,27 +18,36 @@ export function start(port = 8080, opt = {}) {
   fs.mkdirSync(REPORTS, { recursive: true });
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://localhost');
-    const send = (code, body, type = 'text/plain') => { res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' }); res.end(body); };
+    const send = (code, body, type = 'text/plain') => { res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(body); };
     try {
+      // only this machine's own pages may talk to the server: no DNS-rebinding hosts, no cross-site form posts
+      const hosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]); if (!hosts.has(String(req.headers.host || '').toLowerCase())) return send(403, 'forbidden');
       if (req.method === 'POST' && u.pathname === '/save') {
-        const name = safeName(u.searchParams.get('name')); if (!name) return send(400, 'name required');
-        const chunks = []; req.on('data', (c) => chunks.push(c));
-        req.on('end', () => { fs.writeFileSync(path.join(REPORTS, name), Buffer.concat(chunks)); send(200, JSON.stringify({ saved: true, name }), 'application/json'); });
+        const origin = req.headers.origin; if (origin && origin !== `http://localhost:${port}` && origin !== `http://127.0.0.1:${port}`) return send(403, 'forbidden');
+        const name = safeName(u.searchParams.get('name')); if (!name || name === '.' || name === '..' || name.length > 200) return send(400, 'bad name');
+        const chunks = []; let size = 0, over = false;
+        req.on('data', (c) => { size += c.length; if (size > 200 * 1024 * 1024) { over = true; req.destroy(); } else chunks.push(c); });
+        req.on('end', () => { if (over) return; try { fs.writeFileSync(path.join(REPORTS, name), Buffer.concat(chunks)); send(200, JSON.stringify({ saved: true, name }), 'application/json'); } catch (e) { send(500, 'could not save'); } });
         return;
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'method not allowed');
-      let file;
-      if (u.pathname.startsWith('/reports/')) file = path.join(REPORTS, safeName(decodeURIComponent(u.pathname.slice(9))));
+      let file, saved = false;
+      if (u.pathname.startsWith('/reports/')) { file = path.join(REPORTS, safeName(decodeURIComponent(u.pathname.slice(9)))); saved = true; }
       else {
         const rel = decodeURIComponent(u.pathname === '/' ? '/index.html' : u.pathname);
-        file = path.join(ROOT, rel);
-        if (!file.startsWith(ROOT + path.sep) || /(^|\/)\.(git|devcache)(\/|$)/.test(rel) || rel.includes('/private/')) return send(403, 'forbidden');
+        file = path.resolve(ROOT, '.' + path.sep + rel);
+        // judged on the resolved path, segment by segment and case-insensitively (back-slashes and .GIT on Windows included)
+        const segs = path.relative(ROOT, file).split(/[\\/]+/).map((q) => q.toLowerCase());
+        if (!file.startsWith(ROOT + path.sep) || segs.some((q) => q === '..' || q === '.git' || q === '.devcache' || q === 'private' || q.startsWith('.env'))) return send(403, 'forbidden');
       }
       if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return send(404, 'not found');
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+      const ext = path.extname(file).toLowerCase(); const head = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+      // saved files are data, never pages: anything that could run as a page is sent as a download
+      if (saved && !['.tif', '.tiff', '.json', '.pdf', '.png', '.jpg', '.jpeg', '.csv'].includes(ext)) { head['Content-Type'] = 'application/octet-stream'; head['Content-Disposition'] = 'attachment'; }
+      res.writeHead(200, head);
       if (req.method === 'HEAD') return res.end();
       fs.createReadStream(file).pipe(res);
-    } catch (e) { send(500, String(e)); }
+    } catch (e) { send(500, 'server error'); }
   });
   return new Promise((resolve) => srv.listen(port, 'localhost', () => resolve(srv)));
 }

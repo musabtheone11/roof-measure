@@ -17,7 +17,7 @@
  *  - Each physical line is counted once in its own category. A height break is two physical lines on one plan line (the
  *    upper roof's eave or rake, and the flashing where the lower roof meets the wall); both are real and both are counted,
  *    each in its own category, never twice in the same one. Duplicate lines of the same category on the same stretch are
- *    reported by the audit and are not added twice.
+ *    reported by the audit as an error (they are counted twice until removed: the export gate asks first).
  *  - Every facet and line carries a status: measured, inferred (with evidence and, when known, a range) or unresolved
  *    (with what is missing). Unresolved quantities are never reported as zero: they are listed and the totals are flagged.
  *  - A category with no lines reads 0 only when every facet boundary is classified; outline left unclassified is reported

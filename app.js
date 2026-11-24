@@ -775,7 +775,7 @@ function selEvidenceButtons(item) {
   return `<div class="row wrap" style="margin-top:8px;gap:6px">
       ${st !== 'measured' ? `<button class="small" id="selConfirm" ${geo ? '' : 'disabled'} title="${geo ? 'Its position matches the roof edge in the imagery now shown on the map' : 'Show georeferenced overhead imagery of another date first (Review roof from other angles)'}">Confirm on ${geo ? esc(av.label) : 'other imagery'}</button>` : ''}
       <button class="small ghost" id="selVerify" title="Another view shows this edge but cannot measure it reliably">${item.verify ? 'Marked for verification' : 'Mark for verification'}</button>
-    </div>${item.confirmedBy ? `<div class="muted small" style="margin-top:4px">Confirmed on ${esc(item.confirmedBy.source)}${item.confirmedBy.date ? ', ' + esc(item.confirmedBy.date) : ''}.</div>` : ''}`;
+    </div>${item.confirmedBy ? `<div class="muted small" style="margin-top:4px">${st === 'measured' ? 'Confirmed on' : 'Located on'} ${esc(item.confirmedBy.source || String(item.confirmedBy))}${item.confirmedBy.date ? ', ' + esc(item.confirmedBy.date) : ''}${st === 'measured' ? '' : ' (estimate)'}.</div>` : ''}`;
 }
 function selEvidenceWire(item, kind) {
   const c = $('#selConfirm'), v = $('#selVerify'); const av = typeof AV !== 'undefined' ? AV.active : null;
@@ -867,15 +867,19 @@ function exportCSV() {
   const L = [];
   L.push(['Roof Measure export', state.jobName, state.address, new Date().toLocaleString()].map(csv).join(','));
   L.push('');
-  L.push('Facet,Structure,Pitch,Plan sq ft,Roof sq ft,Perimeter ft,Corners,Two story,Two layer,Excluded');
-  for (const { f, m } of t.facetsAll) L.push([f.name, structureOf(t, f.id), pitchLabel(f.pitch), m.plan.toFixed(1), m.sloped.toFixed(1), m.perimeterFt.toFixed(1), m.path.length, f.twoStory ? 'yes' : '', f.twoLayer ? 'yes' : '', f.excluded ? 'yes' : ''].map(csv).join(','));
-  L.push(['TOTAL', '', `${t.weightedPitch.toFixed(1)}/12 avg`, t.plan.toFixed(1), t.sloped.toFixed(1), '', '', '', '', ''].join(','));
+  // what the totals rest on, stated before any number: a spreadsheet reader has no drawing to see the dashes and hatching on
+  L.push('Status,Confirmed sq ft,Estimated sq ft (hidden roof),Marked unresolved sq ft,Hidden zones not in any total (sq ft, upper bound),Obstruction boundary not counted (ft)');
+  L.push([t.unresolvedItems ? 'NOT FULLY MEASURED' : (t.inferredSloped > 0.5 ? 'includes an estimate' : 'measured'), t.confirmedSloped.toFixed(1), t.inferredSloped.toFixed(1), t.areaByStatus.unresolved.toFixed(1), (t.hiddenUpperSloped || 0).toFixed(1), (t.obstructionFt || 0).toFixed(1)].map(csv).join(','));
   L.push('');
-  L.push('Line,Type,Pitch used,Plan ft,Actual ft,Segments');
-  t.edges.forEach(({ e, m }, i) => L.push([i + 1, EDGE_TYPES[e.type].label, pitchLabel(m.pitch), m.planFt.toFixed(1), m.trueFt.toFixed(1), m.path.length - 1].map(csv).join(',')));
+  L.push('Facet,Structure,Pitch,Plan sq ft,Roof sq ft,Perimeter ft,Corners,Two story,Two layer,Excluded,Status');
+  for (const { f, m } of t.facetsAll) L.push([f.name, structureOf(t, f.id), pitchLabel(f.pitch), m.plan.toFixed(1), m.sloped.toFixed(1), m.perimeterFt.toFixed(1), m.path.length, f.twoStory ? 'yes' : '', f.twoLayer ? 'yes' : '', f.excluded ? 'yes' : '', RM.statusOf(f)].map(csv).join(','));
+  L.push(['TOTAL', '', `${t.weightedPitch.toFixed(1)}/12 avg`, t.plan.toFixed(1), t.sloped.toFixed(1), '', '', '', '', '', ''].join(','));
+  L.push('');
+  L.push('Line,Type,Pitch used,Plan ft,Actual ft,Segments,Status');
+  t.edges.forEach(({ e, m }, i) => L.push([i + 1, EDGE_TYPES[e.type].label, pitchLabel(m.pitch), m.planFt.toFixed(1), m.trueFt.toFixed(1), m.path.length - 1, EDGE_TYPES[e.type].notRoof ? 'not a roof edge (not counted)' : RM.statusOf(e)].map(csv).join(',')));
   L.push('');
   L.push('Line type,Total plan ft,Total actual ft');
-  for (const [k, v] of Object.entries(EDGE_TYPES)) if (t.byType[k].count) L.push([v.plural, t.byType[k].plan.toFixed(1), t.byType[k].true.toFixed(1)].join(','));
+  for (const [k, v] of Object.entries(EDGE_TYPES)) if (t.byType[k].count && !v.notRoof) L.push([v.plural, t.byType[k].plan.toFixed(1), t.byType[k].true.toFixed(1)].join(','));
   L.push('');
   L.push('Structure,Facets,Roof sq ft,Predominant pitch');
   for (const s of t.structures) L.push([`Structure #${s.index}`, s.facetCount, s.sloped.toFixed(1), s.predominant == null ? '' : pitchLabel(s.predominant)].join(','));
