@@ -79,8 +79,12 @@ with their fitted slopes (`results/now.jsonl`, `final.jsonl`, `v6.jsonl`):
   height taken only from down-slope edges) it was 12 of 43.
 - Roof colour: tan, warm grey, olive, red-brown and charcoal roofs trace exactly like the grey one in `colourtest.mjs`
   (before this update a tan or olive roof lost facets to the canopy test).
-- Real houses (23, trace image only): median area error 6.0% (was 6.9% on the previous engine), rake length error 36%
-  (was 46%; 63% after the first update), step flashing 21% (was 46%). See `REAL_RESULTS.md`.
+- Real houses (23, trace image only): median area error 5.5% (was 6.9% on the previous engine), eave length error 22%
+  (was 29%), rake length error 35% (was 46%; 63% after the first update), step flashing 24% (was 46%). See `REAL_RESULTS.md`.
+- Outline corners: a short slanted stretch (under 5 m) joining two parallel, offset wall lines is squared into a right-angle
+  step through its middle (`fpSquareJog`). Real houses: area 6.0% -> 5.5%, eaves 24.8% -> 22.1%; synthetic houses unchanged.
+- Tried and switched off: moving each outline wall to the half-way point of the height drop (`edgeHalfHeight`). Synthetic
+  houses improved slightly (93.0% -> 93.7% within 3%) but real houses got worse (median area error 6.0% -> 8.4%).
 
 ## Results on 2026-11-24 (previous engine -> first update)
 

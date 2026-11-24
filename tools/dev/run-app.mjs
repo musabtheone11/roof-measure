@@ -1,5 +1,5 @@
 // Headless address-to-PDF run through the real UI (same buttons a person clicks).
-//   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090] [--alt]
+//   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090] [--alt] [--estimate [--xm "deck=membrane,lossType="] [--est-name estimate]]
 //   --alt also runs the reviewer's second look (3D views, dated imagery, configuration check, carry) and writes report-alt.pdf
 // Writes: map-clean.png, map-overlay.png, roof.json (Export JSON content), totals.json, report.pdf, console.log
 // The API key is read from the environment (Key or GOOGLE_MAPS_KEY) and is never written to disk.
@@ -47,11 +47,11 @@ try {
     fs.writeFileSync(path.join(out, `totals${sfx}.json`), JSON.stringify({ address, ...data.totals, solar: data.solar, audit: data.audit }, null, 1));
     return data;
   };
-  const pdf = (name) => step('download PDF ' + name, async () => {
+  const pdf = (name, id = pdfWhat) => step('download PDF ' + name, async () => {
     const dl = page.waitForEvent('download', { timeout: 240000 }); dl.catch(() => {});
-    await page.evaluate((id) => { const b = document.getElementById(id); for (let p = b; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; if (p.hidden) p.hidden = false; } b.scrollIntoView({ block: 'center' }); }, pdfWhat);
+    await page.evaluate((id) => { const b = document.getElementById(id); for (let p = b; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; if (p.hidden) p.hidden = false; } b.scrollIntoView({ block: 'center' }); }, id);
     if (process.argv.includes('--3d')) await page.evaluate(() => { const c = document.getElementById('chkPdf3d'); if (c) c.checked = true; });
-    await page.click('#' + pdfWhat, { timeout: 15000 });
+    await page.click('#' + id, { timeout: 15000 });
     const save = page.locator('#dlReadySave'); save.waitFor({ timeout: 240000 }).then(() => save.click()).catch(() => {});
     const d = await dl; await d.saveAs(path.join(out, name));
   });
@@ -105,6 +105,17 @@ try {
     await page.click('#avClose'); await fit();
     await page.locator('#map').screenshot({ path: path.join(out, 'map-overlay-alt.png') });
     data = await snapshot('-alt'); await pdf('report-alt.pdf');
+  }
+  // --estimate: the app's own priced estimate (panel 7, its saved price list and default scope), from the final sketch
+  if (process.argv.includes('--estimate')) {
+    // --xm "key=value,key=value": estimate settings a person would change in panel 7 (for example deck=membrane, pipeLead=2, lossType=)
+    const xmSet = arg('xm', null);
+    if (xmSet != null) await page.evaluate((kv) => { for (const part of kv.split(',')) { const i = part.indexOf('='); if (i < 1) continue; const k = part.slice(0, i).trim(), v = part.slice(i + 1).trim(); if (!(k in XM_DEFAULTS)) throw new Error('unknown estimate setting ' + k); const d = XM_DEFAULTS[k]; xm[k] = typeof d === 'boolean' ? v === 'true' : typeof d === 'number' ? +v : v; } if (typeof xmRender === 'function') xmRender(); }, xmSet);
+    const est = await page.evaluate(() => { const E = xmPriced(); const s = {}; for (const k of ['shingle', 'waste', 'underlay', 'deck', 'drip', 'valley', 'iws', 'renail', 'sealant', 'starter', 'ridgeVent', 'mastic', 'steep', 'high', 'op', 'removal', 'pipeLead', 'pipe', 'exhaust4', 'exhaust8', 'turtle', 'offridge4', 'offridge6', 'rain', 'satellite', 'chimney', 'gutterLF', 'haul', 'dumpster', 'permit', 'permitAmt', 'priceList', 'lossType']) s[k] = xm[k];
+      return { settings: s, taxRate: E.rate, items: E.items.map((i) => ({ n: i.n, desc: i.desc, unit: i.unit, qty: i.qty, price: i.price, ext: i.ext, tax: i.tax, rcv: i.rcv, cat: i.cat })), lineItemTotal: E.lit, tax: E.tax, overhead: E.overhead, profit: E.profit, rcv: E.rcv, deductible: E.deductible, net: E.net, meas: E.meas, county: typeof permit !== 'undefined' && permit.data ? permit.data.county : null, yearBuilt: typeof permit !== 'undefined' && permit.data ? permit.data.yearBuilt : null }; });
+    const en = arg('est-name', 'estimate'); fs.writeFileSync(path.join(out, en + '.json'), JSON.stringify(est, null, 1));
+    await pdf(en + '.pdf', 'btnXmPDF');
+    console.log(`     estimate: ${est.items.length} lines, line items ${est.lineItemTotal.toFixed(2)}, tax ${est.tax.toFixed(2)}, total ${est.rcv.toFixed(2)}`);
   }
   const t = data.totals; console.log(`${address}: ${Math.round(t.slopedSqft)} sqft, ${t.facetCount} facets, predominant ${t.predominant}/12, ${t.structures.length} structure(s)`);
 } catch (e) { code = 1; try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }

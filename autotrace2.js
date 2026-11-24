@@ -38,6 +38,9 @@ var AT2 = {
   fpChamferInsideM: 2.4, // inside-corner chamfers shorter than this are squared too
   fpChamferFreeM: 2.2, // ... always when shorter than this, otherwise only if the corner is occluded (tree canopy)
   eaveBufferM: 0,      // outward offset of the footprint (benchmarked: 0.15 m made well-traced houses 4-5% too big)
+  fpSquareJog: true,   // a short slanted stretch between two parallel offset walls becomes a square step through its middle
+  fpSquareJogMaxM: 5,  // ... when the slanted stretch is shorter than this (longer ones can be real angled walls)
+  edgeHalfHeight: false, // move each outline wall to the half-way point of the height drop. Benchmarked: synthetic 93.0% -> 93.7% within 3%, but real houses got worse (median area error 6.0% -> 8.4%), so it stays off
   regularizeFootprint: true,
   bendGapM: 0.15,      // a pitch break is continuous: one plane rising and one falling across a line with a bigger gap is a step
   pitchAnchorM2: 15,   // facets at least this big define the house's design pitches
@@ -308,7 +311,49 @@ function regularizeFootprint(dsm, label, w, h, geo, dominantDeg, ground) {
     }
     runs = out; if (!changed) break;
   }
+  // skewed jog: one or more short non-axis runs joining two parallel, offset wall lines. Walls step at right angles; a
+  // slanted join is the building mask cutting the inside corner (a tree or its shadow beside it, or plain blur). Make it
+  // one square step through the middle of the slanted stretch, which keeps the area the same.
+  if (AT2.fpSquareJog) for (let pass = 0; pass < 12; pass++) {
+    const n = runs.length; let hit = false; if (n < 4) break;
+    for (let k = 0; k < n && !hit; k++) {
+      const p = runs[(k - 1 + n) % n]; if (runs[k].cls >= 0 || p.cls < 0) continue;                 // k starts a non-axis stretch
+      let m = 1; while (m < n - 2 && runs[(k + m) % n].cls < 0) m++;
+      const q = runs[(k + m) % n]; if (q === p || q.cls !== p.cls) continue;
+      let len = 0; const pts = []; for (let j = 0; j < m; j++) { const r = runs[(k + j) % n]; len += r.len; for (const t of r.pts) pts.push(t); }
+      if (len >= AT2.fpSquareJogMaxM || Math.abs(offset(p, q.line.m)) < AT2.fpJogM) continue;
+      const step = refit({ cls: 1 - p.cls, pts, len, a: runs[k].a, b: runs[(k + m - 1) % n].b });
+      const out = []; for (let j = 0; j < n - m; j++) out.push(runs[(k + m + j) % n]); out.push(step); runs = out; hit = true;
+    }
+    if (!hit) break;
+  }
   if (runs.length < 3) return label;
+  // Put each wall line where the height model says the roof ends. Google's building mask, which the outline starts from,
+  // runs up to a foot outside the shingle edge. The height model is blurred across every eave and rake, and the middle of
+  // that blur (half-way down the drop from the roof to the ground beyond it) is where the edge is. Each straight run is
+  // moved to the median half-way point measured along it, when the drop is clear and the measurements agree; a run with
+  // a tree, a lower roof or another building beside it has no clear drop and is left where it was.
+  if (AT2.edgeHalfHeight) {
+    const px = (E, N) => { const x = Math.floor(geo.X(E)), y = Math.floor(geo.Y(N)); return x >= 0 && y >= 0 && x < w && y < h ? y * w + x : -1; };
+    const med = (v) => { const q = v.slice().sort((p, q2) => p - q2); return q[q.length >> 1]; };
+    for (const r of runs) {
+      const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]); if (!(L >= 2.4)) continue;
+      const u = [(r.b[0] - r.a[0]) / L, (r.b[1] - r.a[1]) / L], n = r.line.n; const offs = []; let tried = 0, outVotes = 0;
+      const foot = (p) => { const d = n[0] * p[0] + n[1] * p[1] - r.line.c; return [p[0] - n[0] * d, p[1] - n[1] * d]; };
+      for (let sgn = 0, k = 0; k < 2; k++) {                                   // pass 0: which side is outside; pass 1: measure
+        for (let sd = 0.7; sd <= L - 0.7; sd += 0.3) { const p = foot([r.a[0] + u[0] * sd, r.a[1] + u[1] * sd]);
+          if (k === 0) { const a = px(p[0] + n[0] * 0.5, p[1] + n[1] * 0.5), b = px(p[0] - n[0] * 0.5, p[1] - n[1] * 0.5); if (a >= 0 && b >= 0 && M[a] !== M[b]) outVotes += M[a] ? -1 : 1; continue; }
+          tried++; const z = []; for (let t = -1.6; t <= 1.2001; t += 0.1) { const i = px(p[0] + n[0] * sgn * t, p[1] + n[1] * sgn * t); z.push(i >= 0 && dsm[i] > -1000 ? dsm[i] : NaN); }
+          if (z.some((v) => !(v === v))) continue;
+          // the roof surface, as a line fitted well inside the edge (it slopes on an eave), carried out to each position
+          let st = 0, sz = 0, stt = 0, stz = 0; for (let i = 0; i < 9; i++) { const t = -1.6 + i * 0.1; st += t; sz += z[i]; stt += t * t; stz += t * z[i]; } const sl = (9 * stz - st * sz) / (9 * stt - st * st), ic = (sz - sl * st) / 9;
+          const zout = med(z.slice(23)); if (!(ic - zout >= 1.2) || Math.abs(sl) > 1.6) continue; const gap = (i) => z[i] - (ic + sl * (-1.6 + i * 0.1) + zout) / 2;
+          for (let i = 8; i < z.length; i++) if (gap(i) < 0) { if (i > 8 && gap(i - 1) >= 0) offs.push(-1.6 + (i - 1) * 0.1 + gap(i - 1) / (gap(i - 1) - gap(i)) * 0.1); break; } }
+        if (k === 0) { if (!outVotes) break; sgn = outVotes > 0 ? 1 : -1; }
+        else if (offs.length >= Math.max(4, 0.5 * tried)) { const m0 = med(offs), mad = med(offs.map((v) => Math.abs(v - m0)));
+          if (mad <= 0.25) { const d = Math.max(-0.9, Math.min(0.5, m0)) * sgn; r.line = { ...r.line, c: r.line.c + d }; r.a = [r.a[0] + n[0] * d, r.a[1] + n[1] * d]; r.b = [r.b[0] + n[0] * d, r.b[1] + n[1] * d]; } } }
+    }
+  }
   // rebuild polygon from consecutive run intersections
   const poly = [];
   for (let k = 0; k < runs.length; k++) { const a = runs[k], b = runs[(k + 1) % runs.length]; const c = intersect2(a.line, b.line); poly.push(c && Math.hypot(c[0] - a.b[0], c[1] - a.b[1]) < Math.max(3, AT2.fpChamferMaxM) ? c : a.b); }
@@ -961,8 +1006,9 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
   const EV = { 1: 'the same plane is visible up or down the slope from the hidden part', 2: 'the opposite face of the same ridge is visible beside the hidden part', 3: 'Google\'s building outline covers the hidden part', 4: 'a reviewer confirmed from another image that the roof continues here', 5: 'the wall lines on both sides of a hidden corner were extended until they meet' };
   // pixels whose heights were carried in from another dated, georeferenced source (reviewer-approved; see autotrace.js)
   const altUsed = env && env.opts && env.opts.alt && env.opts.alt.used && env.opts.alt.used.length === w * h ? env.opts.alt : null;
-  const altN = altUsed ? new Map() : null;
-  if (altUsed) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, l = label[i]; if (l < 0 || !altUsed.used[i] || (st && st.inferred[i])) continue; let a = altN.get(l); if (!a) altN.set(l, (a = { n: 0, edge: 0 })); a.n++;
+  // "resolved" = roof the trace image could not measure and the other dataset shows (not the copied rim of roof it had measured)
+  const altN = altUsed ? new Map() : null, altRes = altUsed ? new Uint8Array(w * h) : null; let altResolvedPx = 0;
+  if (altUsed) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, l = label[i]; if (l < 0 || !altUsed.used[i] || (altUsed.hidden && !altUsed.hidden[i]) || (st && st.inferred[i])) continue; altRes[i] = 1; altResolvedPx++; let a = altN.get(l); if (!a) altN.set(l, (a = { n: 0, edge: 0 })); a.n++;
     if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || label[i - 1] < 0 || label[i + 1] < 0 || label[i - w] < 0 || label[i + w] < 0) a.edge++; }
   for (const f of facets) {
     f.status = 'measured'; f.inferredSqft = 0; f.evidence = null;
@@ -1000,7 +1046,7 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
     if (altUsed && e.type !== 'obstruction') { let n = 0, hit = 0;
       for (let i = 1; i < e.g.length; i++) { const a = e.g[i - 1], b = e.g[i]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const steps = Math.max(1, Math.ceil(L / 0.2));
         for (let k = 0; k <= steps; k++) { const px = Math.floor(geo.X(a[0] + (b[0] - a[0]) * k / steps)), py = Math.floor(geo.Y(a[1] + (b[1] - a[1]) * k / steps)); n++; let any = false;
-          for (let dy = -3; dy <= 3 && !any; dy++) for (let dx = -3; dx <= 3; dx++) { const xx = px + dx, yy = py + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h && altUsed.used[yy * w + xx]) { any = true; break; } }
+          for (let dy = -3; dy <= 3 && !any; dy++) for (let dx = -3; dx <= 3; dx++) { const xx = px + dx, yy = py + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h && altRes[yy * w + xx]) { any = true; break; } }
           if (any) hit++; } }
       if (n && hit / n >= 0.5) { e.confirmedBy = altUsed.label; e.altFt = hit / n * e.planM * e.factor * FT;
         if (altUsed.soft && e.status === 'measured') { e.status = 'inferred'; e.evidence = 'Located on ' + (altUsed.text || altUsed.label) + ' (softer image: position good to about 1.3 ft).'; } } }
@@ -1018,5 +1064,5 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
   // for the alternate-source check: where this dataset sees canopy, and where it sees roof it could measure
   let treeMask = null, roofMask = null;
   if (env && env.opts && env.opts.wantTree && ob && st) { treeMask = new Uint8Array(w * h); roofMask = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) { const tr = ob.tree[i] === 1 || st.inferred[i] || st.ghost[i]; treeMask[i] = tr ? 1 : 0; roofMask[i] = label[i] >= 0 && !tr ? 1 : 0; } }
-  return { facets, edges, planes: facets.length, unassignedPct: 0, datum: 0, dominantDeg, v2: true, obstruction, repairs, noiseSigma: AT2.noiseSigma, plot, treeMask, roofMask };
+  return { facets, edges, planes: facets.length, unassignedPct: 0, datum: 0, dominantDeg, v2: true, obstruction, repairs, noiseSigma: AT2.noiseSigma, plot, treeMask, roofMask, altResolvedPx };
 }

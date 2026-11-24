@@ -356,7 +356,10 @@ async function runSolar() {
   const out = $('#solarOut');
   out.innerHTML = '<span class="muted">Fetching roof model...</span>';
   try {
+    const prev = (state.solar && state.solar.name) || (state.trace && state.trace.buildingName) || null;
     state.solar = await fetchSolar(state.location.lat, state.location.lng);
+    // another building: what a reviewer approved, confirmed or looked at for the last one does not apply to this one
+    if (prev && state.solar && state.solar.name !== prev) { state.altFusion = null; state.acceptedHidden = []; state.altViews = []; state.evidence = []; if (window.rmAltView) { if (window.rmAltView.state.isOpen) window.rmAltView.close(); window.rmAltView.reset(); } }
     drawSolar(); renderSolar(); recompute();
     $('#btnAuto').disabled = false;
   } catch (err) {
@@ -638,7 +641,7 @@ function clearAll() {
   if (draft) cancelDraft();
   for (const f of state.facets) f.shape.setMap(null);
   for (const e of state.edges) e.shape.setMap(null);
-  state.facets = []; state.edges = []; state.selected = null; state.solar = null; state.otherSolar = []; state.trace = null; state.acceptedHidden = []; state.evidence = []; state.altFusion = null; state.altViews = []; clearSolar();
+  state.facets = []; state.edges = []; state.selected = null; state.solar = null; state.otherSolar = []; state.trace = null; state.acceptedHidden = []; state.evidence = []; state.altFusion = null; state.altViews = []; if (window.rmAltView) { if (window.rmAltView.state.isOpen) window.rmAltView.close(); window.rmAltView.reset(); } clearSolar();
   $('#solarOut').innerHTML = ''; $('#jobName').value = ''; state.jobName = '';
   recompute();
 }
@@ -830,7 +833,7 @@ function restore(d) {
   if (d.mat) { Object.assign(state.mat, d.mat); for (const k of Object.keys(state.mat)) { const el = $('#m_' + k); if (el) el.value = state.mat[k]; } }
   for (const f of d.facets || []) addFacet(f.path, f.pitch, f.name, f);
   for (const e of d.edges || []) addEdge(EDGE_TYPES[e.type] ? e.type : 'unspecified', e.path, e.pitch, '', e);
-  state.solar = d.solar || null; state.otherSolar = d.otherSolar || []; state.trace = d.trace || null; state.acceptedHidden = Array.isArray(d.acceptedHidden) ? d.acceptedHidden : []; state.evidence = Array.isArray(d.evidence) ? d.evidence : []; state.altFusion = d.altFusion || null; state.altViews = Array.isArray(d.altViews) ? d.altViews : [];
+  state.solar = d.solar || null; state.otherSolar = d.otherSolar || []; state.trace = d.trace || null; state.acceptedHidden = Array.isArray(d.acceptedHidden) ? d.acceptedHidden : []; state.evidence = Array.isArray(d.evidence) ? d.evidence : []; state.altFusion = d.altFusion || null; if (state.altFusion && !state.altFusion.building && d.solar) state.altFusion.building = d.solar.name; state.altViews = Array.isArray(d.altViews) ? d.altViews : [];
   drawSolar(); renderSolar(); $('#btnAuto').disabled = !state.solar;
   recompute();
   if (state.facets.length) { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 80); }

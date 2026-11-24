@@ -79,7 +79,7 @@ function rpAerialFrom(M, rgb, credit) {
 }
 // the second dated photo, when the reviewer used one: same grid family, so the same roofline can be drawn on it
 function rpAerialAlt(M) {
-  try { if (!M.alt) return null; const cache = window.__altCache || {}; const key = Object.keys(cache).find((k) => k.startsWith(String(M.alt.quality) + '|')); const rgb = key && cache[key].rgbT;
+  try { if (!M.alt) return null; const cache = window.__altCache || {}; const key = M.alt.cacheKey && cache[M.alt.cacheKey] ? M.alt.cacheKey : null; const rgb = key && cache[key].rgbT;        // the exact dataset the trace used, never another building's
     return rpAerialFrom(M, rgb, 'Aerial photo: ' + M.alt.label + '. North up.'); } catch (e) { console.warn('alternate aerial unavailable', e); return null; }
 }
 async function rpAerial(M) {
@@ -476,7 +476,8 @@ function rpPageEvidence(doc, M, A, ctx) {
       ['Same height in both datasets (within 1 ft; roof interior, 2.6 ft in from its edges)', rpNum(c.heightAgreePct, 1) + '%', '80% or more'],
       ['Visible roof inside the second building outline', rpNum(c.outlineAgreePct, 1) + '%', '85% or more'],
       ['Change in roof height above the ground', c.heightChangeM == null ? 'not measurable' : rpNum(Math.abs(c.heightChangeM) * RM.FT, 1) + ' ft', '1.6 ft or less'],
-      ['Horizontal offset between the datasets (corrected)', rpNum(c.shiftM * RM.FT, 1) + ' ft', 'reported'],
+      ['Horizontal offset between the datasets (corrected)', rpNum(c.shiftM * RM.FT, 1) + ' ft', 'under 2 ft'],
+      ...(c.patchSqft ? [['Largest patch of roof added / rebuilt / removed between the two', [c.patchSqft.added, c.patchSqft.changed, c.patchSqft.removed].map((v) => rpNum(v)).join(' / ') + ' sq ft', 'under 16 sq ft each']] : []),
       ['Tilt between the two height models (corrected)', c.tiltPer10m == null ? '-' : rpNum(c.tiltPer10m * 12, 1) + ' in. per 10 ft', '14 in. per 10 ft or less'],
     ], { size: 7 }) + 4;
     y = rpText(doc, 'Result: same roof configuration' + (M.alt.approved ? `; confirmed by the reviewer${M.alt.approved.at ? ' on ' + String(M.alt.approved.at).slice(0, 10) : ''}${M.alt.approved.note ? ' ("' + M.alt.approved.note + '")' : ''}` : '') + (M.alt.soft ? '. The second dataset is softer than the first (edges good to about 1.3 ft, building outline runs large), so what it supplied is an estimate with a range, not a confirmed measurement.' : '.'), x, y + 6, { size: 7, color: RP.MUTE, maxWidth: W }) + 10; }

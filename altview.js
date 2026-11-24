@@ -49,9 +49,17 @@ function avNote(id, patch) {
   Object.assign(v, patch); return v;
 }
 
+// everything the panel holds belongs to one building: drop it when the building changes (New, another address, a loaded job)
+function avReset() {
+  for (const el of [...AV.over, ...AV.marks]) { try { el.remove(); } catch (_) { /* gone */ } }
+  for (const s of Object.values(AV.src)) if (s && s.url) { try { URL.revokeObjectURL(s.url); } catch (_) { /* gone */ } }
+  Object.assign(AV, { src: {}, sel: null, probe: null, pick: null, photo: null, tiers: null, tiersFor: null, naip: null, naipFor: null, fdot: null, fdotFor: null, cov: null, covFor: null, alt: 0, seen: new Set(), over: [], marks: [], markMode: false, listing: false, active: { id: 'solar', label: 'Image used for the trace', date: null, georef: true } });
+}
+const avBuilding = () => (state.solar && state.solar.name) || (state.trace && state.trace.buildingName) || null;
 // ------------------------------------------------------------------ panel shell
 function avOpen(tab) {
   if (!state.key) { toast('Add the Google Maps key first', true); return; }
+  if (AV.forBuilding !== avBuilding()) { avReset(); AV.forBuilding = avBuilding(); }
   AV.tgt = avTarget(); if (!AV.tgt) { toast('Find the property first', true); return; }
   AV.isOpen = true; $('#avPanel').hidden = false; avTab(tab || AV.tab);
 }
@@ -311,8 +319,8 @@ function avPick(p) {
 }
 // check the picked dataset against the roof the trace can see; nothing changes in the sketch
 async function avProbe() {
-  const s = AV.src[AV.sel]; if (!s || !s.tier) return;
-  try { avBusy('Comparing the two datasets where the roof is clearly visible...'); const res = await autoTraceRoof({ altProbe: { quality: s.tier.quality, bbox: s.tier.bbox }, quiet: true });
+  const s = AV.src[AV.sel], tier = (AV.tiers || []).find((q) => q.id === AV.sel); if (!s || !tier || !tier.same) return;
+  try { avBusy('Comparing the two datasets where the roof is clearly visible...'); const res = await autoTraceRoof({ altProbe: { quality: tier.quality, bbox: tier.bbox }, quiet: true });
     AV.probe = { id: AV.sel, ...res.alt, zones: res.hiddenZones.length }; const c = res.alt.check;
     reviewLog({ target: 'roof', action: c.ok ? 'roof configuration check passed' : 'roof configuration check failed: not carried into the sketch', source: s.label, date: s.date || '', note: c.ok ? `heights agree on ${c.heightAgreePct.toFixed(0)}% of the visible roof; outline ${c.outlineAgreePct.toFixed(0)}%` : c.reasons.join(' ') });
     if (!c.ok) avNote(AV.sel, { result: 'Configuration check failed: ' + c.reasons.join(' ') + ' Nothing carried into the sketch.' });
@@ -320,14 +328,14 @@ async function avProbe() {
 }
 // the reviewer confirmed the configuration: use the dataset for the canopy-covered part and re-trace
 async function avCarry() {
-  const s = AV.src[AV.sel], pr = AV.probe; if (!s || !pr || pr.id !== AV.sel || !pr.check.ok) return;
+  const s = AV.src[AV.sel], pr = AV.probe, tier = (AV.tiers || []).find((q) => q.id === AV.sel); if (!s || !tier || !tier.same || !pr || pr.id !== AV.sel || !pr.check.ok) return;
   if (!$('#avCfg').checked) { toast('Tick the box first: compare both images and confirm it is the same roof', true); return; }
   if (state.facets.some((f) => f.edited) && !window.__rmNoConfirm && !confirm('Re-tracing replaces hand edits to facets and lines. Continue?')) return;
   const note = $('#avNoteTxt').value.trim(); const before = { zones: ((state.trace && state.trace.hiddenZones) || []).length, t: computeTotals() };
   try { avBusy('Re-tracing with ' + s.label + ' for the canopy-covered part...');
-    state.altFusion = { quality: s.tier.quality, bbox: s.tier.bbox, date: s.date, label: s.label, approved: { at: new Date().toISOString(), note } };
+    state.altFusion = { building: state.solar.name, quality: tier.quality, bbox: tier.bbox, date: s.date, label: s.label, approved: { at: new Date().toISOString(), note } };
     const info = await autoTraceRoof({ quiet: true }); const a = info.alt; const t = computeTotals();
-    if (!a || !a.used) { state.altFusion = null; await autoTraceRoof({ quiet: true }); toast('Not carried over: the configuration check did not pass on re-trace', true); return; }
+    if (!a || !a.used) { const why = a && a.reasons && a.reasons.length ? a.reasons.join(' ') : 'the configuration check did not pass on re-trace'; state.altFusion = null; if (!(a && a.reasons)) await autoTraceRoof({ quiet: true }); avNote(AV.sel, { result: 'Not carried into the sketch: ' + why }); reviewLog({ target: 'roof', action: 'second dataset not carried into the sketch', source: s.label, date: s.date || '', note: why }); toast('Not carried over: ' + why, true); return; }
     const src = { source: s.label, date: s.date || '' }; const el = state.edges.filter((e) => e.confirmedBy && e.confirmedBy.source === s.label), fl = state.facets.filter((f) => f.confirmedBy && f.confirmedBy.source === s.label);
     const res = `Same roof configuration (check passed, reviewer confirmed). Carried into the sketch${a.soft ? ' as an estimate (softer dataset: edges good to about 1.3 ft)' : ''}: ${Math.round(fl.reduce((q, f) => q + (f.altSqft || 0), 0))} sq ft on ${fl.length} facet${fl.length === 1 ? '' : 's'} and ${el.length} line${el.length === 1 ? '' : 's'}. Hidden zones ${before.zones} -> ${t.hiddenZones.length}.`;
     avNote(AV.sel, { kind: 'solar', label: s.label, date: s.date, georef: true, measurable: true, used: true, result: res });
@@ -420,7 +428,7 @@ function avSide() {
       const used = state.altFusion && state.altFusion.quality === s.tier.quality && state.trace && state.trace.alt && state.trace.alt.used; const pr = AV.probe && AV.probe.id === AV.sel ? AV.probe : (used ? state.trace.alt : null);
       h += `<h4>Use this image for the hidden part</h4><div class="small">This dataset has its own height model. If it shows the same roof, the part the trace image has under tree canopy can be taken from it${s.tier.quality === 'HIGH' ? '' : ' as an estimate (it is softer than the trace image, so its edges are good to about 1.3 ft)'}.</div>`;
       if (pr) { const c = pr.check; const row = (k, v, ok) => `<tr><td>${k}</td><td class="num" style="color:${ok ? 'inherit' : '#ff8a80'}">${v}</td></tr>`;
-        h += `<table class="tbl small" style="margin-top:6px">${row('Visible roof compared', Math.round(c.roofSqft).toLocaleString() + ' sq ft', c.roofSqft >= 160)}${c.heightAgreePct != null ? row('Same height, away from edges', c.heightAgreePct.toFixed(0) + '%', c.heightAgreePct >= 80) + row('Inside the other outline', c.outlineAgreePct.toFixed(0) + '%', c.outlineAgreePct >= 85) + row('Roof height change', c.heightChangeM == null ? 'n/a' : (Math.abs(c.heightChangeM) * RM.FT).toFixed(1) + ' ft', c.heightChangeM == null || Math.abs(c.heightChangeM) <= 0.5) + row('Offset corrected', (c.shiftM * RM.FT).toFixed(1) + ' ft', true) + (c.tiltPer10m != null ? row('Tilt corrected', (c.tiltPer10m * 12).toFixed(1) + ' in. per 10 ft', c.tiltPer10m <= 1.2) : '') : ''}</table>
+        h += `<table class="tbl small" style="margin-top:6px">${row('Visible roof compared', Math.round(c.roofSqft).toLocaleString() + ' sq ft', c.roofSqft >= 160)}${c.heightAgreePct != null ? row('Same height, away from edges', c.heightAgreePct.toFixed(0) + '%', c.heightAgreePct >= 80) + row('Inside the other outline', c.outlineAgreePct.toFixed(0) + '%', c.outlineAgreePct >= 85) + row('Roof height change', c.heightChangeM == null ? 'n/a' : (Math.abs(c.heightChangeM) * RM.FT).toFixed(1) + ' ft', c.heightChangeM == null || Math.abs(c.heightChangeM) <= 0.5) + row(c.aligned === false ? 'Offset (not lined up)' : 'Offset corrected', (c.shiftM * RM.FT).toFixed(1) + ' ft', c.aligned !== false) + (c.tiltPer10m != null ? row('Tilt corrected', (c.tiltPer10m * 12).toFixed(1) + ' in. per 10 ft', c.tiltPer10m <= 1.2) : '') + (c.patchSqft ? row('Largest added / rebuilt / removed patch', [c.patchSqft.added, c.patchSqft.changed, c.patchSqft.removed].map((v) => Math.round(v)).join(' / ') + ' sq ft', Math.max(c.patchSqft.added, c.patchSqft.changed, c.patchSqft.removed) < 16) : '') : ''}</table>
           <div class="small" style="margin-top:4px;color:${c.ok ? '#8fd694' : '#ff8a80'}"><b>${c.ok ? 'Same roof configuration where both can see it.' : 'Not the same roof: ' + esc(c.reasons.join(' '))}</b></div>`;
         if (used) h += `<div class="small" style="margin-top:6px">In use: ${Math.round(state.trace.alt.usedSqft || 0).toLocaleString()} sq ft of roof under the canopy was taken from this dataset${state.trace.alt.soft ? ' as an estimate (dashed lines; the PDF gives the range)' : ''}.</div><div class="row" style="margin-top:6px"><button id="avUncarry" class="small ghost">Stop using this image</button></div>`;
         else if (c.ok) h += `<label class="chk" style="margin-top:6px"><input type="checkbox" id="avCfg"> I compared both images: it is the same roof (same ridges and levels, no addition or removal)</label><label style="display:block;margin-top:4px">Note <input id="avNoteTxt" type="text" placeholder="what changed between the dates (e.g. tree removed)"></label><div class="row" style="margin-top:6px"><button id="avCarry" class="primary small">Carry edges into the sketch</button></div>`;
@@ -478,4 +486,4 @@ function avInit() {
   avCanvasWire();
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', avInit); else avInit();
-window.rmAltView = { open: avOpen, close: avClose, tab: avTab, fly: avFly, tiers: avTiers, naip: avNaipList, select: avSelect, probe: avProbe, carry: avCarry, state: AV };
+window.rmAltView = { reset: avReset, open: avOpen, close: avClose, tab: avTab, fly: avFly, tiers: avTiers, naip: avNaipList, select: avSelect, probe: avProbe, carry: avCarry, state: AV };
