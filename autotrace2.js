@@ -544,7 +544,7 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
     }
     // area-weighted typical slopes of the roof (main planes only)
     const big = [...area.entries()].filter(([, n]) => n * geo.pxM2 >= AT2.bandMaxM2);
-    const bandIds = [];
+    const bandIds = [], eaveBand = new Set();
     for (const [l, n] of area) {
       const aM2 = n * geo.pxM2; if (aM2 > AT2.bandMaxM2 * 2) continue;
       const t = 2 * n / Math.max(1, perim.get(l) || 1) * px; // thickness (m)
@@ -572,13 +572,28 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
         const P = regions[l].plane;
         for (const [q, c] of bigShare) { if (c / shTot >= 0.8) island = true; else if (tot && c / tot >= 0.8 && angleBetween(P.a, P.b, regions[q].plane.a, regions[q].plane.b) < 10) island = true; }
       }
-      if ((steepWall && (thin || outsideShare > 0.3)) || (thin && (!shareable || flatOnPitched)) || island) bandIds.push(l);
+      if ((steepWall && (thin || outsideShare > 0.3)) || (thin && (!shareable || flatOnPitched)) || island) { bandIds.push(l); if (steepWall && outsideShare > 0.25 && !island) eaveBand.add(l); }
     }
     if (!bandIds.length) break;
     const bandSet = new Set(bandIds);
     for (const l of bandIds) {
       const cands = [...(shared.get(l) || new Map()).keys()].filter((q) => q >= 0 && !bandSet.has(q));
       if (!cands.length) continue;
+      if (eaveBand.has(l)) {
+        // The blurred drop-off along the outline fits no roof plane, so "which plane explains the height best" picks at
+        // random (often the plane round the corner, which then owns a strip along this eave: a fake rake + step).
+        // Each pixel joins the roof plane right behind it instead: grow inward from the band's roof-side boundary.
+        const candSet = new Set(cands); let todo = []; for (let i = 0; i < label.length; i++) if (label[i] === l) todo.push(i);
+        while (todo.length) {
+          const set = [], rest = [];
+          for (const i of todo) { const x = i % w; let q = -1;
+            for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) if (j >= 0 && j < label.length && candSet.has(label[j])) { q = label[j]; break; }
+            if (q >= 0) set.push([i, q]); else rest.push(i); }
+          if (!set.length) break;
+          for (const [i, q] of set) { label[i] = q; changedIds.add(q); }
+          todo = rest;
+        }
+      }
       for (let i = 0; i < label.length; i++) {
         if (label[i] !== l) continue; const x = i % w, y = (i - x) / w; const z = dsm[i];
         let best = cands[0], bd = Infinity;
