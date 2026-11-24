@@ -34,6 +34,26 @@ The "Recommended" waste column is computed the way Roofr does it, from the cut e
 
 Tested on 50 random Jacksonville houses; see `reports/_batch_results.json` for the numbers.
 
+## Review, tree obstructions and the PDF report
+
+**5. Review before export** (new panel). After a trace the panel shows what the totals are based on and lets you correct them on the photo:
+
+- **Status of every facet and line**: *Measured* (seen on the imagery), *Inferred* (hidden, placed from stated evidence, with a range) or *Unresolved* (hidden, no evidence). Inferred lines are drawn with long dashes, unresolved ones as red dots. Unresolved items are never reported as zero: they are listed, the totals are flagged as incomplete, and the export asks you to confirm.
+- **Tree canopy layer**: canopy is found from the height model plus the aerial colour layer (tall, rough, green) and is never traced as the roof edge. Each roof plane fitted to its visible part is continued under the canopy only down to that plane's own measured eave height (Inferred). Where the continued plane runs out of canopy before reaching its eave, the hidden edge is marked Unresolved with what would resolve it (leaf-off or oblique photo, drone photo, tape measurement). Trees near the roof and other structures are listed separately, with heights above the ground beside the house.
+- **Geometry checks**: self-intersections, overlaps on the same roof level, doubled corners, near-miss joins, duplicate lines, tracing artifacts and outline with no line type. "Fix what can be fixed safely" joins corners and removes duplicates; overlaps and artifacts are left for you to decide. The raw auto-trace is kept (tick *Show raw trace*) and is saved in the JSON export for audit.
+- **Corrections**: click a facet or line to move corners, change type, pitch, roof level and status, or add a note. Untick a structure to leave it out. Every total recalculates.
+- **Imagery age**: Google's height model can be years old; the panel and the report say so when it is over 3 years.
+
+**Measurement rules** (one module, `roofmodel.js`, used by the screen, the PDF and the benchmark):
+
+- Plan (projected) area and sloped area are separate. Sloped = plan x sqrt(1 + slope^2), using the plane fitted to the height model for auto-traced facets and the assigned pitch for hand-drawn or hand-corrected ones.
+- True line length = plan length x slope factor: from the fitted roof plane for auto-traced lines, from the adjoining pitch for hand-drawn ones. The line schedule says which.
+- Each line is counted once in one category. A height break is two physical lines on one plan line (the upper roof's eave or rake, and the flashing on the lower roof): both are counted, each in its own category.
+- Totals are sums of unrounded values; waste and order quantities are shown separately from the net area; the report prints its own reconciliation checks.
+- Distances use the WGS84 ellipsoid at the roof's latitude (the old spherical formula read north-south distances 0.4% long).
+
+**Download PDF report** now draws the report directly as vectors with selectable text: summary, aerial with roofline, to-scale roof plan (north arrow, scale bar), length / area / pitch diagrams with the same facet IDs, enlarged length-diagram windows for busy roofs, facet schedule, line schedule (every line keyed to the diagram), trees and obstructions, totals with counting rules and reconciliation, optional 3D view and material quantities. *Print* and *Download report* (HTML) keep the earlier layout.
+
 ## Commercial tab (flat / low-slope roofs)
 
 Click **Commercial** at the top of the left panel. Enter the address, then press **Measure commercial roof**. The tool downloads Google's roof mask and 3D surface model for the whole building (10 cm pixels up to about 650 ft across, 25 cm pixels for larger buildings) and measures:
@@ -143,8 +163,14 @@ Check pitch with the **Street View** and **Google Earth 3D** links in the Proper
 
 - `index.html` - the app
 - `app.js` - map, tracing, measurement engine
-- `report.js` - Roofr-format report, company details, brand material catalog
+- `roofmodel.js` - coordinate math, measurement rules, geometry audit and reconciliation (shared by app, PDF and benchmark)
+- `report.js` - Roofr-format HTML report, company details, brand material catalog
+- `roofpdf.js` - the vector PDF report (Diversity Contracting header, schedules, diagrams)
+- `review.js` - "Review before export" panel, status and obstruction overlays, export gate
 - `autotrace.js`, `autotrace2.js` - automatic roof tracing from Google's roof height model
+- `obstruction.js` - tree canopy / nearby structure layer and inference of roof hidden under canopy
+- `bench/` - synthetic and real-house accuracy benchmarks (see `bench/README.md`, `bench/REAL_RESULTS.md`)
+- `tools/dev/` - cross-platform local server and a headless address-to-PDF runner
 - `commercial.js` - commercial (flat roof) measuring, materials and wind zones
 - `commercial_report.js` - the commercial roof report
 - `permits.js` - permit history and roof age (city / county permit records, year built)

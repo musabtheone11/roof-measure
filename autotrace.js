@@ -29,7 +29,7 @@ async function loadTiff(url, cacheName) {
   }
   const tiff = await GeoTIFF.fromArrayBuffer(buf);
   const img = await tiff.getImage();
-  const data = (await img.readRasters())[0];
+  const ras = await img.readRasters(); const data = ras[0];
   const w = img.getWidth(), h = img.getHeight();
   const [ox, oy] = img.getOrigin(); const [rx, ry] = img.getResolution();
   const keys = img.getGeoKeys ? (img.getGeoKeys() || {}) : {};
@@ -45,7 +45,7 @@ async function loadTiff(url, cacheName) {
     if (!def) throw new Error('Unsupported GeoTIFF projection EPSG:' + epsg);
     toLL = (x, y) => { const p = proj4(def, 'EPSG:4326', [ox + x * rx, oy + y * sy]); return { lng: p[0], lat: p[1] }; };
   }
-  return { data, w, h, toLL, rx, ry, epsg };
+  return { data, bands: ras.length >= 3 ? [ras[0], ras[1], ras[2]] : null, w, h, toLL, rx, ry, epsg };
 }
 
 // ------------------------------------------------------------------ raster helpers
@@ -396,7 +396,8 @@ async function autoTraceRoof(opts = {}) {
   const main = state.solar;
   const bb = main.boundingBox;
   const cLat = main.center.latitude, cLng = main.center.longitude;
-  const kx = 111320 * Math.cos(cLat * Math.PI / 180), ky = 110540;
+  // metres per degree on the WGS84 ellipsoid at this latitude (roofmodel.js); the old round numbers were 0.3% off north-south
+  const { kx, ky } = typeof RM !== 'undefined' ? RM.scale(cLat) : { kx: 111320 * Math.cos(cLat * Math.PI / 180), ky: 110540 };
   const halfDiag = Math.hypot((bb.ne.longitude - bb.sw.longitude) * kx, (bb.ne.latitude - bb.sw.latitude) * ky) / 2;
   const radius = Math.min(100, Math.max(15, Math.ceil(halfDiag + 12)));
   if (!opts.quiet) toast('Downloading roof height model...');
@@ -409,16 +410,20 @@ async function autoTraceRoof(opts = {}) {
     const mName = '_cache_' + safe + '_mask.tif', dName = '_cache_' + safe + '_dsm.tif';
     let mT = null, dT = null, layers = null;
     if (location.hostname === 'localhost') {
-      try { const ok = (await fetch('/reports/' + mName)).ok && (await fetch('/reports/' + dName)).ok; if (ok) { mT = await loadTiff('unused', mName); dT = await loadTiff('unused', dName); layers = { imageryDate: main.imageryDate, fromDiskCache: true }; } } catch (_) { mT = null; }
+      try { const ok = (await fetch('/reports/' + mName)).ok && (await fetch('/reports/' + dName)).ok && (await fetch('/reports/_cache_' + safe + '_rgb.tif')).ok; if (ok) { mT = await loadTiff('unused', mName); dT = await loadTiff('unused', dName); layers = { imageryDate: main.imageryDate, fromDiskCache: true }; } } catch (_) { mT = null; }
     }
     if (!mT) {
       layers = await solarDataLayers(cLat, cLng, radius);
       if (!layers.maskUrl || !layers.dsmUrl) throw new Error('Data layers did not include a mask and DSM');
       [mT, dT] = await Promise.all([loadTiff(layers.maskUrl, mName), loadTiff(layers.dsmUrl, dName)]);
     }
-    cached = cache[cacheKey] = { layers, maskT: mT, dsmT: dT };
+    // aerial colour layer of the same flight (same grid as the height model): vegetation test + the report's aerial view
+    let rT = null; const rName = '_cache_' + safe + '_rgb.tif';
+    try { rT = layers.rgbUrl ? await loadTiff(layers.rgbUrl, rName) : (location.hostname === 'localhost' && (await fetch('/reports/' + rName)).ok ? await loadTiff('unused', rName) : null); } catch (_) { rT = null; }
+    cached = cache[cacheKey] = { layers, maskT: mT, dsmT: dT, rgbT: rT };
   }
-  const { layers, maskT, dsmT } = cached;
+  const { layers, maskT, dsmT } = cached; const rgbT = cached.rgbT && cached.rgbT.bands && cached.rgbT.w === dsmT.w && cached.rgbT.h === dsmT.h ? cached.rgbT : null;
+  opts = { ...opts, rgb: rgbT ? rgbT.bands : null };
   if (maskT.w !== dsmT.w || maskT.h !== dsmT.h) throw new Error('Mask and DSM sizes differ');
   const w = maskT.w, h = maskT.h;
   const mask = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) mask[i] = maskT.data[i] > 0 ? 1 : 0;
@@ -489,13 +494,21 @@ async function autoTraceRoof(opts = {}) {
   state.facets = []; state.edges = []; state.selected = null;
   let fi = 0, mainSqft = 0;
   results.forEach(({ res }, idx) => {
-    for (const f of res.facets) { const added = addFacet(f.path, f.pitch, `F${++fi}`); added.azimuth = f.azimuth; if (idx === 0) mainSqft += facetMetrics(added).sloped; }
-    for (const e of res.edges) addEdge(e.type, e.path, null);
+    for (const f of res.facets) {
+      // engine evidence kept on the facet: exact fitted slope, fit quality, Measured / Inferred / Unresolved, raw outline
+      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft } : { azimuth: f.azimuth, structure: idx + 1 });
+      if (idx === 0) mainSqft += facetMetrics(added).sloped;
+    }
+    for (const e of res.edges) addEdge(e.type, e.path, null, '', e.factor != null ? { factor: e.factor, basis: e.basis, status: e.status, autoType: e.type, obscuredFt: e.obscuredFt, structure: idx + 1, evidence: e.evidence, missing: e.missing, paired: e.paired } : { structure: idx + 1 });
   });
   state.otherSolar = results.slice(1).map((r) => r.resp).filter(Boolean);
   if (typeof drawSolar === 'function') drawSolar();
   recompute();
-  const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}` };
+  const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}`, obstruction: mainRes.obstruction || null, repairs: mainRes.repairs || [], plot: mainRes.plot || null };
+  // what the trace was made from, for the review panel, the audit trail and the report
+  state.trace = { engine: 'v2.1', tracedAt: new Date().toISOString(), imageryDate: layers.imageryDate || main.imageryDate || null, imageryQuality: layers.imageryQuality || main.imageryQuality || null, source: 'Google Solar API height model (DSM) and building mask, 0.1 m per pixel', hasRgb: !!rgbT, noiseSigmaM: mainRes.noiseSigma || null,
+    obstruction: mainRes.obstruction || null, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
+    raw: results.map(({ res }, idx) => ({ structure: idx + 1, facets: res.facets.map((f) => ({ pitch: f.pitch, slope: f.slope, status: f.status, path: f.path, rawPath: f.rawPath || null })), edges: res.edges.map((e) => ({ type: e.type, factor: e.factor, status: e.status, path: e.path })) })) };
   if (!opts.quiet) toast(`Auto-traced ${fi} facets, ${state.edges.length} lines, ${results.length} structure${results.length === 1 ? '' : 's'}`);
   return info;
 }

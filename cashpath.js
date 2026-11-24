@@ -1,6 +1,6 @@
 'use strict';
 /* cashpath.js - the two estimate paths.
- * Insurance claim: the existing Xactimate-format estimate (panel 6). Nothing about it changes.
+ * Insurance claim: the existing Xactimate-format estimate (panel 7). Nothing about it changes.
  * Cash: the Diversity Roofing estimate builder in cash/ (kept exactly as built). This file only hands the measured roof
  * to that builder the way the builder already loads a saved estimate: its own localStorage key "currentEstimate",
  * read by loadEstimate() in cash/main.js when the page opens. No file in cash/ is modified. */

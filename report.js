@@ -349,8 +349,9 @@ function heightsPage(R, info, n) {
       </table></div>
       <div><div class="sec">Access &amp; safety</div><table class="kv">
         ${row('Ladder to reach the gutter', ladder ? `${ladder} ft extension ladder` : 'Over 40 ft: lift or roof access required')}
-        ${row('Tallest trees / structures near the roof', trees > 1 ? `${fmt(trees)} ft` : 'None found')}
-        ${row('Trees above the ridge', trees > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No')}
+        ${(() => { const ob = state.trace && state.trace.obstruction; if (!ob) return row('Tallest object near the roof (trees and structures not separated: no trace)', trees > 1 ? `${fmt(trees)} ft` : 'None found') + row('Above the ridge', trees > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No');
+          const tt = Math.max(ob.tallestOverlapTreeFt || 0, ob.tallestNearTreeFt || 0);
+          return row('Tallest tree near the roof', tt > 1 ? `${fmt(tt)} ft` : 'None found') + row('Tallest other structure nearby', ob.tallestStructureFt ? `${fmt(ob.tallestStructureFt)} ft` : 'None found') + row('Tree canopy over the roof', ob.inferredPlanSqft > 1 ? `${fmt(ob.inferredPlanSqft)} sq ft (${fmt(ob.footprintObscuredPct, 1)}% of the footprint)` : 'None') + row('Trees above the ridge', tt > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No'); })()}
         ${row('Steep-roof equipment', R.t && R.t.predominant >= 8 ? 'Yes: predominant pitch ' + pitchLabel(R.t.predominant) : 'Not expected')}
       </table></div>
     </div>
@@ -554,7 +555,13 @@ async function downloadPDF(what = "report") {
   const run = (fn, btn) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace()) await fn(); } finally { b.disabled = false; } };
   $('#btnReport').onclick = run(printReport, '#btnReport');
   $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML');
-  const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => { try { await downloadPDF(what); } catch (e) { toast('PDF failed: ' + e.message, true); } }, id); };
+  // roof report PDFs are drawn as vectors with selectable text (roofpdf.js); the estimate-only PDF keeps its own layout.
+  // Every export first passes the review gate, so incomplete totals are acknowledged, never exported silently.
+  const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => {
+    try {
+      if (what !== 'estimate' && typeof reviewGate === 'function' && !reviewGate()) { toast('Export cancelled: see "5. Review before export"'); const p = $('#panelReview'); if (p) { p.open = true; p.scrollIntoView({ block: 'start' }); } return; }
+      if (what !== 'estimate' && typeof rpDownload === 'function' && state.facets.length) await rpDownload(what); else await downloadPDF(what);
+    } catch (e) { console.error(e); toast('PDF failed: ' + e.message, true); } }, id); };
   pdfBtn('#btnReportPDF', 'report');
   pdfBtn('#btnReportBoth', 'both');
   pdfBtn('#btnXmPDF', 'estimate');

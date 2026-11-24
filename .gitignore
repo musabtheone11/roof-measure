@@ -7,3 +7,9 @@ leads-data-inv/
 leads-inv.log
 leads-data-rates/
 leads-rates.log
+
+# local dev cache (downloaded rasters, generated customer PDFs) and private benchmark artifacts
+.devcache/
+reports/
+bench/private/
+node_modules/

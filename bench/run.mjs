@@ -8,6 +8,7 @@ import { loadEngine, trace } from './engine.mjs';
 import { summarizeEngine, compare } from './score.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
+const EXACT = isMainThread ? process.argv.includes('--exact') : !!(workerData && workerData.exact);
 
 export function runOne(ctx, seed) {
   const r = rng(seed * 7919 + 13);
@@ -18,8 +19,11 @@ export function runOne(ctx, seed) {
   const t0 = Date.now();
   let res;
   try { res = trace(ctx, sc); } catch (e) { return { seed, error: String(e && e.message || e) }; }
-  const en = summarizeEngine(res);
-  return { seed, wings: wings.length, levels: new Set(wings.map((w) => w.eaveZ)).size, meta: sc.meta, ms: Date.now() - t0, ...compare(gt, en) };
+  const en = summarizeEngine(res, 6, EXACT);
+  const tagged = { inferred: res.facets.filter((f) => f.status === 'inferred').length, unresolved: res.facets.filter((f) => f.status === 'unresolved').length, repaired: (res.repairs || []).length, obscPct: res.obstruction ? res.obstruction.footprintObscuredPct : null };
+  // paired: the same trace scored with exact math (fitted slope, plane slope factors) -> x_ fields
+  const ex = compare(gt, summarizeEngine(res, 6, true)); const x = { x_areaErrPct: ex.areaErrPct }; for (const t of ['rake', 'hip', 'valley', 'step', 'eave', 'ridge']) x['x_en_' + t] = ex['en_' + t];
+  return { seed, wings: wings.length, levels: new Set(wings.map((w) => w.eaveZ)).size, meta: sc.meta, ms: Date.now() - t0, ...tagged, ...x, ...compare(gt, en) };
 }
 
 if (isMainThread && process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -28,15 +32,17 @@ if (isMainThread && process.argv[1] === fileURLToPath(import.meta.url)) {
   const nw = Math.max(1, os.cpus().length);
   const fh = fs.openSync(out, 'w'); let done = 0; const t0 = Date.now();
   await Promise.all(Array.from({ length: nw }, (_, k) => new Promise((resolve) => {
-    const seeds = []; for (let s = seed0 + k; s < seed0 + n; s += nw) seeds.push(s);
-    const wk = new Worker(fileURLToPath(import.meta.url), { workerData: { seeds, engine: arg('engine', null) } });
+    // --list file.json: run exactly these seeds (e.g. only the tree-covered houses of an earlier run)
+    const listed = arg('list', null) ? JSON.parse(fs.readFileSync(arg('list'), 'utf8')) : null;
+    const seeds = []; if (listed) { for (let i = k; i < listed.length; i += nw) seeds.push(listed[i]); } else for (let s = seed0 + k; s < seed0 + n; s += nw) seeds.push(s);
+    const wk = new Worker(fileURLToPath(import.meta.url), { workerData: { seeds, engine: arg('engine', null), exact: process.argv.includes('--exact') } });
     wk.on('message', (row) => { fs.writeSync(fh, JSON.stringify(row) + '\n'); if (++done % 100 === 0) process.stderr.write(`${done}/${n} ${((Date.now() - t0) / 1000).toFixed(0)}s\n`); });
     wk.on('exit', resolve); wk.on('error', (e) => { console.error(e); resolve(); });
   })));
   fs.closeSync(fh);
   console.error('done', done, ((Date.now() - t0) / 1000).toFixed(0) + 's');
 } else if (!isMainThread) {
-  const files = workerData.engine ? ['autotrace.js', 'autotrace2.js'].map((f) => workerData.engine + '/' + f) : undefined;
+  const files = workerData.engine ? ['autotrace.js', 'autotrace2.js', 'obstruction.js'].map((f) => workerData.engine + '/' + f) : undefined;
   const ctx = files ? loadEngine(files) : loadEngine();
   for (const s of workerData.seeds) parentPort.postMessage(runOne(ctx, s));
 }

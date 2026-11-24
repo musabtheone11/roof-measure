@@ -28,3 +28,29 @@ use the "hard" profile (heavy blur and noise), which reproduces the failures see
 Put the GAF report numbers in `truth/<address>.json` (see the Kelliwood file), then
 `node real.mjs --key YOUR_GOOGLE_KEY --truth truth/4510-kelliwood-manor-ln.json`.
 It prints truth vs original engine vs current engine for area, facets, every line type and the pitch mix.
+
+## Real houses against same-property reference reports
+
+`compare.mjs` runs the app's own `autoTraceRoof()` headless (`appcore.mjs`) for every reference file in
+`bench/private/truth/` (numbers extracted from Roofr / GAF / EagleView reports and adjuster estimates, with source page,
+unit and confidence), once with the previous engine (`engines/2026-11-23`) and once with the current one, and scores both
+against the same reference. The reference numbers are never given to the engine.
+
+```
+cd bench && npm install
+Key=YOUR_GOOGLE_KEY node compare.mjs          # downloads are cached under private/cache (about 10 cents per new address)
+node report_real.mjs                          # private/results/compare.md (per property) + REAL_RESULTS.md (aggregate)
+python3 sketches.py                           # private/results/<slug>.png: old vs new roofline over the aerial photo
+```
+
+Everything under `bench/private/` (customer addresses, report numbers, sketches) is git-ignored. Only the aggregate
+`REAL_RESULTS.md` is committed.
+
+## Other checks
+
+```
+node modeltest.mjs                            # measurement and audit rules in roofmodel.js
+node run.mjs --n 1600 --out results/new.jsonl # synthetic houses now carry an aerial colour layer (trees are green)
+node treecmp.mjs results/now.jsonl results/new.jsonl   # area accuracy on tree-covered synthetic roofs, paired seeds
+Key=... node ../tools/dev/run-app.mjs --address "..." --out ../.devcache/runs/name   # the real UI, address to PDF
+```

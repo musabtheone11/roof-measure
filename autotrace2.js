@@ -446,17 +446,36 @@ function reconstruct(label, regions, w, h, geo, dominantDeg) {
     return p;
   });
   // ---- final chain geometry
-  for (const ch of chains) {
-    const a = jFinal[ch.j0], b = jFinal[ch.j1];
-    if (ch.kind === 'intersect' || !ch.runs || ch.runs.length <= 1) { ch.geom = [a, b]; continue; }
-    const g = [a];
-    for (let i = 0; i < ch.runs.length - 1; i++) {
-      const v = intersect2(ch.runs[i].line, ch.runs[i + 1].line); const orig = ch.runs[i].end;
-      g.push(v && Math.hypot(v[0] - orig[0], v[1] - orig[1]) < 1.5 ? v : orig);
+  const buildGeoms = () => {
+    for (const ch of chains) {
+      const a = jFinal[ch.j0], b = jFinal[ch.j1];
+      if (ch.rawGeom) { const mid = dpM(ch.pts, 0.3).slice(1, -1); ch.geom = [a, ...mid, b]; continue; }   // audited fallback: the raster outline itself
+      if (ch.kind === 'intersect' || !ch.runs || ch.runs.length <= 1) { ch.geom = [a, b]; continue; }
+      const g = [a];
+      for (let i = 0; i < ch.runs.length - 1; i++) {
+        const v = intersect2(ch.runs[i].line, ch.runs[i + 1].line); const orig = ch.runs[i].end;
+        g.push(v && Math.hypot(v[0] - orig[0], v[1] - orig[1]) < 1.5 ? v : orig);
+      }
+      g.push(b); ch.geom = g;
     }
-    g.push(b); ch.geom = g;
-  }
-  return { chains, jFinal, topo };
+  };
+  buildGeoms();
+  // a facet whose straightened outline crosses itself or no longer matches its raster area goes back to the raster
+  // junction positions and outline (the fitted lines disagreed there); returns how many chains changed
+  // stage 1: put that facet's junctions back on their raster corners (the least-squares junction jumped across a
+  // neighbour); stage 2: also drop the straightened runs and use the simplified raster outline
+  const revert = (badIds, stage) => {
+    let n = 0;
+    for (const ch of chains) {
+      if (!ch.pair.some((l) => badIds.has(l))) continue;
+      if (stage >= 2) { if (ch.rawGeom) continue; ch.rawGeom = true; n++; }
+      else { if (ch.jReverted) continue; ch.jReverted = true; n++; }
+      jFinal[ch.j0] = jPos[ch.j0]; jFinal[ch.j1] = jPos[ch.j1];
+    }
+    if (n) buildGeoms();
+    return n;
+  };
+  return { chains, jFinal, topo, revert };
 }
 
 // split a simplified polyline into straight runs; snap run directions to the plane's contour/slope (or the building axis)
@@ -591,6 +610,49 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
   return { label, changedIds };
 }
 
+// ------------------------------------------------------------------ polygon checks (metres)
+var ringAreaM = (r) => { let s = 0; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; };
+// drop points closer than 6 cm to the previous one and zero-width spikes (out and straight back within 4 cm)
+var cleanRingM = (r) => {
+  let out = r.slice(), changed = true, guard = 0;
+  while (changed && out.length > 3 && guard++ < 6) {
+    changed = false; const nx = [];
+    for (let i = 0; i < out.length; i++) {
+      const p = nx.length ? nx[nx.length - 1] : out[out.length - 1], c = out[i], q = out[(i + 1) % out.length];
+      if (Math.hypot(c[0] - p[0], c[1] - p[1]) < 0.06 && nx.length) { changed = true; continue; }
+      const d1 = [c[0] - p[0], c[1] - p[1]], d2 = [q[0] - c[0], q[1] - c[1]]; const l1 = Math.hypot(d1[0], d1[1]), l2 = Math.hypot(d2[0], d2[1]);
+      if (l1 > 1e-6 && l2 > 1e-6 && (d1[0] * d2[0] + d1[1] * d2[1]) / (l1 * l2) < -0.9995 && Math.min(l1, l2) < 0.5) { changed = true; continue; }
+      nx.push(c);
+    }
+    if (nx.length >= 3) out = nx; else break;
+  }
+  return out;
+};
+// number of proper crossings between non-adjacent sides (touching and keyhole bridges do not count)
+var selfCrossings = (r) => {
+  const n = r.length; let c = 0; if (n < 4) return 0;
+  const o = (p, q, t) => (q[0] - p[0]) * (t[1] - p[1]) - (q[1] - p[1]) * (t[0] - p[0]);
+  for (let i = 0; i < n; i++) { const a = r[i], b = r[(i + 1) % n];
+    for (let j = i + 2; j < n; j++) { if (i === 0 && j === n - 1) continue; const p = r[j], q = r[(j + 1) % n];
+      const d1 = o(a, b, p), d2 = o(a, b, q), d3 = o(p, q, a), d4 = o(p, q, b); const eps = 1e-7;
+      if (((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) && ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps))) c++; } }
+  return c;
+};
+// regions that are really tree canopy (a smooth canopy top can fit a plane): tall, green, and a poor or steep fit
+function obDropCanopyRegions(label, regions, w, h, geo, ob, rgb, dsm) {
+  if (!rgb || rgb.length !== 3 || rgb[0].length !== w * h) return 0;
+  const acc = new Map();
+  for (let i = 0; i < w * h; i++) { const l = label[i]; if (l < 0) continue; let a = acc.get(l); if (!a) acc.set(l, (a = [0, 0, 0, 0])); a[0]++; a[1] += 2 * rgb[1][i] - rgb[0][i] - rgb[2][i]; if (ob.tree[i] === 1) a[2]++; a[3] += ob.rough[i]; }
+  const drop = new Set();
+  for (const [l, a] of acc) {
+    const n = a[0], exg = a[1] / n, treeShare = a[2] / n, rough = a[3] / n; const pl = regions[l].plane; const p12 = Math.hypot(pl.a, pl.b) * 12;
+    if (n * geo.pxM2 > 60) continue;                                    // a big planar surface is a roof whatever its colour
+    if (treeShare >= 0.5 || (exg >= OB.exgMin + 4 && (rough >= OB.roughM * 0.75 || p12 > 14))) drop.add(l);
+  }
+  if (drop.size) for (let i = 0; i < w * h; i++) if (drop.has(label[i])) { label[i] = -1; ob.tree[i] = 1; }
+  return drop.size;
+}
+
 // ------------------------------------------------------------------ driver
 function traceBuildingV2(resp, tif, mask, comp, geo, opts) {
   const { w, h } = tif;
@@ -605,12 +667,24 @@ function traceBuildingV2(resp, tif, mask, comp, geo, opts) {
     AT2.seedResid = Math.max(saved.seedResid, 1.6 * sigma); AT2.goodResid = Math.max(saved.goodResid, 2.6 * sigma);
     AT2.growDist = Math.max(saved.growDist, 4.5 * sigma); AT2.growDistWeak = Math.max(saved.growDistWeak, 3 * sigma);
     AT2.mergeDist = Math.max(saved.mergeDist, 3 * sigma); AT2.growAngle = Math.max(saved.growAngle, 9 * Math.sqrt(sigma / 0.025)); }
-  try { return traceBuildingV2Core(tif, member, w, h, geo, lp); } finally { Object.assign(AT2, saved); }
+  try { return traceBuildingV2Core(tif, member, w, h, geo, lp, { mask, rgb: opts && opts.rgb ? opts.rgb : null, opts: opts || {} }); } finally { Object.assign(AT2, saved); }
 }
 
-function traceBuildingV2Core(tif, member, w, h, geo, lp) {
-  let { label, regions } = growRegions(tif.data, member, w, h, lp, geo);
-  label = mergeRegions(tif.data, label, regions, w, h, lp, geo);
+function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
+  const dsmRaw = tifIn.data; let tif = tifIn;
+  let { label, regions } = growRegions(dsmRaw, member, w, h, lp, geo);
+  label = mergeRegions(dsmRaw, label, regions, w, h, lp, geo);
+  // ---- obstruction layer: classify canopy, take it off the footprint, continue the fitted planes under it (obstruction.js)
+  let ob = null, st = null;
+  if (typeof obClassify === 'function' && env && env.mask && !(env.opts && env.opts.noObstruction)) {
+    ob = obClassify(dsmRaw, w, h, geo, env.mask, member, env.rgb);
+    obDropCanopyRegions(label, regions, w, h, geo, ob, env.rgb, dsmRaw);
+    st = obInferHidden(dsmRaw, label, regions, member, env.mask, w, h, geo, lp, ob);
+    label = st.label; member = st.memberEff;
+    // heights under canopy are tree heights: hide them from every later plane fit
+    let any = false; for (let i = 0; i < w * h; i++) if (st.inferred[i]) { any = true; break; }
+    if (any) { const d2 = Float32Array.from(dsmRaw); for (let i = 0; i < w * h; i++) if (st.inferred[i]) d2[i] = -9999; tif = { data: d2, w, h }; }
+  }
   label = fillHoles(tif.data, label, member, w, h, regions, lp);
   label = absorbSlivers(tif.data, label, regions, w, h, lp, geo);
   // drop large blobs no plane could explain (trees over the roof)
@@ -645,17 +719,25 @@ function traceBuildingV2Core(tif, member, w, h, geo, lp) {
   if (AT2.regularizeFootprint) {
     const vals = []; for (let i = 0; i < w * h; i += 7) if (!member[i] && tif.data[i] > -1000) vals.push(tif.data[i]);
     vals.sort((p, q) => p - q); const ground = vals.length ? vals[Math.floor(vals.length * 0.05)] : -1e9;
-    try { label = regularizeFootprint(tif.data, label, w, h, geo, dominantDeg, ground); } catch (e) { console.warn('footprint regularisation failed', e); }
+    try {
+      const before = label; label = regularizeFootprint(dsmRaw, label, w, h, geo, dominantDeg, ground);
+      if (st) for (let i = 0; i < w * h; i++) { if (label[i] >= 0 && before[i] < 0 && ob.tree[i] === 1) st.inferred[i] = 1; if (label[i] < 0) st.unresolved[i] = 0; }
+    } catch (e) { console.warn('footprint regularisation failed', e); }
   }
   // region centroids (for "which side of the edge is this plane on")
   const cent = new Map();
   { const acc = new Map(); for (let i = 0; i < w * h; i++) { const l = label[i]; if (l < 0) continue; const x = i % w, y = (i - x) / w; const a = acc.get(l) || [0, 0, 0]; a[0] += lp.Ecol[x]; a[1] += lp.Nrow[y]; a[2]++; acc.set(l, a); } for (const [l, a] of acc) cent.set(l, [a[0] / a[2], a[1] / a[2]]); }
   const rec = reconstruct(label, regions, w, h, geo, dominantDeg);
   // ---- assemble facets: walk each region's chains into loops
-  const facets = [], edges = [];
+  let facets = []; const edges = [];
+  // ground beside the house (same datum as the obstruction layer): facet planes are stored relative to it for the 3D view
+  const groundZ = ob ? ob.ground : (() => { const v = []; for (let i = 0; i < w * h; i += 7) if (!member[i] && dsmRaw[i] > -1000) v.push(dsmRaw[i]); v.sort((p, q) => p - q); return v.length ? v[Math.floor(v.length * 0.05)] : 0; })();
   const toLL = (p) => { const lat = geo.ref.lat + p[1] / geo.ref.ky, lng = geo.ref.lng + p[0] / geo.ref.kx; return { lat, lng }; };
   const byRegion = new Map();
   for (const ch of rec.chains) for (const l of ch.pair) if (l >= 0) { if (!byRegion.has(l)) byRegion.set(l, []); byRegion.get(l).push(ch); }
+  const pxCount = new Map(); for (let i = 0; i < w * h; i++) { const l = label[i]; if (l >= 0) pxCount.set(l, (pxCount.get(l) || 0) + 1); }
+  const repairs = [];
+  const assemble = () => { facets = [];
   for (const id of ids) {
     const list = byRegion.get(id) || []; if (!list.length) continue;
     // build loops by junction connectivity
@@ -683,11 +765,34 @@ function traceBuildingV2Core(tif, member, w, h, geo, lp) {
       const ring = hp.slice(bj).concat(hp.slice(0, bj + 1));
       outer = outer.slice(0, bi + 1).concat(ring, [outer[bi]], outer.slice(bi + 1));
     }
+    outer = cleanRingM(outer);
     const pl = regions[id].plane; const slope = Math.hypot(pl.a, pl.b);
     const pitch = Math.round(slope * 12);
     const az = slope > 0.03 ? ((Math.atan2(-pl.a, -pl.b) * 180 / Math.PI) + 360) % 360 : null;
-    facets.push({ id, path: outer.map(toLL), pitch, azimuth: az, slope, areaM2: regions[id].n * geo.pxM2 });
+    facets.push({ id, path: outer.map(toLL), m: outer, pitch, azimuth: az, slope, rms: pl.rms || 0, plane: [pl.a, pl.b, pl.c - groundZ], areaM2: (pxCount.get(id) || regions[id].n) * geo.pxM2, holes: loops.length - 1 });
+  } };
+  assemble();
+  // ---- geometry validation: self-crossing outlines and outlines that drifted away from their raster area are rebuilt from
+  // the raster (raw) geometry; what was changed is kept in `repairs` so the edit can be audited
+  const stageOf = new Map();
+  for (let pass = 0; pass < 4; pass++) {
+    const bad = new Set(); let maxStage = 1;
+    for (const f of facets) {
+      const A = Math.abs(ringAreaM(f.m)), cross = selfCrossings(f.m);
+      const drift = Math.abs(A - f.areaM2) > Math.max(1.5, 0.22 * f.areaM2) && !f.holes;
+      if (!cross && !drift) continue;
+      const stage = (stageOf.get(f.id) || 0) + 1; if (stage > 2) continue;      // already on the raster outline: nothing more to do
+      stageOf.set(f.id, stage); bad.add(f.id); if (stage > maxStage) maxStage = stage;
+      repairs.push({ facetRegion: f.id, stage, reason: cross ? 'straightened outline crossed itself (' + cross + ' crossing' + (cross > 1 ? 's' : '') + ')' : 'straightened outline area ' + (A * 10.7639).toFixed(0) + ' sq ft did not match the height-model region ' + (f.areaM2 * 10.7639).toFixed(0) + ' sq ft', action: stage === 1 ? 'corner points moved back to their height-model positions' : 'outline rebuilt from the height-model region' });
+    }
+    if (!bad.size) break;
+    // facets on stage 2 need the raster outline; the rest only their junctions
+    const s2 = new Set([...bad].filter((id) => stageOf.get(id) >= 2)), s1 = new Set([...bad].filter((id) => stageOf.get(id) < 2));
+    let changed = 0; if (s1.size) changed += rec.revert(s1, 1); if (s2.size) changed += rec.revert(s2, 2);
+    if (!changed) break;
+    assemble();
   }
+  for (const f of facets) { const st0 = stageOf.get(f.id); if (st0) f.repaired = st0; }
   // ---- pitch snapping: a house is framed with a few design pitches. Large facets fix them; small facets, whose fitted
   // slope is noisy (Google's DSM rounds every crease), take the nearest design pitch when it is close enough.
   { const big = facets.filter((f) => f.areaM2 >= AT2.pitchAnchorM2 && f.slope > 0.06).sort((a, b) => b.areaM2 - a.areaM2);
@@ -738,11 +843,11 @@ function traceBuildingV2Core(tif, member, w, h, geo, lp) {
         let lType = null;
         if (Math.hypot(Lo.a, Lo.b) <= 0.06) lType = 'wall';
         else lType = lAlong >= 0.5 ? 'step' : 'wall';          // level line on the lower roof: headwall / apron flashing
-        if (uType) edges.push({ type: uType, path: g.map(toLL) });
-        if (lType) edges.push({ type: lType, path: g.map(toLL) });
+        if (uType) edges.push({ type: uType, path: g.map(toLL), g, pl: U, regions: [p, q], paired: 'upper' });
+        if (lType) edges.push({ type: lType, path: g.map(toLL), g, pl: Lo, regions: [p, q], paired: 'lower' });
         return;
       }
-      edges.push({ type, path: g.map(toLL), why });
+      edges.push({ type, path: g.map(toLL), why, g, pl: A, regions: [p, q] });
     }
   for (const ch of rec.chains) {
     const [p, q] = ch.pair; const A = planeOf(p), B = planeOf(q);
@@ -764,11 +869,80 @@ function traceBuildingV2Core(tif, member, w, h, geo, lp) {
         const a = g[i - 1], b = g[i]; const d = [b[0] - a[0], b[1] - a[1]]; const L = Math.hypot(d[0], d[1]); if (L < 0.05) continue;
         let type = 'eave';
         if (slope > 0.06) { const along = Math.abs((d[0] * own.a + d[1] * own.b) / (L * slope)); type = along >= 0.5 ? 'rake' : 'eave'; }
-        edges.push({ type, path: [toLL(a), toLL(b)] });
+        edges.push({ type, path: [toLL(a), toLL(b)], g: [a, b], pl: own, regions: [p >= 0 ? p : q] });
       }
     }
   }
   function planeOf(id) { return id >= 0 && regions[id] ? regions[id].plane : null; }
-  // merge consecutive collinear outline edges of the same type for a cleaner line list
-  return { facets, edges, planes: facets.length, unassignedPct: 0, datum: 0, dominantDeg, v2: true };
+  // ---- line list clean-up: pieces of the same line (same type, same two planes) that meet end to end and run straight on
+  // become one line; leftovers shorter than 6 in. are tracing crumbs, not roof features, and are dropped
+  { const keyOf = (e) => e.type + '|' + (e.paired || '') + '|' + (e.regions || []).slice().sort().join(',');
+    const dirOf = (g, atEnd) => { const a = atEnd ? g[g.length - 2] : g[0], b = atEnd ? g[g.length - 1] : g[1]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
+    let changed = true, guard = 0;
+    while (changed && guard++ < 400) {
+      changed = false;
+      scan: for (let i = 0; i < edges.length; i++) for (let j = 0; j < edges.length; j++) {
+        if (i === j) continue; const a = edges[i], b = edges[j]; if (keyOf(a) !== keyOf(b)) continue;
+        for (const rev of [false, true]) {
+          const bg = rev ? b.g.slice().reverse() : b.g; const ae = a.g[a.g.length - 1];
+          if (Math.hypot(ae[0] - bg[0][0], ae[1] - bg[0][1]) > 0.04) continue;
+          const d1 = dirOf(a.g, true), d2 = dirOf(bg, false); if (d1[0] * d2[0] + d1[1] * d2[1] < 0.9976) continue;   // within 4 degrees
+          a.g = a.g.slice(0, -1).concat(bg.slice(1)); if (a.g.length < 2) a.g = [a.g[0], bg[bg.length - 1]];
+          edges.splice(j, 1); changed = true; break scan;
+        }
+      }
+    }
+    for (let i = edges.length - 1; i >= 0; i--) { const g = edges[i].g; let L = 0; for (let k = 1; k < g.length; k++) L += Math.hypot(g[k][0] - g[k - 1][0], g[k][1] - g[k - 1][1]); edges[i].lenM = L; if (L < 0.15) edges.splice(i, 1); else edges[i].path = g.map(toLL); }
+    // the same line traced twice (a boundary that doubles back around a sliver): one physical line is counted once.
+    // A line whose whole length lies on a longer line of the same type is the duplicate.
+    const dSeg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1]; const l2 = dx * dx + dy * dy || 1e-12; let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
+    const onLine = (p, g) => { for (let k = 1; k < g.length; k++) if (dSeg(p, g[k - 1], g[k]) < 0.25) return true; return false; };
+    const dropDup = new Set();
+    for (let i = 0; i < edges.length; i++) for (let j = 0; j < edges.length; j++) {
+      if (i === j || dropDup.has(i) || dropDup.has(j)) continue; const a = edges[i], b = edges[j];
+      if (a.type !== b.type || b.lenM > a.lenM || (b.lenM === a.lenM && j < i)) continue;   // an upper roof's edge is one line whether it was found as outline or as a height break
+      let all = true; for (let k = 1; k < b.g.length && all; k++) { const p = b.g[k - 1], q = b.g[k]; for (const t of [0, 0.25, 0.5, 0.75, 1]) if (!onLine([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t], a.g)) { all = false; break; } }
+      if (all) dropDup.add(j);
+    }
+    if (dropDup.size) { for (const j of [...dropDup].sort((p, q) => q - p)) edges.splice(j, 1); repairs.push({ reason: dropDup.size + ' line' + (dropDup.size > 1 ? 's were' : ' was') + ' traced twice on the same stretch', action: 'the duplicate was removed so the length is counted once' }); } }
+  // ---- true (sloped) length of every line from the plane it lies in: plan length x sqrt(1 + (grad . direction)^2)
+  const FT = 3.28084, SQFT = 10.7639104, pxM = Math.sqrt(geo.pxM2);
+  for (const e of edges) {
+    let plan = 0, len3 = 0;
+    for (let i = 1; i < e.g.length; i++) { const dx = e.g[i][0] - e.g[i - 1][0], dy = e.g[i][1] - e.g[i - 1][1]; const L = Math.hypot(dx, dy); if (L < 1e-6) continue; const rise = e.pl ? (e.pl.a * dx + e.pl.b * dy) : 0; plan += L; len3 += Math.hypot(L, rise); }
+    e.planM = plan; e.factor = plan > 0 ? len3 / plan : 1; e.basis = e.pl ? 'plane' : 'assumed';
+  }
+  // ---- Measured / Inferred / Unresolved
+  const idName = new Map(); facets.forEach((f, i) => idName.set(f.id, i));
+  for (const f of facets) {
+    f.status = 'measured'; f.inferredSqft = 0; f.evidence = null;
+    const sf = Math.sqrt(1 + f.slope * f.slope);
+    if (st) {
+      const q = obStatusOfFacet(f.id, label, w, h, st); const infM2 = q.inferredPx * geo.pxM2;
+      if (infM2 >= Math.max(0.5, 0.03 * q.n * geo.pxM2)) {
+        f.status = 'inferred'; f.inferredSqft = infM2 * sf * SQFT;
+        f.rangeSqft = [(q.n - q.inferredPx) * geo.pxM2 * sf * SQFT, q.n * geo.pxM2 * sf * SQFT];
+        f.evidence = 'Tree canopy hides ' + Math.round(infM2 * SQFT) + ' sq ft (plan) of this plane. The plane fitted to its visible part was continued under the canopy down to ' + (st.eaveZ && st.eaveZ.has(f.id) ? 'its own measured eave height' : 'the eave height of the neighbouring planes') + '. Low end of the range is the visible part only.';
+      }
+      if (q.unresolvedPx * pxM >= 1.5) { f.status = 'unresolved'; if (!f.rangeSqft && infM2 > 0) f.rangeSqft = [(q.n - q.inferredPx) * geo.pxM2 * sf * SQFT, q.n * geo.pxM2 * sf * SQFT]; f.inferredSqft = infM2 * sf * SQFT;
+        f.missing = 'About ' + Math.round(q.unresolvedPx * pxM * FT) + ' ft of this plane\'s edge is under tree canopy and could not be located' + (f.rangeSqft ? ' (area between ' + Math.round(f.rangeSqft[0]) + ' and about ' + Math.round(f.rangeSqft[1]) + ' sq ft; the larger figure is used)' : '') + '. A leaf-off or oblique image, a drone photo, or a tape measurement of the hidden edge would resolve it.'; }
+    }
+    // raw (unstraightened) outline of the height-model region, kept for audit
+    try { const loop = regionOuterLoop(label, w, h, f.id); if (loop.length >= 8) { const P = loop.map((e) => [geo.E(e.a[0]), geo.N(e.a[1])]); const half = Math.floor(P.length / 2); f.rawPath = dpM(P.slice(0, half + 1), 0.12).slice(0, -1).concat(dpM(P.slice(half).concat([P[0]]), 0.12).slice(0, -1)).map(toLL); } } catch (_) { /* audit copy only */ }
+    delete f.m;
+  }
+  for (const e of edges) {
+    e.status = 'measured'; e.obscuredFt = 0;
+    if (st) {
+      const q = obStatusOfLine(e.g, geo, w, h, st); e.obscuredFt = (q.inferredM + q.unresolvedM) * e.factor * FT;
+      if (q.unresolvedM >= Math.max(0.6, 0.3 * q.lenM)) { e.status = 'unresolved'; e.missing = 'Runs along tree canopy: ' + Math.round(q.unresolvedM * FT) + ' ft of this line follows the edge of the visible roof, not a confirmed roof edge.'; }
+      else if (q.inferredM >= Math.max(0.6, 0.3 * q.lenM)) { e.status = 'inferred'; e.evidence = Math.round(q.inferredM * FT) + ' ft of this line is under tree canopy; its position comes from the continued roof planes.'; }
+    }
+    e.facets = (e.regions || []).filter((l) => l >= 0 && idName.has(l)).map((l) => idName.get(l));
+    delete e.g; delete e.pl; delete e.regions;
+  }
+  let obstruction = null;
+  if (ob && st) { try { obstruction = obSummarize(dsmRaw, w, h, geo, env.mask, label, regions, ob, st, toLL); obstruction.canopyOnMaskSqft = st.canopyOnMaskPx * geo.pxM2 * SQFT; } catch (e) { console.warn('obstruction summary failed', e); } }
+  const plot = env && env.opts && env.opts.plot && ob ? { tree: (() => { const o = []; for (let y = 0; y < h; y++) { const r = []; for (let x = 0; x < w; x++) { const i = y * w + x; r.push(st.unresolved[i] ? 3 : st.inferred[i] ? 2 : ob.tree[i] === 1 ? 1 : 0); } o.push(r); } return o; })() } : null;
+  return { facets, edges, planes: facets.length, unassignedPct: 0, datum: 0, dominantDeg, v2: true, obstruction, repairs, noiseSigma: AT2.noiseSigma, plot };
 }
