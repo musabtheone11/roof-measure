@@ -50,6 +50,7 @@ var AT2 = {
   occludedAboveM: 0.5, // a roof pixel this far above the nearest plane is canopy or a chimney, not roof surface
   occludedMinM2: 1.0,  // ... handled as an occluded blob when the blob is at least this big
   eaveDropMinPitch: 13, eaveDropSteeperBy: 6, eaveDropMaxWidthM: 1.5, // eave drop-off strips: at least this steep, this much steeper than the roof behind, and no wider
+  bandThinM: 0.5,      // mean thickness (2*area/perimeter, m) below which a region is a strip whatever its shape
   bandAspect: 3.5,     // ... and a band is a strip: length / width above this (hip-end triangles are compact)
 };
 
@@ -616,7 +617,8 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
       const tr = cxx + cyy, dt = Math.sqrt(Math.max(0, (cxx - cyy) ** 2 / 4 + cxy * cxy)); const l1 = tr / 2 + dt, l2 = Math.max(1e-9, tr / 2 - dt);
       const widthM = Math.sqrt(12 * l2) * px, lengthM = Math.sqrt(12 * l1) * px;
       const strip = widthM < AT2.bandThickM && lengthM / widthM > AT2.bandAspect;
-      const thin = strip || (t < AT2.bandThickM * 0.5 && aM2 < 3);
+      // 2*area/perimeter also catches strips that bend round a corner or follow two ridges (their moments look wide)
+      const thin = strip || t < AT2.bandThinM;
       // island: small and almost fully enclosed by one roof plane (DSM warp, a chimney top, debris) -> part of that plane
       const shTot = perim.get(l) || 1; let island = false;
       if (aM2 < AT2.islandMaxM2) {
