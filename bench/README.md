@@ -54,3 +54,19 @@ node run.mjs --n 1600 --out results/new.jsonl # synthetic houses now carry an ae
 node treecmp.mjs results/now.jsonl results/new.jsonl   # area accuracy on tree-covered synthetic roofs, paired seeds
 Key=... node ../tools/dev/run-app.mjs --address "..." --out ../.devcache/runs/name   # the real UI, address to PDF
 ```
+
+## Results on 2026-11-24 (previous engine -> this branch)
+
+Synthetic, 954 paired houses (seeds 1-1600), area scored the way the app scores it:
+
+| Set | Houses | Area within 3%, before | Area within 3%, after | Mean abs. area error, before | after | Flagged inferred / unresolved |
+|---|---|---|---|---|---|---|
+| Clear roofs | 629 | 93.5% | 93.0% | 0.95% | 1.20% | 0 |
+| Tree-covered roofs | 325 | 43.1% | 52.6% | 5.16% | 4.25% | 227 |
+
+- Clear roofs are slightly worse on the synthetic set because its houses are built at exact whole pitches, so rounding the
+  fitted slope to a whole pitch is exact there; with rounded pitches the new engine scores 0.97%. On the 23 real houses the
+  fitted slope was the better choice (median area error 5.7% against 6.3% with rounded pitches), so it is the default.
+- Line lengths by type did not change materially (within the larger of 5 ft or 10%: eaves 77% -> 78%, rakes 45% -> 43%,
+  ridge + hip 66% -> 66%, valleys 43% -> 47%, step + wall 35% -> 37%).
+- Real houses: see `REAL_RESULTS.md`.
