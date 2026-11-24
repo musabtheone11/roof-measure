@@ -47,6 +47,8 @@ var AT2 = {
   bandSteep: 20,       // steeper than 20/12: wall or eave drop-off, never a roof plane
   islandMaxM2: 8,      // enclosed regions smaller than this join the plane around them
   refitGateM: 0.5,     // first refit pass ignores pixels this far off the grown plane (canopy and chimney pixels filled into the region)
+  occludedAboveM: 0.5, // a roof pixel this far above the nearest plane is canopy or a chimney, not roof surface
+  occludedMinM2: 1.0,  // ... handled as an occluded blob when the blob is at least this big
   bandAspect: 3.5,     // ... and a band is a strip: length / width above this (hip-end triangles are compact)
 };
 
@@ -195,7 +197,55 @@ function mergeRegions(dsm, label, regions, w, h, lp, geo) {
 }
 
 // fill unlabelled roof pixels (-1 inside member, -2) from the neighbouring region whose plane fits best
+// Tree canopy and chimneys sit above the roof: the heights there say nothing about the planes underneath, and "the
+// plane closest in height" is simply the highest one, so a hip or ridge under a tree ended up far from the real line
+// (and was then typed as a step). Under an occluded blob each plane continues to its intersection with the others
+// instead: a plane may grow into an occluded pixel only while it stays on its own side of the intersection line with
+// every other plane around that blob. Whatever is left is filled by fillHoles as before.
+function fillOccluded(dsm, label, member, w, h, regions, lp) {
+  const N = w * h; const near = new Int32Array(label); const out = new Int32Array(label);
+  // nearest labelled region for every unlabelled roof pixel
+  { let frontier = []; for (let i = 0; i < N; i++) if (member[i] && label[i] < 0) frontier.push(i);
+    for (let it = 0; it < 400 && frontier.length; it++) {
+      const set = [], rest = [];
+      for (const i of frontier) { const x = i % w; let q = -1; for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) if (j >= 0 && j < N && near[j] >= 0) { q = near[j]; break; } if (q >= 0) set.push([i, q]); else rest.push(i); }
+      if (!set.length) break; for (const [i, q] of set) near[i] = q; frontier = rest;
+    } }
+  const zOf = (id, i) => { const x = i % w, y = (i - x) / w; const pl = regions[id].plane; return pl.a * lp.Ecol[x] + pl.b * lp.Nrow[y] + pl.c; };
+  const occ = new Uint8Array(N); let any = false;
+  for (let i = 0; i < N; i++) if (member[i] && label[i] < 0 && near[i] >= 0 && dsm[i] > -1000 && dsm[i] - zOf(near[i], i) > AT2.occludedAboveM) { occ[i] = 1; any = true; }
+  if (!any) return label;
+  // region centroids (which side of a line a plane's visible part lies on)
+  const cen = new Map(); for (let i = 0; i < N; i++) { const l = label[i]; if (l < 0) continue; const x = i % w, y = (i - x) / w; let c = cen.get(l); if (!c) cen.set(l, (c = [0, 0, 0])); c[0] += lp.Ecol[x]; c[1] += lp.Nrow[y]; c[2]++; }
+  const seen = new Uint8Array(N);
+  for (let s0 = 0; s0 < N; s0++) {
+    if (!occ[s0] || seen[s0]) continue;
+    const comp = [s0]; seen[s0] = 1; const cands = new Set();
+    for (let k = 0; k < comp.length; k++) { const i = comp[k], x = i % w; cands.add(near[i]);
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) { if (j < 0 || j >= N) continue; if (occ[j] && !seen[j]) { seen[j] = 1; comp.push(j); } else if (label[j] >= 0) cands.add(label[j]); } }
+    if (comp.length * Math.abs((lp.Ecol[1] - lp.Ecol[0]) * (lp.Nrow[1] - lp.Nrow[0])) < AT2.occludedMinM2 || cands.size < 2) continue;
+    const C = [...cands];
+    // pairwise "own side" tests: D(x) = zR(x) - zQ(x) keeps the sign it has at R's centroid
+    const tests = new Map();
+    for (const R of C) { const pr = regions[R].plane, cr = cen.get(R); const list = []; if (!cr) { tests.set(R, null); continue; }
+      for (const Q of C) { if (Q === R) continue; const pq = regions[Q].plane; const da = pr.a - pq.a, db = pr.b - pq.b, dc = pr.c - pq.c; if (Math.hypot(da, db) < 0.08) continue;
+        const d0 = da * cr[0] / cr[2] + db * cr[1] / cr[2] + dc; if (Math.abs(d0) < 0.12) continue; list.push([da, db, dc, Math.sign(d0)]); }
+      tests.set(R, list); }
+    const ok = (R, i) => { const t = tests.get(R); if (!t) return false; const x = i % w, y = (i - x) / w; const e = lp.Ecol[x], n = lp.Nrow[y]; for (const [da, db, dc, sg] of t) if ((da * e + db * n + dc) * sg < -0.05) return false; return true; };
+    let todo = comp;
+    for (let it = 0; it < 600 && todo.length; it++) {
+      const set = [], rest = [];
+      for (const i of todo) { const x = i % w; let q = -1;
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) { if (j < 0 || j >= N) continue; const l = out[j]; if (l >= 0 && cands.has(l) && ok(l, i)) { q = l; break; } }
+        if (q >= 0) set.push([i, q]); else rest.push(i); }
+      if (!set.length) break; for (const [i, q] of set) out[i] = q; todo = rest;
+    }
+  }
+  return out;
+}
+
 function fillHoles(dsm, label, member, w, h, regions, lp) {
+  label = fillOccluded(dsm, label, member, w, h, regions, lp);
   for (let it = 0; it < 80; it++) {
     let changed = 0; const next = new Int32Array(label);
     for (let i = 0; i < w * h; i++) {
