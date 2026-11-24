@@ -46,6 +46,7 @@ var AT2 = {
   bandPitchTol: 1.6,   // a band whose pitch is within this (x/12) of a neighbour could be a real narrow facet: keep
   bandSteep: 20,       // steeper than 20/12: wall or eave drop-off, never a roof plane
   islandMaxM2: 8,      // enclosed regions smaller than this join the plane around them
+  refitGateM: 0.5,     // first refit pass ignores pixels this far off the grown plane (canopy and chimney pixels filled into the region)
   bandAspect: 3.5,     // ... and a band is a strip: length / width above this (hip-end triangles are compact)
 };
 
@@ -635,7 +636,7 @@ function traceBuildingV2Core(tif, member, w, h, geo, lp) {
   for (const id of ids) {
     for (let pass = 0; pass < 2; pass++) {
       const acc = new PlaneAcc(); const pl = regions[id].plane;
-      for (let i = 0; i < w * h; i++) { if (label[i] !== id || !(tif.data[i] > -1000)) continue; const x = i % w, y = (i - x) / w; const e = lp.Ecol[x], n = lp.Nrow[y]; const r = Math.abs(tif.data[i] - (pl.a * e + pl.b * n + pl.c)); if (pass && r > 0.2) continue; acc.add(e, n, tif.data[i]); }
+      for (let i = 0; i < w * h; i++) { if (label[i] !== id || !(tif.data[i] > -1000)) continue; const x = i % w, y = (i - x) / w; const e = lp.Ecol[x], n = lp.Nrow[y]; const r = Math.abs(tif.data[i] - (pl.a * e + pl.b * n + pl.c)); if (r > (pass ? 0.2 : AT2.refitGateM)) continue; acc.add(e, n, tif.data[i]); }
       const f = acc.solve(); if (f) regions[id].plane = f;
     }
     let n = 0; for (let i = 0; i < w * h; i++) if (label[i] === id) n++; regions[id].n = n;
