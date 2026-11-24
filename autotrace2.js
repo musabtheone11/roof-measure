@@ -35,9 +35,18 @@ var AT2 = {
   fpJogM: 0.45,        // parallel footprint runs closer than this are one wall line
   fpShortM: 0.9,       // shorter runs between parallel runs are jogs
   fpChamferMaxM: 9,    // diagonal corner cuts up to this long can be squared off
+  fpChamferInsideM: 2.4, // inside-corner chamfers shorter than this are squared too
   fpChamferFreeM: 2.2, // ... always when shorter than this, otherwise only if the corner is occluded (tree canopy)
   eaveBufferM: 0,      // outward offset of the footprint (benchmarked: 0.15 m made well-traced houses 4-5% too big)
   regularizeFootprint: true,
+  bendGapM: 0.15,      // a pitch break is continuous: one plane rising and one falling across a line with a bigger gap is a step
+  pitchAnchorM2: 15,   // facets at least this big define the house's design pitches
+  bandThickM: 0.9,     // crease bands thinner than this (2*area/perimeter, m) are candidates
+  bandMaxM2: 14,       // ... and smaller than 2x this
+  bandPitchTol: 1.6,   // a band whose pitch is within this (x/12) of a neighbour could be a real narrow facet: keep
+  bandSteep: 20,       // steeper than 20/12: wall or eave drop-off, never a roof plane
+  islandMaxM2: 8,      // enclosed regions smaller than this join the plane around them
+  bandAspect: 3.5,     // ... and a band is a strip: length / width above this (hip-end triangles are compact)
 };
 
 // ------------------------------------------------------------------ 1. local planes
@@ -291,7 +300,9 @@ function regularizeFootprint(dsm, label, w, h, geo, dominantDeg, ground) {
         const c = intersect2(p.line, q.line);
         // only convex corners (an inside corner "squared off" would add area that is not roof)
         const turn = (p.b[0] - p.a[0]) * (q.b[1] - q.a[1]) - (p.b[1] - p.a[1]) * (q.b[0] - q.a[0]);
-        if (c && Math.sign(turn) === ringSign && (r.len < AT2.fpChamferFreeM || triangleIsOccluded(r.a, r.b, c))) { out[out.length - 1].b = c; out.push(q); q.a = c; k++; changed = true; continue; }
+        const convex = Math.sign(turn) === ringSign;
+        // convex: square it if short or hidden by canopy; concave (inside corner at the foot of a valley): the blur cut roof away, square it when short
+        if (c && (convex ? (r.len < AT2.fpChamferFreeM || triangleIsOccluded(r.a, r.b, c)) : r.len < AT2.fpChamferInsideM)) { out[out.length - 1].b = c; out.push(q); q.a = c; k++; changed = true; continue; }
       }
       out.push(r);
     }
@@ -500,8 +511,8 @@ function classifyInternal(A, B, segA, segB) {
   const mid = [(segA[0] + segB[0]) / 2, (segA[1] + segB[1]) / 2];
   const zA = (p) => A.a * p[0] + A.b * p[1] + A.c, zB = (p) => B.a * p[0] + B.b * p[1] + B.c;
   const gap = Math.abs(zA(mid) - zB(mid));
-  if (gap > 0.45 || !ln) return { type: gap > 0.45 ? 'step' : 'transition', gap };
-  if (pitchA < 0.08 || pitchB < 0.08) return { type: 'transition', gap };
+  if (gap > 0.45 || !ln) return { type: gap > 0.45 ? 'step' : 'transition', gap, why: 'ci-noline' };
+  if (pitchA < 0.08 || pitchB < 0.08) return { type: 'transition', gap, why: 'ci-flat' };
   // project the inside points onto the line to get "at the edge" heights
   const foot = (p) => { const d = ln.n[0] * p[0] + ln.n[1] * p[1] - ln.c; return [p[0] - d * ln.n[0], p[1] - d * ln.n[1]]; };
   const dA = zA(segA) - zA(foot(segA)), dB = zB(segB) - zB(foot(segB));
@@ -509,7 +520,75 @@ function classifyInternal(A, B, segA, segB) {
   const slope = Math.abs(A.a * ln.d[0] + A.b * ln.d[1]);
   if (dA < -0.02 && dB < -0.02) return { type: slope < 0.06 ? 'ridge' : 'hip', gap };
   if (dA > 0.02 && dB > 0.02) return { type: 'valley', gap };
-  return { type: 'transition', gap };
+  return { type: gap > AT2.bendGapM ? 'step' : 'transition', gap, why: 'ci-mixed' };
+}
+
+
+// ------------------------------------------------------------------ crease bands
+// Google's DSM rounds every crease. A rounded ridge becomes a thin near-flat strip between the two roof planes, a
+// blurred eave becomes a thin very steep strip along the outline, and dormer cheek walls become steep strips too.
+// Left alone they turn into fake facets (1/12, 0/12, 20+/12) with "transition" lines on both sides and steal ridge and
+// eave length. A region is a band if it is thin and its pitch is not one its neighbours could share; its pixels go to
+// whichever neighbouring plane explains each pixel best (for a rounded ridge that is the plane on that pixel's side).
+function absorbBands(dsm, label, regions, w, h, lp, geo) {
+  const px = Math.sqrt(geo.pxM2);
+  const slopeOf = (id) => Math.hypot(regions[id].plane.a, regions[id].plane.b);
+  const changedIds = new Set();
+  for (let pass = 0; pass < 4; pass++) {
+    const area = new Map(), perim = new Map(), shared = new Map(), mom = new Map();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x, l = label[i]; if (l < 0) continue; area.set(l, (area.get(l) || 0) + 1);
+      let mm = mom.get(l); if (!mm) mom.set(l, (mm = [0, 0, 0, 0, 0])); mm[0] += x; mm[1] += y; mm[2] += x * x; mm[3] += y * y; mm[4] += x * y;
+      const nb = [x > 0 ? label[i - 1] : -1, x < w - 1 ? label[i + 1] : -1, y > 0 ? label[i - w] : -1, y < h - 1 ? label[i + w] : -1];
+      for (const q of nb) if (q !== l) { perim.set(l, (perim.get(l) || 0) + 1); let m = shared.get(l); if (!m) shared.set(l, (m = new Map())); m.set(q, (m.get(q) || 0) + 1); }
+    }
+    // area-weighted typical slopes of the roof (main planes only)
+    const big = [...area.entries()].filter(([, n]) => n * geo.pxM2 >= AT2.bandMaxM2);
+    const bandIds = [];
+    for (const [l, n] of area) {
+      const aM2 = n * geo.pxM2; if (aM2 > AT2.bandMaxM2 * 2) continue;
+      const t = 2 * n / Math.max(1, perim.get(l) || 1) * px; // thickness (m)
+      const nbs = [...(shared.get(l) || new Map()).entries()].filter(([q]) => q >= 0 && q !== l);
+      if (!nbs.length) continue;
+      const s = slopeOf(l); const p12 = s * 12;
+      const nbSlopes = nbs.map(([q]) => slopeOf(q));
+      const shareable = nbSlopes.some((q) => Math.abs(q - s) * 12 <= AT2.bandPitchTol) || big.some(([q]) => q !== l && Math.abs(slopeOf(q) - s) * 12 <= AT2.bandPitchTol * 0.6);
+      const outsideShare = ((shared.get(l) || new Map()).get(-1) || 0) / Math.max(1, perim.get(l) || 1);
+      const steepWall = p12 > AT2.bandSteep;                       // walls and eave drop-offs, never shingles
+      const flatOnPitched = p12 < 1.5 && nbSlopes.every((q) => q * 12 >= 3);
+      // strip shape from second moments: width and length of the equivalent rectangle (m)
+      const mm = mom.get(l); const mx = mm[0] / n, my = mm[1] / n; const cxx = mm[2] / n - mx * mx, cyy = mm[3] / n - my * my, cxy = mm[4] / n - mx * my;
+      const tr = cxx + cyy, dt = Math.sqrt(Math.max(0, (cxx - cyy) ** 2 / 4 + cxy * cxy)); const l1 = tr / 2 + dt, l2 = Math.max(1e-9, tr / 2 - dt);
+      const widthM = Math.sqrt(12 * l2) * px, lengthM = Math.sqrt(12 * l1) * px;
+      const strip = widthM < AT2.bandThickM && lengthM / widthM > AT2.bandAspect;
+      const thin = strip || (t < AT2.bandThickM * 0.5 && aM2 < 3);
+      // island: small and almost fully enclosed by one roof plane (DSM warp, a chimney top, debris) -> part of that plane
+      const shTot = perim.get(l) || 1; let island = false;
+      if (aM2 < AT2.islandMaxM2) {
+        // enclosure counted against the big neighbours only, so a cluster of small bumps inside one plane goes too
+        const isSmall = (q) => (area.get(q) || 0) * geo.pxM2 < AT2.islandMaxM2;
+        const bigShare = nbs.filter(([q]) => !isSmall(q)); const outC = (shared.get(l) || new Map()).get(-1) || 0;
+        const tot = bigShare.reduce((a, [, c]) => a + c, 0) + outC;
+        const P = regions[l].plane;
+        for (const [q, c] of bigShare) { if (c / shTot >= 0.8) island = true; else if (tot && c / tot >= 0.8 && angleBetween(P.a, P.b, regions[q].plane.a, regions[q].plane.b) < 10) island = true; }
+      }
+      if ((steepWall && (thin || outsideShare > 0.3)) || (thin && (!shareable || flatOnPitched)) || island) bandIds.push(l);
+    }
+    if (!bandIds.length) break;
+    const bandSet = new Set(bandIds);
+    for (const l of bandIds) {
+      const cands = [...(shared.get(l) || new Map()).keys()].filter((q) => q >= 0 && !bandSet.has(q));
+      if (!cands.length) continue;
+      for (let i = 0; i < label.length; i++) {
+        if (label[i] !== l) continue; const x = i % w, y = (i - x) / w; const z = dsm[i];
+        let best = cands[0], bd = Infinity;
+        for (const q of cands) { const pl = regions[q].plane; const d = z > -1000 ? Math.abs(z - (pl.a * lp.Ecol[x] + pl.b * lp.Nrow[y] + pl.c)) : 0; if (d < bd) { bd = d; best = q; } }
+        label[i] = best; changedIds.add(best);
+      }
+    }
+    // pixels of a band whose best neighbour is far away stay attached; clean single pixels with a majority pass
+  }
+  return { label, changedIds };
 }
 
 // ------------------------------------------------------------------ driver
@@ -517,6 +596,19 @@ function traceBuildingV2(resp, tif, mask, comp, geo, opts) {
   const { w, h } = tif;
   const member = comp.member;
   const lp = localPlanes(tif.data, member, w, h, geo);
+  // DSM noise varies a lot between tiles: measure it (25th percentile of the local plane-fit residual is ~0.94 sigma)
+  // and widen the fit tolerances on noisy tiles so they still trace instead of returning no facets
+  const saved = { ...AT2 };
+  { const R = []; for (let i = 0; i < w * h; i += 3) if (member[i] && lp.R[i] < 9) R.push(lp.R[i]); R.sort((p, q) => p - q);
+    const sigma = R.length ? R[Math.floor(R.length * 0.25)] / 0.94 : 0.02;
+    AT2.noiseSigma = sigma;
+    AT2.seedResid = Math.max(saved.seedResid, 1.6 * sigma); AT2.goodResid = Math.max(saved.goodResid, 2.6 * sigma);
+    AT2.growDist = Math.max(saved.growDist, 4.5 * sigma); AT2.growDistWeak = Math.max(saved.growDistWeak, 3 * sigma);
+    AT2.mergeDist = Math.max(saved.mergeDist, 3 * sigma); AT2.growAngle = Math.max(saved.growAngle, 9 * Math.sqrt(sigma / 0.025)); }
+  try { return traceBuildingV2Core(tif, member, w, h, geo, lp); } finally { Object.assign(AT2, saved); }
+}
+
+function traceBuildingV2Core(tif, member, w, h, geo, lp) {
   let { label, regions } = growRegions(tif.data, member, w, h, lp, geo);
   label = mergeRegions(tif.data, label, regions, w, h, lp, geo);
   label = fillHoles(tif.data, label, member, w, h, regions, lp);
@@ -533,6 +625,13 @@ function traceBuildingV2(resp, tif, mask, comp, geo, opts) {
     }
     let n = 0; for (let i = 0; i < w * h; i++) if (label[i] === id) n++; regions[id].n = n;
   }
+  // crease bands -> neighbouring planes, then refit the planes that grew
+  { const r2 = absorbBands(tif.data, label, regions, w, h, lp, geo); label = r2.label;
+    for (const id of r2.changedIds) { const acc = new PlaneAcc(); const pl = regions[id].plane;
+      for (let i = 0; i < w * h; i++) { if (label[i] !== id || !(tif.data[i] > -1000)) continue; const x = i % w, y = (i - x) / w; const r = Math.abs(tif.data[i] - (pl.a * lp.Ecol[x] + pl.b * lp.Nrow[y] + pl.c)); if (r > 0.2) continue; acc.add(lp.Ecol[x], lp.Nrow[y], tif.data[i]); }
+      const f = acc.solve(); if (f) regions[id].plane = f; }
+    ids.length = 0; for (const l of new Set(label)) if (l >= 0) ids.push(l);
+    for (const id of ids) { let n = 0; for (let i = 0; i < w * h; i++) if (label[i] === id) n++; regions[id].n = n; } }
   // dominant building axis
   const dominantDeg = (() => { const bins = new Float64Array(90); for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (label[i] < 0) continue; const outside = label[i - 1] < 0 || label[i + 1] < 0 || label[i - w] < 0 || label[i + w] < 0; if (!outside) continue; } let best = 0;
     // use plane gradient directions weighted by area: roof planes face the building axes
@@ -589,31 +688,41 @@ function traceBuildingV2(resp, tif, mask, comp, geo, opts) {
     const az = slope > 0.03 ? ((Math.atan2(-pl.a, -pl.b) * 180 / Math.PI) + 360) % 360 : null;
     facets.push({ id, path: outer.map(toLL), pitch, azimuth: az, slope, areaM2: regions[id].n * geo.pxM2 });
   }
+  // ---- pitch snapping: a house is framed with a few design pitches. Large facets fix them; small facets, whose fitted
+  // slope is noisy (Google's DSM rounds every crease), take the nearest design pitch when it is close enough.
+  { const big = facets.filter((f) => f.areaM2 >= AT2.pitchAnchorM2 && f.slope > 0.06).sort((a, b) => b.areaM2 - a.areaM2);
+    const centers = [];
+    for (const f of big) { const p = f.slope * 12; const c = centers.find((c) => Math.abs(c.sum / c.w - p) <= 0.8); if (c) { c.sum += p * f.areaM2; c.w += f.areaM2; } else centers.push({ sum: p * f.areaM2, w: f.areaM2 }); }
+    const design = centers.map((c) => Math.round(c.sum / c.w));
+    for (const f of facets) {
+      if (f.slope <= 0.06 || !design.length) continue;
+      const p = f.slope * 12; const tol = f.areaM2 >= AT2.pitchAnchorM2 ? 0.8 : f.areaM2 >= 5 ? 1.3 : 2.0;
+      let best = null, bd = tol; for (const c of design) { const d = Math.abs(c - p); if (d <= bd) { bd = d; best = c; } }
+      if (best != null) f.pitch = best;
+    } }
   // ---- edges
   const regionCentre = new Map(); for (const id of ids) { const s = regions[id].acc ? regions[id].acc.s : null; }
-  for (const ch of rec.chains) {
-    const [p, q] = ch.pair; const A = planeOf(p), B = planeOf(q);
-    if (p >= 0 && q >= 0) {
+    function classifySpan(ch, A, B, p, q, g, rawPts) {
       // sample a point 0.6 m into each region from the chain midpoint
-      const g = ch.geom; const a = g[0], b = g[g.length - 1]; const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const a = g[0], b = g[g.length - 1]; const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
       const d = [b[0] - a[0], b[1] - a[1]]; const L = Math.hypot(d[0], d[1]) || 1e-9; const nrm = [-d[1] / L, d[0] / L];
       const side = (pt) => { const x = Math.floor(geo.X(pt[0])), y = Math.floor(geo.Y(pt[1])); return x >= 0 && y >= 0 && x < w && y < h ? label[y * w + x] : -9; };
       // which side of the edge each plane lies on: from the region centroids (robust for thin or bent regions)
       const sgnOf = (c, dflt) => { if (!c) return dflt; const s = (c[0] - mid[0]) * nrm[0] + (c[1] - mid[1]) * nrm[1]; return Math.abs(s) < 1e-6 ? dflt : Math.sign(s); };
       // vote with label probes on both sides of the raw boundary (centroids fail for bent or L-shaped facets)
-      let vote = 0; { const P = ch.pts || []; const step = Math.max(1, Math.floor(P.length / 10)); for (let i = 0; i < P.length; i += step) for (const off of [0.35, 0.7]) { const l1 = side([P[i][0] + nrm[0] * off, P[i][1] + nrm[1] * off]), l2 = side([P[i][0] - nrm[0] * off, P[i][1] - nrm[1] * off]); if (l1 === p) vote++; if (l2 === p) vote--; if (l1 === q) vote--; if (l2 === q) vote++; } }
+      let vote = 0; { const P = rawPts; const step = Math.max(1, Math.floor(P.length / 10)); for (let i = 0; i < P.length; i += step) for (const off of [0.35, 0.7]) { const l1 = side([P[i][0] + nrm[0] * off, P[i][1] + nrm[1] * off]), l2 = side([P[i][0] - nrm[0] * off, P[i][1] - nrm[1] * off]); if (l1 === p) vote++; if (l2 === p) vote--; if (l1 === q) vote--; if (l2 === q) vote++; } }
       let sA = vote > 0 ? 1 : vote < 0 ? -1 : sgnOf(cent.get(p), side([mid[0] + nrm[0] * 0.6, mid[1] + nrm[1] * 0.6]) === p ? 1 : -1); const sB = -sA;
       const pa = [mid[0] + nrm[0] * 0.8 * sA, mid[1] + nrm[1] * 0.8 * sA], pb = [mid[0] + nrm[0] * 0.8 * sB, mid[1] + nrm[1] * 0.8 * sB];
-      let type;
+      let type, why = null;
       if (ch.kind === 'intersect') {
         // the planes meet on this line: convex (ridge/hip) or concave (valley) from how each plane slopes away from it
         const rA = (A.a * nrm[0] + A.b * nrm[1]) * sA, rB = (B.a * nrm[0] + B.b * nrm[1]) * sB;
         const along = Math.abs(A.a * ch.line.d[0] + A.b * ch.line.d[1]);
-        if (Math.hypot(A.a, A.b) < 0.08 || Math.hypot(B.a, B.b) < 0.08) type = 'transition';
+        if (Math.hypot(A.a, A.b) < 0.08 || Math.hypot(B.a, B.b) < 0.08) { type = 'transition'; why = 'ix-flat'; }
         else if (rA < -0.03 && rB < -0.03) type = along < 0.07 ? 'ridge' : 'hip';
         else if (rA > 0.03 && rB > 0.03) type = 'valley';
-        else type = 'transition';
-      } else type = classifyInternal(A, B, pa, pb).type;
+        else { const gz = Math.abs((A.a - B.a) * mid[0] + (A.b - B.b) * mid[1] + (A.c - B.c)); type = gz > AT2.bendGapM ? 'step' : 'transition'; why = 'ix-mixed'; }
+      } else { const c = classifyInternal(A, B, pa, pb); type = c.type; why = c.why; }
       if (type === 'step') {
         // a height break: the upper roof's edge (eave over the lower roof, or a rake) and the lower roof meeting the wall
         // below it are both real lines; Roofr counts both, so emit both on the same plan line
@@ -625,18 +734,28 @@ function traceBuildingV2(resp, tif, mask, comp, geo, opts) {
         const uAlong = dirAlong(U), lAlong = dirAlong(Lo);
         let uType = null;
         if (Math.hypot(U.a, U.b) <= 0.06) uType = 'eave';
-        else if (uAlong > 0.6) uType = 'rake';
-        else if (uAlong < 0.45) uType = zU(pU) > zU(mid) + 0.02 ? 'eave' : 'unspecified';
-        else uType = 'unspecified';
+        else uType = uAlong >= 0.5 ? 'rake' : 'eave';
         let lType = null;
         if (Math.hypot(Lo.a, Lo.b) <= 0.06) lType = 'wall';
-        else if (lAlong > 0.6) lType = 'step';
-        else if (zL(pL) < zL(mid) - 0.02) lType = 'wall';      // lower roof rises to meet the wall: headwall flashing
+        else lType = lAlong >= 0.5 ? 'step' : 'wall';          // level line on the lower roof: headwall / apron flashing
         if (uType) edges.push({ type: uType, path: g.map(toLL) });
         if (lType) edges.push({ type: lType, path: g.map(toLL) });
-        continue;
+        return;
       }
-      edges.push({ type, path: g.map(toLL) });
+      edges.push({ type, path: g.map(toLL), why });
+    }
+  for (const ch of rec.chains) {
+    const [p, q] = ch.pair; const A = planeOf(p), B = planeOf(q);
+    if (p >= 0 && q >= 0) {
+      // A fitted chain can change character along its length (valley -> exposed gable end -> valley where a cross gable
+      // meets the main roof): classify each straight run on its own. Plane-intersection chains are one straight line.
+      const G = ch.geom;
+      if (ch.kind === 'intersect' || G.length <= 2) classifySpan(ch, A, B, p, q, G, ch.pts || []);
+      else for (let i = 1; i < G.length; i++) {
+        const a = G[i - 1], b = G[i]; const dd = [b[0] - a[0], b[1] - a[1]]; const LL = Math.hypot(dd[0], dd[1]); if (LL < 0.05) continue;
+        const raw = (ch.pts || []).filter((t) => { const u = ((t[0] - a[0]) * dd[0] + (t[1] - a[1]) * dd[1]) / (LL * LL); return u >= -0.05 && u <= 1.05 && Math.abs((t[0] - a[0]) * dd[1] - (t[1] - a[1]) * dd[0]) / LL < 1.0; });
+        classifySpan(ch, A, B, p, q, [a, b], raw.length >= 2 ? raw : [a, b]);
+      }
     } else {
       const own = A || B; const slope = own ? Math.hypot(own.a, own.b) : 0;
       // one edge per straight run so a gable corner splits into eave + rake
@@ -644,7 +763,7 @@ function traceBuildingV2(resp, tif, mask, comp, geo, opts) {
       for (let i = 1; i < g.length; i++) {
         const a = g[i - 1], b = g[i]; const d = [b[0] - a[0], b[1] - a[1]]; const L = Math.hypot(d[0], d[1]); if (L < 0.05) continue;
         let type = 'eave';
-        if (slope > 0.06) { const along = Math.abs((d[0] * own.a + d[1] * own.b) / (L * slope)); type = along > 0.6 ? 'rake' : along < 0.45 ? 'eave' : 'unspecified'; }
+        if (slope > 0.06) { const along = Math.abs((d[0] * own.a + d[1] * own.b) / (L * slope)); type = along >= 0.5 ? 'rake' : 'eave'; }
         edges.push({ type, path: [toLL(a), toLL(b)] });
       }
     }
