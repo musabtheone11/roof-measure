@@ -28,3 +28,11 @@ use the "hard" profile (heavy blur and noise), which reproduces the failures see
 Put the GAF report numbers in `truth/<address>.json` (see the Kelliwood file), then
 `node real.mjs --key YOUR_GOOGLE_KEY --truth truth/4510-kelliwood-manor-ln.json`.
 It prints truth vs original engine vs current engine for area, facets, every line type and the pitch mix.
+
+Rasters are cached per address in `real-cache/` (git-ignored), so only the first run of an address needs the key and
+costs money; later runs are free. The key can also come from the `GOOGLE_MAPS_KEY` environment variable.
+
+```
+python gaf2truth.py "GAF QuickMeasure report.pdf"      # writes truth/<address>.json from the report's Summary page (pip install pypdf)
+node realmd.mjs                                         # rebuilds REAL.md: truth / original / current per address
+```
