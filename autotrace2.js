@@ -51,6 +51,7 @@ var AT2 = {
   occludedMinM2: 1.0,  // ... handled as an occluded blob when the blob is at least this big
   eaveDropMinPitch: 13, eaveDropSteeperBy: 6, eaveDropMaxWidthM: 1.5, // eave drop-off strips: at least this steep, this much steeper than the roof behind, and no wider
   bandThinM: 0.5,      // mean thickness (2*area/perimeter, m) below which a region is a strip whatever its shape
+  parallelStepM: 0.3,  // parallel planes further apart than this in height are a step; closer, one plane split by noise
   bandAspect: 3.5,     // ... and a band is a strip: length / width above this (hip-end triangles are compact)
 };
 
@@ -564,6 +565,9 @@ function classifyInternal(A, B, segA, segB) {
   const mid = [(segA[0] + segB[0]) / 2, (segA[1] + segB[1]) / 2];
   const zA = (p) => A.a * p[0] + A.b * p[1] + A.c, zB = (p) => B.a * p[0] + B.b * p[1] + B.c;
   const gap = Math.abs(zA(mid) - zB(mid));
+  // parallel planes cannot bend into each other: a real height offset between them is a step (a lower roof with the
+  // same pitch beside the main one); a small one is one roof plane that the DSM noise split in two, which has no line
+  if (!ln && gap <= 0.45) return { type: gap > AT2.parallelStepM ? 'step' : null, gap, why: 'ci-parallel' };
   if (gap > 0.45 || !ln) return { type: gap > 0.45 ? 'step' : 'transition', gap, why: 'ci-noline' };
   if (pitchA < 0.08 || pitchB < 0.08) return { type: 'transition', gap, why: 'ci-flat' };
   // project the inside points onto the line to get "at the edge" heights
@@ -800,6 +804,7 @@ function traceBuildingV2Core(tif, member, w, h, geo, lp) {
         else if (rA > 0.03 && rB > 0.03) type = 'valley';
         else { const gz = Math.abs((A.a - B.a) * mid[0] + (A.b - B.b) * mid[1] + (A.c - B.c)); type = gz > AT2.bendGapM ? 'step' : 'transition'; why = 'ix-mixed'; }
       } else { const c = classifyInternal(A, B, pa, pb); type = c.type; why = c.why; }
+      if (type == null) return;                               // same plane on both sides: no line
       if (type === 'step') {
         // a height break: the upper roof's edge (eave over the lower roof, or a rake) and the lower roof meeting the wall
         // below it are both real lines; Roofr counts both, so emit both on the same plan line
