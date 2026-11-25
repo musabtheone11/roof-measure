@@ -183,6 +183,7 @@ body.mode-lead .panel.lead-keep { display: block; }
 /* Review roof from other angles (altview.js) */
 .av { position: absolute; inset: 8px; z-index: 7; display: flex; flex-direction: column; background: #12161c; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.55); overflow: hidden; }
 .av[hidden] { display: none; }
+.rp-preview { z-index: 8; }
 .av-head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #12304a; color: #fff; border-bottom: 3px solid #c9a227; }
 .av-head strong { font-size: 14px; }
 .av-tabs { display: flex; gap: 4px; margin-left: auto; }

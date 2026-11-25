@@ -649,7 +649,8 @@ function setMode(m) {
   bind('c_system', 'system'); bind('c_waste', 'waste', 'num'); bind('c_rTarget', 'rTarget', 'num'); bind('c_cover', 'cover', 'chk'); bind('c_taper', 'taper', 'chk');
   bind('c_drains', 'drains'); bind('c_scuppers', 'scuppers'); bind('c_skylights', 'skylights'); bind('c_hatches', 'hatches'); bind('c_height', 'heightFt'); bind('c_wind', 'windMph', 'num');
   const run = (fn) => async () => { if (!com.model) { await comRun(); if (!com.model) return; } await fn(); };
-  $('#btnComReport').onclick = run(comPrint); $('#btnComDownload').onclick = run(comDownload);
+  // comPrint / comDownload live in commercial_report.js, which loads after this file: resolve them at click time
+  $('#btnComReport').onclick = run(() => comPrint()); $('#btnComDownload').onclick = run(() => comDownload());
   // a new address clears the old measurement and the per-building site counts (no stale report under a new name)
   const SITE = { drains: 'c_drains', scuppers: 'c_scuppers', skylights: 'c_skylights', hatches: 'c_hatches', heightFt: 'c_height' };
   const origSet = setLocation;

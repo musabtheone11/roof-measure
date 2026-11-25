@@ -249,172 +249,62 @@ function head(R, title) {
 function foot(n) { return `<div class="foot"><span>This report was prepared by ${esc(company.name)}.${company.phone ? ' ' + esc(company.phone) + '.' : ''}</span><span>${n}</span></div>`; }
 const page = (inner, n) => `<section class="rp-page">${inner}${foot(n)}</section>`;
 
-function coverPage(R, satSrc, n) {
-  const t = R.t;
-  const facets = R.hasTrace ? t.facetCount : (R.s ? R.s.segs.length : 0);
-  const total = R.hasTrace ? t.sloped : (R.s ? R.s.total : 0);
-  const pitch = R.hasTrace ? t.predominant : (R.s ? Math.round(R.s.predominant) : null);
-  const imagery = R.s && R.s.imageryDate ? `Google ${new Date(R.s.imageryDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Google satellite imagery';
-  return page(`<h1>Roof Report</h1>
-    <div class="cover-row"><div class="l">Prepared by ${esc(company.name)}</div><div class="r">${sqftUp(total)} sqft<br>${facets} facets<br>Predominant pitch ${pitch == null ? '-' : pitch === 0 ? 'Flat' : pitchLabel(pitch)}</div></div>
-    <div class="addr">${esc(state.address || '')}</div>
-    ${typeof leadCoverLine === 'function' ? leadCoverLine() : ''}
-    ${typeof permitCoverLine === 'function' ? permitCoverLine() : ''}
-    ${satSrc ? `<img class="cover-img" src="${satSrc}" alt="">` : '<div class="empty" style="margin-top:.5in">Satellite image unavailable</div>'}
-    <div class="cap">${imagery}</div><div style="flex:1"></div>`, n);
-}
-function diagramPage(R, n) {
-  return page(`${head(R, 'Diagram')}<div class="diagram">${roofrDiagram(R.t, 'outline', 700, 760)}</div>`, n);
-}
-function lengthPage(R, n) {
-  const bt = R.t.byType;
-  const legend = `<div class="legend">${Object.entries(EDGE_TYPES).filter(([, v]) => !v.notRoof).map(([k, v]) => `<span class="${v.dashed ? 'dashed' : ''}" style="--c:${v.color}">${v.plural}: ${ftInR(bt[k].true)}</span>`).join('')}</div>`;
-  return page(`${head(R, 'Length measurement report')}${legend}<div class="diagram">${roofrDiagram(R.t, 'lengths', 700, 640)}</div>
-    <div class="note">Measurements in diagram are rounded up for display. Some edge lengths may be hidden from diagram to avoid overcrowding.</div>`, n);
-}
-function areaPage(R, n) {
-  const t = R.t;
-  return page(`${head(R, 'Area measurement report')}
-    ${t.unresolvedItems || t.inferredSloped > 0.5 ? `<div style="margin:6px 0;padding:6px 8px;border:1.5px solid #c0392b;color:#8a1c12;font-weight:600;font-size:11px">${t.unresolvedItems ? 'NOT FULLY MEASURED. ' : ''}Confirmed ${sqftUp(t.confirmedSloped)} sqft${t.inferredSloped > 0.5 ? '; estimated under tree canopy ' + sqftUp(t.inferredSloped) + ' sqft' : ''}${t.areaByStatus.unresolved > 0.5 ? '; marked unresolved ' + sqftUp(t.areaByStatus.unresolved) + ' sqft' : ''}${t.hiddenZones && t.hiddenZones.length ? '; hidden zones of 0 to ' + sqftUp(t.hiddenUpperSloped) + ' sqft are in no total' : ''}. The PDF report shows where and on what evidence.</div>` : ''}
-    <div class="stats"><div>Total roof area: ${sqftUp(t.sloped)} sqft</div><div>Predominant pitch: ${t.predominant == null ? '-' : t.predominant === 0 ? 'Flat' : pitchLabel(t.predominant)}</div>
-    <div>Pitched roof area: ${sqftUp(t.pitched)} sqft</div><div>Predominant pitch area: ${sqftUp(t.predArea)} sqft</div>
-    <div>Flat roof area: ${sqftUp(t.flat)} sqft</div><div>Unspecified pitch area: 0 sqft</div>
-    <div>Two story area: ${sqftUp(t.twoStory)} sqft</div><div></div>
-    <div>Two layer area: ${sqftUp(t.twoLayer)} sqft</div><div></div></div>
-    <div class="diagram">${roofrDiagram(t, 'areas', 700, 620)}</div>
-    <div class="note">Area measurements in diagram are rounded. The totals at the top of the page are the sums of the exact measurements, which are then rounded. Deleted facets (skylights, chimneys, etc.) are designated with a dashed line and are excluded from the calculations.</div>`, n);
-}
-function pitchPage(R, n) {
-  return page(`${head(R, 'Pitch &amp; direction measurement report')}<div class="diagram">${roofrDiagram(R.t, 'pitch', 700, 720)}</div>
-    <div class="note">Deleted facets are designated with a dashed line and do not have a pitch.</div>`, n);
-}
-function measurementsBlock(S, R) {
-  const bt = S.byType;
-  const rec = S.recWaste != null ? S.recWaste : R.rec, wasteCols = wasteColumns(rec);
-  const rows = [
-    ['Total roof area', `${sqftUp(S.sloped)} sqft`], ['Total pitched area', `${sqftUp(S.pitched)} sqft`], ['Total flat area', `${sqftUp(S.flat)} sqft`],
-    ['Total roof facets', `${S.facetCount} facets`], ['Predominant pitch', S.predominant == null ? '-' : S.predominant === 0 ? '0/12' : pitchLabel(S.predominant)],
-    ['Total eaves', ftInR(bt.eave.true)], ['Total valleys', ftInR(bt.valley.true)], ['Total hips', ftInR(bt.hip.true)], ['Total ridges', ftInR(bt.ridge.true)],
-    ['Total rakes', ftInR(bt.rake.true)], ['Total wall flashing', ftInR(bt.wall.true)], ['Total step flashing', ftInR(bt.step.true)],
-    ['Total transitions', ftInR(bt.transition.true)], ['Total parapet wall', ftInR(bt.parapet.true)], ['Total unspecified', ftInR(bt.unspecified.true)],
-    ['Hips + ridges', ftInR(bt.hip.true + bt.ridge.true)], ['Eaves + rakes', ftInR(bt.eave.true + bt.rake.true)],
-  ];
-  const meas = `<div class="sec">Measurements</div><table class="kv">${rows.map(([l, v]) => `<tr><td>${l}</td><td>${v}</td></tr>`).join('')}</table>`;
-  const pitchT = `<div class="sec">Pitch</div><table><tr><th>Pitch</th>${S.pitches.map((p) => `<th class="num">${p}/12</th>`).join('')}</tr>
-    <tr><td>Area (sqft)</td>${S.pitches.map((p) => `<td class="num">${fmt(sqftUp(S.pitchGroups[p]))}</td>`).join('')}</tr>
-    <tr><td>Squares</td>${S.pitches.map((p) => `<td class="num">${sq1(S.pitchGroups[p])}</td>`).join('')}</tr></table>`;
-  const wasteT = `<div class="sec">Waste</div><table><tr><th>Waste %</th>${wasteCols.map((w) => `<th class="num">${w}%${w === rec ? '<span class="rec">Recommended</span>' : ''}</th>`).join('')}</tr>
-    <tr><td>Area (sqft)</td>${wasteCols.map((w) => `<td class="num">${fmt(sqftUp(S.sloped * (1 + w / 100)))}</td>`).join('')}</tr>
-    <tr><td>Squares</td>${wasteCols.map((w) => `<td class="num">${sq1(S.sloped * (1 + w / 100))}</td>`).join('')}</tr></table>
-    <div class="note">Recommended waste is based on an asphalt shingle roof with a closed valley system (if applicable). Several other factors are involved in determining which waste percentage to use, including the complexity of the roof and individual roof application style. You will also need to calculate the post-waste quantity of other materials needed (hip and ridge caps, starter shingle, etc.).</div>`;
-  return `<div class="two"><div>${meas}</div><div>${pitchT}${wasteT}</div></div>`;
-}
-function structurePage(R, S, n, title) {
-  const scope = { facets: S.facets, cutouts: S.cutouts, edges: S.edges, pitches: S.pitches };
-  return page(`${head(R, title)}<div class="diagram" style="flex:0 0 3.4in">${roofrDiagram(scope, 'outline', 700, 330, R.t.pitches)}</div>${measurementsBlock(S, R)}<div style="flex:1"></div>`, n);
-}
-function materialsPage(R, n) {
-  const t = R.t, bt = t.byType;
-  const bases = { pitched: t.pitched, starter: bt.eave.true + bt.rake.true, iw: bt.eave.true + bt.valley.true + bt.wall.true + bt.step.true, cap: bt.hip.true + bt.ridge.true };
-  const cols = R.matCols;
-  let rows = '';
-  for (const g of MATERIAL_CATALOG) {
-    const base = bases[g.base];
-    rows += `<tr class="group"><td>${g.group}</td><td></td>${cols.map((w) => `<td class="num">${g.baseUnit === 'sqft' ? fmt(sqftUp(base * (1 + w / 100))) + ' sqft' : ftUp(base * (1 + w / 100)) + ' ft'}</td>`).join('')}</tr>`;
-    for (const [name, cov] of g.items) rows += `<tr><td>${name}</td><td>${g.unit}</td>${cols.map((w) => `<td class="num">${base > 0 ? Math.ceil(base * (1 + w / 100) / cov - 1e-9) : 0}</td>`).join('')}</tr>`;
-  }
-  rows += `<tr class="group"><td>Other</td><td></td>${cols.map(() => '<td></td>').join('')}</tr>`;
-  rows += `<tr><td>8' Valley (no laps)</td><td>sheet</td>${cols.map(() => `<td class="num">${Math.ceil(bt.valley.true / 8 - 1e-9)}</td>`).join('')}</tr>`;
-  rows += `<tr><td>10' Drip Edge (eaves + rakes; no laps)</td><td>sheet</td>${cols.map(() => `<td class="num">${Math.ceil((bt.eave.true + bt.rake.true) / 10 - 1e-9)}</td>`).join('')}</tr>`;
-  return page(`${head(R, 'Material calculations')}
-    <table class="mat" style="margin-top:14px"><tr><th>Product</th><th>Unit</th>${cols.map((w) => `<th class="num">Waste (${w}%)</th>`).join('')}</tr>${rows}</table>
-    <div class="note">These calculations are estimates and are not guaranteed. Always double check calculations before ordering materials. Estimates are based off of the total pitched area (i.e., flat area is excluded).</div><div style="flex:1"></div>`, n);
-}
-
-// roof heights & access (Google's roof height model, via the drone panel's measurement)
-const LADDERS = [16, 20, 24, 28, 32, 36, 40];
-function heightsPage(R, info, n) {
-  const h = info.heights, M = 3.28084;
-  const eave = h.eave * M, ridge = h.ridge * M, trees = Math.max(h.ringObst || 0, h.nearObst || 0) * M;
-  const stories = eave < 14 ? 1 : eave < 24 ? 2 : 3;
-  // extension ladder: reach 3 ft above the gutter at a 4:1 angle (length ~ 1.03 x height), next standard size up
-  const need = (eave + 3) * 1.03, ladder = LADDERS.find((l) => l >= need);
-  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
-  const pl = info.plan;
-  return page(`${head(R, 'Roof heights &amp; access')}
-    <div class="two" style="margin-top:18px">
-      <div><div class="sec">Heights</div><table class="kv">
-        ${row('Gutter (eave) height', `${fmt(eave)} ft`)}
-        ${row('Ridge / highest point', `${fmt(ridge)} ft`)}
-        ${row('Roof rise (gutter to ridge)', `${fmt(Math.max(0, ridge - eave))} ft`)}
-        ${row('Stories (estimated)', stories === 3 ? '3+' : stories)}
-      </table></div>
-      <div><div class="sec">Access &amp; safety</div><table class="kv">
-        ${row('Ladder to reach the gutter', ladder ? `${ladder} ft extension ladder` : 'Over 40 ft: lift or roof access required')}
-        ${(() => { const ob = state.trace && state.trace.obstruction; if (!ob) return row('Tallest object near the roof (trees and structures not separated: no trace)', trees > 1 ? `${fmt(trees)} ft` : 'None found') + row('Above the ridge', trees > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No');
-          const tt = Math.max(ob.tallestOverlapTreeFt || 0, ob.tallestNearTreeFt || 0);
-          return row('Tallest tree near the roof', tt > 1 ? `${fmt(tt)} ft` : 'None found') + row('Tallest other structure nearby', ob.tallestStructureFt ? `${fmt(ob.tallestStructureFt)} ft` : 'None found') + row('Tree canopy over the roof', ob.inferredPlanSqft > 1 ? `${fmt(ob.inferredPlanSqft)} sq ft (${fmt(ob.footprintObscuredPct, 1)}% of the footprint)` : 'None') + row('Trees above the ridge', tt > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No'); })()}
-        ${row('Steep-roof equipment', R.t && R.t.predominant >= 8 ? 'Yes: predominant pitch ' + pitchLabel(R.t.predominant) : 'Not expected')}
-      </table></div>
-    </div>
-    ${pl ? `<div class="sec">Drone inspection flight</div><table class="kv">
-      ${row('Photos planned', `${pl.photos} (${pl.nadir} overhead, ${pl.photos - pl.nadir} angled)`)}
-      ${row('Flight altitudes above take-off', `${fmt(pl.gridAlt * M)} ft grid · ${fmt(pl.orbitAlt * M)} ft loop`)}
-      ${row('Estimated flight time', `${Math.floor(pl.secs / 60)} min ${Math.round(pl.secs % 60)} s`)}
-    </table>` : ''}
-    <div class="note">Heights are measured from Google's 3D roof height model and are relative to the ground beside the house. They are estimates (typically within about 1 ft) and should be confirmed on site. Ladder size assumes a 4:1 setup angle and 3 ft of ladder above the gutter.</div>
-    <div style="flex:1"></div>`, n);
-}
-
-// ------------------------------------------------------------------ build / print / download
-async function buildReportHTML() {
-  // permit history / roof age (city permit records, year built); a failed lookup never blocks the report
-  if (typeof permitEnsure === 'function') { try { await permitEnsure(); } catch (_) { /* shown as unavailable */ } }
-  const R = reportData();
-  const url = coverPhotoUrl(R);
-  const satSrc = await imageToDataURL(url);
-  const satForPrint = satSrc || url;
-  const pages = [];
-  pages.push((n) => coverPage(R, satForPrint, n));
-  if (R.hasTrace) {
-    pages.push((n) => diagramPage(R, n), (n) => lengthPage(R, n), (n) => areaPage(R, n), (n) => pitchPage(R, n));
-    if (R.t.structures.length > 1) for (const S of R.t.structures) pages.push((n) => structurePage(R, S, n, `Structure #${S.index} summary`));
-    pages.push((n) => structurePage(R, R.t, n, 'Report summary'));
-  }
-  if (typeof permitReportPage === 'function' && state.location) pages.push((n) => page(permitReportPage(head(R, 'Permit history &amp; roof age')), n));
-  let dInfo = null;
-  if (window.__drone && window.__drone.reportInfo) { try { dInfo = await window.__drone.reportInfo(); } catch (_) { dInfo = null; } }
-  if (dInfo && dInfo.heights) pages.push((n) => heightsPage(R, dInfo, n));
-  pages.push((n) => materialsPage(R, n));
-  const html = pages.map((fn, i) => fn(i + 1)).join('');
-  return { html, R, satSrc, satForPrint };
-}
 const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">';
-function standaloneDoc(html) {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Roof Report - ${esc(state.address || '')}</title>${FONT_LINK}<style>${REPORT_CSS}
-    body { margin: 0; background: #555; } .rp-page { margin: 16px auto; box-shadow: 0 2px 12px rgba(0,0,0,.4); }
-    @media print { body { background: #fff; } .rp-page { margin: 0; box-shadow: none; } }
-    .rp-print { position: fixed; top: 10px; right: 10px; background: ${BLUE}; color: #fff; border: 0; border-radius: 6px; padding: 10px 16px; font: 600 14px Inter, "Segoe UI", Arial; cursor: pointer; z-index: 9; } @media print { .rp-print { display: none; } }
-  </style></head><body><button class="rp-print" onclick="window.print()">Print / Save as PDF</button><div class="rp">${html}</div></body></html>`;
+
+// ------------------------------------------------------------------ one PDF for preview, print and download
+// The roof report is built once (roofpdf.js: vector sheets to the Diversity Contracting design) and the same bytes go
+// to the on-screen preview, the print dialog and the saved file, so the three always agree. The estimate pages are
+// appended (rendered as before) when "Add to end of roof report" is ticked or the Report + estimate button is used.
+const RPT = { url: null, blob: null, name: '', hash: '', sig: '', rec: null };
+window.__rmLastReport = null;
+async function sha256Hex(blob) { try { const d = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()); return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join(''); } catch (_) { return ''; } }
+async function buildReportPDF(opts = {}) {
+  if (typeof rpBuild !== 'function') throw new Error('The report module did not load');
+  const wantEst = !!opts.both || (typeof xm !== 'undefined' && !!xm.appendToReport && state.facets.length > 0);
+  // the same job state gives the same file: preview, print and download share one build (and the bytes are deterministic anyway)
+  const sig = JSON.stringify({ j: { ...serialize(), savedAt: null }, est: wantEst, mat: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked), co: company, w: state.waste });
+  if (RPT.rec && RPT.sig === sig) return RPT.rec;
+  if (wantEst && typeof xmEnsureRoof === 'function' && !await xmEnsureRoof()) return null;
+  if (typeof permitEnsure === 'function') { try { await permitEnsure(); } catch (_) { /* optional */ } }
+  const { doc, pages } = await rpBuild({ materials: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked) });
+  // deterministic bytes: the file carries the report date, not the second it was built
+  try { const d = new Date(); d.setHours(0, 0, 0, 0); doc.setCreationDate(d); doc.setFileId('00000000000000000000000000000000'); } catch (_) { /* older jsPDF */ }
+  let extraPages = 0;
+  if (wantEst && typeof xmBuildHTML === 'function') {
+    // jsPDF cannot merge documents: render the estimate pages into this one the same way htmlToPDF does
+    const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;background:#fff;z-index:-1'; host.innerHTML = `<style>${REPORT_CSS} .rp-page, .xm-page { margin: 0 !important; box-shadow: none !important; }</style><div class="rp">${xmBuildHTML().html}</div>`; document.body.appendChild(host);
+    try { for (const pg of host.querySelectorAll('.rp-page, .xm-page')) { const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false }); doc.addPage('letter', 'portrait'); doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, 612, 792, undefined, 'MEDIUM'); extraPages++; } } finally { host.remove(); }
+  }
+  const blob = doc.output('blob'); const name = fileBase() + (extraPages ? '_Roof_Report_and_Estimate.pdf' : '_Roof_Report.pdf');
+  RPT.sig = sig; RPT.rec = { blob, name, pages: pages + extraPages, hash: await sha256Hex(blob) }; return RPT.rec;
 }
-async function printReport() {
+// the preview panel (an iframe with the browser's PDF viewer) with Print and Save buttons that use the same bytes
+function showReportPreview(rec) {
+  const panel = $('#reportPreview'), frame = $('#reportFrame'); if (!panel || !frame) return;
+  if (RPT.url) { try { URL.revokeObjectURL(RPT.url); } catch (_) { /* ignore */ } }
+  RPT.blob = rec.blob; RPT.name = rec.name; RPT.hash = rec.hash; RPT.url = URL.createObjectURL(rec.blob);
+  frame.src = RPT.url + '#toolbar=0&view=FitH'; panel.hidden = false;
+  $('#reportPreviewName').textContent = `${rec.name}  -  ${rec.pages} US Letter sheet${rec.pages === 1 ? '' : 's'}; print at 100% (Actual size)`;
+}
+function printReportFrame() {
+  const frame = $('#reportFrame'); let done = false;
+  const viaTab = () => { if (done) return; done = true; try { window.open(RPT.url, '_blank'); } catch (_) { /* blocked */ } toast('The report opened in a new tab: press Ctrl+P (Cmd+P) and print at 100%.'); window.__rmLastReport = Object.assign(window.__rmLastReport || {}, { printed: 'tab' }); };
+  try { if (!frame || !frame.contentWindow) throw new Error('no frame'); frame.contentWindow.focus(); frame.contentWindow.print(); done = true; window.__rmLastReport = Object.assign(window.__rmLastReport || {}, { printed: 'frame' }); }
+  catch (e) { viaTab(); }
+}
+// action: 'preview' | 'print' | 'download' | 'both' (download with the estimate appended)
+async function reportAction(action) {
   toast('Building report...');
-  const { html } = await buildReportHTML();
-  $('#report').innerHTML = `<style>${REPORT_CSS}</style><div class="rp">${html}</div>`;
-  const imgs = [...$('#report').querySelectorAll('img')].filter((i) => !i.complete);
-  await Promise.race([Promise.all(imgs.map((i) => new Promise((r) => { i.onload = i.onerror = r; }))), new Promise((r) => setTimeout(r, 4000))]);
-  window.print();
+  const rec = await buildReportPDF({ both: action === 'both' }); if (!rec) return null;
+  showReportPreview(rec);
+  window.__rmLastReport = { name: rec.name, pages: rec.pages, hash: rec.hash, action, previewed: true, printed: null, downloaded: false };
+  if (action === 'print') { await new Promise((r) => setTimeout(r, 900)); printReportFrame(); }
+  if (action === 'download' || action === 'both') { const saved = await deliverFile(rec.blob, rec.name); window.__rmLastReport.downloaded = true; toast(`Ready: ${rec.name} (${rec.pages} sheets)${saved ? '; copy saved in the reports folder' : ''}`); }
+  else if (action === 'preview') toast(`Preview ready: ${rec.pages} sheets. Print and Save use this same file.`);
+  return rec;
 }
-async function downloadReport() {
-  toast('Building report...');
-  const { html, satSrc, satForPrint } = await buildReportHTML();
-  // never ship the API key inside a shareable file: drop the live-URL image if it could not be embedded
-  const body = satSrc ? html : html.replace(`<img class="cover-img" src="${satForPrint}" alt="">`, '<div class="empty" style="margin-top:.5in">Satellite image not embedded</div>');
-  const doc = standaloneDoc(body);
-  const name = fileBase() + '_Roof_Report.html';
-  const saved = await deliverFile(new Blob([doc], { type: 'text/html' }), name);
-  toast('Ready: ' + name + (saved ? '; copy saved in the reports folder' : ''));
-}
+async function printReport() { return reportAction('print'); }
+async function downloadReport() { return reportAction('download'); }
 
 // Each letter page: text, tables and photos are rendered to an image (html2canvas: PNG for crisp text, JPEG only on
 // pages with a photo), then every roof diagram is drawn on top as true vector lines (svg2pdf), so edges stay sharp
@@ -523,18 +413,7 @@ async function downloadPDF(what = "report") {
   if (what === "estimate") {
     html = xmBuildHTML().html;
     title = "Estimate - " + (state.address || ""); name = fileBase() + "_Estimate.pdf";
-  } else {
-    const hasXm = typeof xm !== "undefined";
-    const prev = hasXm ? xm.appendToReport : false;
-    if (hasXm && what === "both") xm.appendToReport = true;
-    let res;
-    try { res = await buildReportHTML(); } finally { if (hasXm) xm.appendToReport = prev; }
-    // never put the API key into a file that gets shared
-    html = res.satSrc ? res.html : res.html.replace(`<img class="cover-img" src="${res.satForPrint}" alt="">`, "<div class=\"empty\" style=\"margin-top:.5in\">Satellite image unavailable</div>");
-    const both = what === "both" || (hasXm && xm.appendToReport && state.facets.length);
-    title = (both ? "Roof Report and Estimate - " : "Roof Report - ") + (state.address || "");
-    name = fileBase() + (both ? "_Roof_Report_and_Estimate.pdf" : "_Roof_Report.pdf");
-  }
+  } else throw new Error("The roof report is built by reportAction(); only the estimate uses this path");
   const pdf = await htmlToPDF(html, title);
   const n = pdf.getNumberOfPages();
   const saved = await deliverFile(pdf.output("blob"), name);
@@ -546,7 +425,7 @@ async function downloadPDF(what = "report") {
   if (!document.querySelector('link[href*="fonts.googleapis.com/css2?family=Inter"]')) document.head.insertAdjacentHTML('beforeend', FONT_LINK);
   // the diagram, length, area, pitch and summary pages need a traced roof: trace it automatically when there is none yet
   const ensureTrace = async () => {
-    if (state.facets.length) return true;
+    if (state.facets.length || (state.trace && state.trace.failed)) return true;
     if (!state.solar && state.location && typeof runSolar === 'function') await runSolar();
     if (!state.solar) { if (!state.edges.length) { toast('Nothing to report yet. Enter an address and get roof data first.', true); return false; } return true; }
     if (typeof autoTraceRoof !== 'function') return true;
@@ -557,19 +436,13 @@ async function downloadPDF(what = "report") {
   const gateOk = () => { if (typeof reviewGate !== 'function' || reviewGate()) return true; toast('Export cancelled: see "5. Review before export"'); const p = $('#panelReview'); if (p) { p.open = true; p.scrollIntoView({ block: 'start' }); } return false; };
   window.rmExportGate = gateOk;
   const run = (fn, btn, gate) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace() && (!gate || gateOk())) await fn(); } finally { b.disabled = false; } };
-  $('#btnReport').onclick = run(printReport, '#btnReport', true);
-  $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML', true);
-  // roof report PDFs are drawn as vectors with selectable text (roofpdf.js); the estimate-only PDF keeps its own layout.
-  // Every export first passes the review gate, so incomplete totals are acknowledged, never exported silently.
-  const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => {
-    try {
-      if (!gateOk()) return;                                   // the estimate is priced from the same totals, so it asks too
-      if (what !== 'estimate' && typeof rpDownload === 'function' && state.facets.length) await rpDownload(what); else await downloadPDF(what);
-    } catch (e) { console.error(e); toast('PDF failed: ' + e.message, true); } }, id); };
-  pdfBtn('#btnReportPDF', 'report');
-  pdfBtn('#btnReportBoth', 'both');
-  pdfBtn('#btnXmPDF', 'estimate');
-  pdfBtn('#btnXmBoth', 'both');
+  const act = (id, action) => { if ($(id)) $(id).onclick = run(async () => { try { if (!gateOk()) return; await reportAction(action); } catch (e) { console.error(e); toast('Report failed: ' + e.message, true); } }, id); };
+  act('#btnReportPreview', 'preview'); act('#btnReport', 'print'); act('#btnReportPDF', 'download'); act('#btnReportBoth', 'both'); act('#btnXmBoth', 'both');
+  // the estimate-only PDF keeps its own layout (rendered pages); it passes the same review gate
+  if ($('#btnXmPDF')) $('#btnXmPDF').onclick = run(async () => { try { if (!gateOk()) return; await downloadPDF('estimate'); } catch (e) { console.error(e); toast('PDF failed: ' + e.message, true); } }, '#btnXmPDF');
+  // preview panel controls
+  const pf = () => { if (!RPT.url) return; printReportFrame(); }; const ps = async () => { if (!RPT.blob) return; await deliverFile(RPT.blob, RPT.name); window.__rmLastReport = Object.assign(window.__rmLastReport || {}, { downloaded: true }); };
+  if ($('#rpPrint')) $('#rpPrint').onclick = pf; if ($('#rpSave')) $('#rpSave').onclick = ps; if ($('#rpClose')) $('#rpClose').onclick = () => { $('#reportPreview').hidden = true; };
   for (const k of Object.keys(COMPANY_DEFAULT)) {
     const el = $('#co_' + k); if (!el) continue;
     el.value = company[k] || '';

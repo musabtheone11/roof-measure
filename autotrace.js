@@ -502,6 +502,49 @@ function altCheck(dsm, al, roofMask, treeMask, curMask, w, h, geo) {
   return out;
 }
 
+// why no building could be traced: Google has a building record here but its image shows no building outline
+// A low-slope section (4/12 or less) whose surface does not fit a plane well (rms 6 cm or more, 50 sq ft or more) is
+// what a screen enclosure, a pergola or an open patio cover looks like in the height model: the model cannot tell them
+// from roofing. Such a section stays in the sketch but is marked for verification, so the report asks for review.
+function rmOpenCover(f) {
+  if (!(f.slope != null && f.slope <= 0.34 && (f.rms || 0) >= 0.06 && (f.areaM2 || 0) * Math.sqrt(1 + f.slope * f.slope) >= 4.65)) return null;
+  return { source: 'Height model', date: '', note: `Low-slope section with an uneven surface (${(f.rms * 100).toFixed(0)} cm from a flat plane): it may be a screen enclosure, a pergola or an open patio cover rather than roofing.` };
+}
+// Google keeps one dataset per quality tier, often flown years apart. When a NEWER tier of the same building shows a lot
+// more roof than the image traced (25% or more), the building was probably extended or rebuilt after the traced flight
+// (or more of it was under trees then). Only the tiers' own roof-area figures are compared: two small requests.
+async function rmNewerRecords(main) {
+  if (typeof fetchSolarTier !== 'function' || !main || !main.imageryDate) return null;
+  const cur = String(main.imageryQuality || '').toUpperCase(), d0 = Date.UTC(main.imageryDate.year, main.imageryDate.month - 1, main.imageryDate.day || 1);
+  const a0 = main.solarPotential && main.solarPotential.wholeRoofStats ? main.solarPotential.wholeRoofStats.areaMeters2 : null; if (!a0) return null;
+  const out = [];
+  for (const q of ['HIGH', 'MEDIUM', 'BASE']) { if (q === cur) continue; let r = null; try { r = await fetchSolarTier(main.center.latitude, main.center.longitude, q); } catch (_) { continue; }
+    if (!r || r.name !== main.name || !r.imageryDate) continue; const d = Date.UTC(r.imageryDate.year, r.imageryDate.month - 1, r.imageryDate.day || 1); if (d - d0 < 365 * 864e5) continue;
+    const a = r.solarPotential && r.solarPotential.wholeRoofStats ? r.solarPotential.wholeRoofStats.areaMeters2 : null; if (!a) continue;
+    out.push({ quality: q, date: r.imageryDate, roofM2: a, tracedRoofM2: a0, ratio: a / a0 }); }
+  return out;
+}
+async function fetchSolarTier(lat, lng, q) {
+  if (typeof fetch !== 'function' || !state.key) return null;
+  const r = await fetch(`https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&requiredQuality=${q}&exactQualityRequired=true&key=${encodeURIComponent(state.key)}`);
+  return r.ok ? r.json() : null;
+}
+// how far the address point is from the building that was measured (Google picks the building nearest the point; a
+// geocode on an empty lot or between houses can pick the neighbour's)
+function rmAddressCheck(res, kx, ky, cLat, cLng) {
+  const loc = state.location; if (!loc || !res || !res.facets) return null;
+  const P = [(loc.lng - cLng) * kx, (loc.lat - cLat) * ky]; let best = Infinity, inside = false;
+  for (const f of res.facets) { const r = f.path.map((v) => [(v.lng - cLng) * kx, (v.lat - cLat) * ky]); let c = false;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > P[1]) !== (b[1] > P[1]) && P[0] < (b[0] - a[0]) * (P[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+      const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-9; const t = Math.max(0, Math.min(1, ((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / l2)); best = Math.min(best, Math.hypot(P[0] - a[0] - t * dx, P[1] - a[1] - t * dy)); }
+    if (c) inside = true; }
+  return { distM: inside ? 0 : best, precision: loc.precision || null, partial: !!loc.partial };
+}
+const fmtDate = (d) => (d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : 'an unknown date');
+function rmNoBuilding(layers, main) {
+  const d = (layers && layers.imageryDate) || main.imageryDate; const date = d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : 'an unknown date';
+  return `Google's imagery of this location (flown ${date}) shows no building outline at the selected building. The building may be newer than the image, or hidden by trees.`;
+}
 async function autoTraceRoof(opts = {}) {
   if (!state.solar) throw new Error('Get roof data first');
   const main = state.solar;
@@ -540,7 +583,23 @@ async function autoTraceRoof(opts = {}) {
     cached = cache[cacheKey] = { layers, maskT: mT, dsmT: dT, rgbT: rT };
   }
   if (cached.rgbT === undefined && cached.layers && cached.layers.rgbUrl) { try { cached.rgbT = await loadTiff(cached.layers.rgbUrl, '_cache_' + String(main.name || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius + '_rgb.tif'); } catch (_) { cached.rgbT = null; } }
-  const { layers, maskT, dsmT } = cached; const rgbT = cached.rgbT && cached.rgbT.bands && cached.rgbT.w === dsmT.w && cached.rgbT.h === dsmT.h ? cached.rgbT : null;
+  let { layers, maskT, dsmT } = cached; let rgbT = cached.rgbT && cached.rgbT.bands && cached.rgbT.w === dsmT.w && cached.rgbT.h === dsmT.h ? cached.rgbT : null;
+  // Google's building record can come from a newer flight than the best (high quality) layers. When the selected building
+  // has no outline in those layers (built after that flight), trace from the flight the record itself comes from. It is
+  // usually medium quality: the report then says so and asks for review.
+  let layerChoice = null;
+  { const recQ = main.imageryQuality ? String(main.imageryQuality).toUpperCase() : null, layQ = layers && layers.imageryQuality ? String(layers.imageryQuality).toUpperCase() : null;
+    const dOf = (d) => (d ? Date.UTC(d.year, d.month - 1, d.day) : null); const recD = dOf(main.imageryDate), layD = dOf(layers && layers.imageryDate);
+    if (recQ && recD && layD && recD - layD > 180 * 864e5) {
+      let inBox = 0; const pad = 3 / kx, padN = 3 / ky; const lo = { la: bb.sw.latitude - padN, ln: bb.sw.longitude - pad }, hi = { la: bb.ne.latitude + padN, ln: bb.ne.longitude + pad };
+      for (let y = 0; y < maskT.h; y += 2) for (let x = 0; x < maskT.w; x += 2) { if (!(maskT.data[y * maskT.w + x] > 0)) continue; const q = maskT.toLL(x + 0.5, y + 0.5); if (q.lat >= lo.la && q.lat <= hi.la && q.lng >= lo.ln && q.lng <= hi.ln) inBox++; }
+      const pxM2 = 0.01 * 4; layerChoice = { recordDate: main.imageryDate, recordQuality: recQ, layersDate: layers.imageryDate, layersQuality: layQ, buildingInLayers: inBox * pxM2 >= 15, used: 'layers' };
+      if (!layerChoice.buildingInLayers && recQ !== layQ) {
+        try { const A = await altLoadLayers(recQ, cLat, cLng, radius); if (A && A.maskT && A.dsmT) { layers = A.layers; maskT = A.maskT; dsmT = A.dsmT; rgbT = A.rgbT && A.rgbT.bands && A.rgbT.w === A.dsmT.w && A.rgbT.h === A.dsmT.h ? A.rgbT : null; layerChoice.used = 'record'; if (!opts.quiet) toast(`The best image (${fmtDate(layerChoice.layersDate)}) shows no building here; tracing from the newer ${recQ.toLowerCase()} quality image (${fmtDate(main.imageryDate)}).`, true); } }
+        catch (e) { layerChoice.error = String(e.message || e); }
+      }
+    } }
+
   // hidden zones a reviewer confirmed from another source are passed to the tracer as points in its metre frame
   opts = { ...opts, rgb: rgbT ? rgbT.bands : null, acceptHidden: (state.acceptedHidden || []).map((p) => [(p.lng - cLng) * kx, (p.lat - cLat) * ky]) };
   if (maskT.w !== dsmT.w || maskT.h !== dsmT.h) throw new Error('Mask and DSM sizes differ');
@@ -575,13 +634,13 @@ async function autoTraceRoof(opts = {}) {
       for (const pc of near) for (let i = 0; i < w * h; i++) if (pc.member[i]) clipped[i] = 1;
       pieces = near;
     }
-    if (!pieces.length) throw new Error('Building mask is empty at this location');
+    if (!pieces.length) throw new Error(rmNoBuilding(layers, main));
     let best = null, bestScore = -Infinity;
     for (const pc of pieces) { const d = Math.hypot(pc.cx - cx0, pc.cy - cy0) * Math.sqrt(geo.pxM2); const score = pc.n * geo.pxM2 - d * 2; if (score > bestScore) { bestScore = score; best = pc; } }
     for (let i = 0; i < w * h; i++) if (best.member[i]) { sx = i % w; sy = (i - sx) / w; break; }
   }
   const mainFlood = floodComponent(clipped, w, h, sx, sy);
-  if (!mainFlood.n) throw new Error('Building mask is empty inside the building bounds');
+  if (!mainFlood.n) throw new Error(rmNoBuilding(layers, main));
   let msx = 0, msy = 0, mminx = w, mmaxx = 0, mminy = h, mmaxy = 0;
   for (let j = 0; j < w * h; j++) if (mainFlood.out[j]) { const px = j % w, py = (j - px) / w; msx += px; msy += py; if (px < mminx) mminx = px; if (px > mmaxx) mmaxx = px; if (py < mminy) mminy = py; if (py > mmaxy) mmaxy = py; }
   const mainComp = { member: mainFlood.out, n: mainFlood.n, cx: msx / mainFlood.n, cy: msy / mainFlood.n, bbox: [mminx, mminy, mmaxx, mmaxy] };
@@ -648,7 +707,7 @@ async function autoTraceRoof(opts = {}) {
     if (res.obstruction && res.obstruction.hiddenZones) for (const z of res.obstruction.hiddenZones) hiddenZones.push({ ...z, id: 'H' + (hiddenZones.length + 1), structure: idx + 1, facetName: z.facet != null ? 'F' + (base + z.facet + 1) : null });
     for (const f of res.facets) {
       // engine evidence kept on the facet: exact fitted slope, fit quality, Measured / Inferred / Unresolved, raw outline
-      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null } : { azimuth: f.azimuth, structure: idx + 1 });
+      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, verify: rmOpenCover(f) } : { azimuth: f.azimuth, structure: idx + 1 });
       if (idx === 0) mainSqft += facetMetrics(added).sloped;
     }
     for (const e of res.edges) addEdge(e.type, e.path, null, '', e.factor != null ? { factor: e.factor, basis: e.basis, status: e.status, autoType: e.type, obscuredFt: e.obscuredFt, structure: idx + 1, evidence: e.evidence, missing: e.missing, paired: e.paired, confirmedBy: e.confirmedBy ? { source: e.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, altFt: e.altFt } : { structure: idx + 1 });
@@ -658,8 +717,8 @@ async function autoTraceRoof(opts = {}) {
   if (altInfo && altInfo.used) altInfo.usedSqft = results.reduce((a, r) => a + r.res.facets.reduce((q, f) => q + (f.altSqft || 0), 0), 0);
   const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}`, obstruction: mainRes.obstruction || null, hiddenZones, repairs: mainRes.repairs || [], plot: mainRes.plot || null, alt: altInfo };
   // what the trace was made from, for the review panel, the audit trail and the report
-  state.trace = { engine: 'v2.1', tracedAt: new Date().toISOString(), imageryDate: layers.imageryDate || main.imageryDate || null, imageryQuality: layers.imageryQuality || main.imageryQuality || null, source: 'Google Solar API height model (DSM) and building mask, 0.1 m per pixel', hasRgb: !!rgbT, noiseSigmaM: mainRes.noiseSigma || null,
-    obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
+  state.trace = { engine: 'v2.1', tracedAt: new Date().toISOString(), imageryDate: (layers || {}).imageryDate || main.imageryDate || null, imageryQuality: (layers || {}).imageryQuality || main.imageryQuality || null, source: 'Google Solar API height model (DSM) and building mask, 0.1 m per pixel', hasRgb: !!rgbT, noiseSigmaM: mainRes.noiseSigma || null,
+    layerChoice, newerRecords: await rmNewerRecords(layerChoice && layerChoice.used === 'record' ? null : main).catch(() => null), addressCheck: rmAddressCheck(results[0] && results[0].res, kx, ky, cLat, cLng), obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
     raw: results.map(({ res }, idx) => ({ structure: idx + 1, facets: res.facets.map((f) => ({ pitch: f.pitch, slope: f.slope, status: f.status, path: f.path, rawPath: f.rawPath || null })), edges: res.edges.map((e) => ({ type: e.type, factor: e.factor, status: e.status, path: e.path })) })) };
   recompute();   // after state.trace is set: labels, hatching and the review panel read the hidden zones from it
   if (!opts.quiet) toast(`Auto-traced ${fi} facets, ${state.edges.length} lines, ${results.length} structure${results.length === 1 ? '' : 's'}`);

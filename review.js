@@ -16,8 +16,8 @@ function reviewState() {
   const g = reviewPlain(); const a = RM.audit(g.facets, g.lines); const t = computeTotals();
   const unresolved = [];
   // hidden zones: possible roof under canopy that nothing seen supports. Reported as a range, never as a number.
-  for (const z of t.hiddenZones) unresolved.push({ kind: 'zone', id: z.id, label: `${z.id} hidden section${z.facetName ? ' beside ' + z.facetName : ''}`, qty: `0 to ${fmt(z.upperSqft)} sq ft`, at: z.centre,
-    missing: `Tree canopy hides this area. The ${z.pitch}/12 roof plane ${z.facetName ? 'of ' + z.facetName + ' ' : ''}could continue here for up to ${fmt(z.upperSqft)} sq ft, but nothing visible shows that it does. Not included in any total. An image without the canopy (another date, an oblique or 3D view, a drone photo) or a site measurement would resolve it.` });
+  for (const z of t.hiddenZones) unresolved.push({ kind: 'zone', id: z.id, label: z.label ? `${z.id} ${z.label}` : `${z.id} hidden section${z.facetName ? ' beside ' + z.facetName : ''}`, qty: z.upperSqft == null ? 'extent not measured' : `0 to ${fmt(z.upperSqft)} sq ft`, at: z.centre,
+    missing: z.upperSqft == null ? (z.action || 'Review zone from the source document: locate the edges and confirm the extent on site. Not included in any total.') : `Tree canopy hides this area. The ${z.pitch}/12 roof plane ${z.facetName ? 'of ' + z.facetName + ' ' : ''}could continue here for up to ${fmt(z.upperSqft)} sq ft, but nothing visible shows that it does. Not included in any total. An image without the canopy (another date, an oblique or 3D view, a drone photo) or a site measurement would resolve it.` });
   for (const x of t.facets) if (RM.statusOf(x.f) === 'unresolved') unresolved.push({ kind: 'facet', id: x.f.id, label: x.f.name, qty: `${fmt(x.m.sloped)} sq ft`, missing: x.f.missing || x.f.note || 'Marked unresolved' });
   t.edges.forEach((x, i) => { if (RM.statusOf(x.e) === 'unresolved' && !EDGE_TYPES[x.e.type].notRoof) unresolved.push({ kind: 'edge', id: x.e.id, label: `L${i + 1} ${EDGE_TYPES[x.e.type].label.toLowerCase()}`, qty: `${fmt(x.m.trueFt, 1)} ft`, missing: x.e.missing || x.e.note || 'Marked unresolved' }); });
   // items a reviewer saw in another view but could not measure there
@@ -31,7 +31,7 @@ function reviewState() {
   return { audit: a, totals: t, unresolved, verify, reconcile: rec, errors: a.issues.filter((i) => i.severity === 'error').length, warnings: a.issues.filter((i) => i.severity === 'warn').length };
 }
 window.rmAudit = () => { const r = reviewState(); const t = r.totals; const strip = (o) => (o ? { ...o, trees: o.trees.map((x) => ({ ...x, path: undefined })), structures: o.structures.map((x) => ({ ...x, path: undefined })), hiddenZones: undefined } : null);
-  return { issues: r.audit.issues, unclassifiedFt: r.audit.unclassifiedFt, unresolved: r.unresolved, verify: r.verify, reconcile: r.reconcile, areaByStatus: t.areaByStatus, lineByStatus: t.lineByStatus, confirmedSloped: t.confirmedSloped, inferredSloped: t.inferredSloped, hiddenUpperSloped: t.hiddenUpperSloped, obstructionFt: t.obstructionFt,
+  return { reportStatus: reviewReportStatus(r), issues: r.audit.issues, unclassifiedFt: r.audit.unclassifiedFt, unresolved: r.unresolved, verify: r.verify, reconcile: r.reconcile, areaByStatus: t.areaByStatus, lineByStatus: t.lineByStatus, confirmedSloped: t.confirmedSloped, inferredSloped: t.inferredSloped, hiddenUpperSloped: t.hiddenUpperSloped, obstructionFt: t.obstructionFt,
     hiddenZones: t.hiddenZones.map((z) => ({ id: z.id, structure: z.structure, facetName: z.facetName, planSqft: z.planSqft, upperSqft: z.upperSqft, pitch: z.pitch })), evidence: state.evidence, acceptedHidden: state.acceptedHidden,
     structures: t.structures.map((g) => ({ index: g.index, facets: g.facetCount, confirmed: g.areaByStatus.measured, inferred: g.areaByStatus.inferred, byType: Object.fromEntries(Object.entries(g.byType).map(([k, v]) => [k, v.true])) })),
     trace: state.trace ? { imageryDate: state.trace.imageryDate, imageryQuality: state.trace.imageryQuality, repairs: state.trace.repairs, obstruction: strip(state.trace.obstruction), selection: state.trace.selection } : null }; };
@@ -171,15 +171,18 @@ function renderReviewNow() {
   const co = $('#chkObst'); if (co) co.onchange = (e) => { state.showObstruction = e.target.checked; reviewDrawOverlays(); };
   const cr = $('#chkRaw'); if (cr) cr.onchange = (e) => { state.showRaw = e.target.checked; reviewDrawOverlays(); };
 }
+// The report's status, stated on the first page of every export: COMPLETE only when every reported value was measured
+// on georeferenced imagery and nothing that affects the totals is open. Otherwise REVIEW REQUIRED, with each reason
+// and the specific evidence that would settle it. Built from the same review state the totals come from.
+function reviewReportStatus(r) {
+  r = r || reviewState(); const t = r.totals, tr = state.trace || {};
+  return RM.reportStatus({ failed: tr.failed, facets: state.facets.length, hiddenZones: r.unresolved.filter((u) => u.kind === 'zone'), hiddenUpperSqft: t.hiddenUpperKnown === false ? null : t.hiddenUpperSloped,
+    inferredSqft: t.inferredSloped, unresolved: r.unresolved.filter((u) => u.kind !== 'zone'), verify: r.verify, geometryErrors: r.errors, reconcileOk: r.reconcile.ok,
+    imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, newerRecords: tr.newerRecords, extra: typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : [] });
+}
 // asked before any export: incomplete totals and geometry errors must be acknowledged, never silently exported
 function reviewGate() {
-  if (!state.facets.length) return true;
-  const r = reviewState(); const msgs = [];
-  const zones = r.unresolved.filter((u) => u.kind === 'zone').length, other = r.unresolved.length - zones;
-  if (zones) msgs.push(`${zones} hidden section${zones > 1 ? 's' : ''} under tree canopy could not be measured (up to ${fmt(r.totals.hiddenUpperSloped)} sq ft). The report gives the confirmed area first and marks the roof as not fully measured.`);
-  if (other) msgs.push(`${other} item${other > 1 ? 's' : ''} marked unresolved.`);
-  if (r.errors) msgs.push(`${r.errors} geometry error${r.errors > 1 ? 's' : ''} (overlap, self-intersection or duplicate line) that can change the totals.`);
-  if (!r.reconcile.ok) msgs.push('A subtotal does not reconcile.');
-  if (!msgs.length) return true;
-  return window.__rmNoConfirm ? true : confirm('Before you export:\n\n- ' + msgs.join('\n- ') + '\n\nOpen "5. Review before export" (and "Review roof from other angles") to resolve them, or press OK to export with these flags shown in the report.');
+  if (!state.facets.length && !(state.trace && state.trace.failed)) return true;
+  const st = reviewReportStatus(); if (st.status === 'COMPLETE') return true;
+  return window.__rmNoConfirm ? true : confirm('REVIEW REQUIRED before you export:\n\n- ' + st.reasons.map((q) => q.text).join('\n- ') + '\n\nThe report states this on its first page with the evidence each item needs. Open "5. Review before export" (and "Review roof from other angles") to resolve them, or press OK to export a REVIEW REQUIRED report.');
 }

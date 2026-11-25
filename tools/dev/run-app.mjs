@@ -1,7 +1,10 @@
 // Headless address-to-PDF run through the real UI (same buttons a person clicks).
 //   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090] [--alt] [--estimate [--xm "deck=membrane,lossType="] [--est-name estimate]]
+//   Key=<google key> node tools/dev/run-app.mjs --job <saved job .json> --out .devcache/runs/name      (a saved / exported job, loaded the way Import JSON loads it)
 //   --alt also runs the reviewer's second look (3D views, dated imagery, configuration check, carry) and writes report-alt.pdf
-// Writes: map-clean.png, map-overlay.png, roof.json (Export JSON content), totals.json, report.pdf, console.log
+// Every run exercises the report flow a person uses: Preview report, Print report, Download report. The three must carry
+// the same PDF bytes (sha256); the run fails otherwise and report-check.json records the hashes and sheet count.
+// Writes: map-clean.png, map-overlay.png, roof.json (Export JSON content), totals.json, report.pdf, report-check.json, console.log
 // The API key is read from the environment (Key or GOOGLE_MAPS_KEY) and is never written to disk.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +14,7 @@ import { start } from './serve.mjs';
 const { chromium } = createRequire(import.meta.url)('playwright');   // the globally installed Playwright (matches the installed browser)
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const key = process.env.Key || process.env.GOOGLE_MAPS_KEY; if (!key) { console.error('Set Key or GOOGLE_MAPS_KEY'); process.exit(2); }
-const address = arg('address'), out = path.resolve(arg('out', '.devcache/runs/run')), port = +arg('port', 8090), root = arg('root', null);
+const address = arg('address', ''), out = path.resolve(arg('out', '.devcache/runs/run')), port = +arg('port', 8090), root = arg('root', null);
 const pdfWhat = arg('pdf', 'btnReportPDF');
 fs.mkdirSync(out, { recursive: true });
 const srv = await start(port, root ? { root } : {});
@@ -26,11 +29,17 @@ const step = async (name, fn) => { const t = Date.now(); try { const r = await f
 let code = 0;
 try {
   await step('load app + map', async () => { await page.goto(`http://localhost:${port}/`); await page.waitForFunction(() => typeof map !== 'undefined' && map && typeof geocoder !== 'undefined' && geocoder, null, { timeout: 60000 }); });
+  const jobFile = arg('job', null);
+  if (jobFile) {
+    // a saved job (Export JSON format) goes through the app's own restore(), the same path as "Import JSON"
+    const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
+    await step('load saved job', async () => { await page.evaluate((d) => { restore(d); }, job); await page.waitForFunction((n) => state.facets.length === n, job.facets.length, { timeout: 30000 }); });
+  } else
   await step('address', async () => { await page.fill('#address', address); await page.click('#btnGo'); await page.waitForFunction(() => state.location, null, { timeout: 30000 }); });
   await page.waitForTimeout(6000);
   await page.locator('#map').screenshot({ path: path.join(out, 'map-clean.png') });
-  await step('get roof data', async () => { await page.click('#btnSolar'); await page.waitForFunction(() => state.solar || /class="err"/.test(document.querySelector('#solarOut').innerHTML), null, { timeout: 30000 }); });
-  await step('auto-trace', async () => { await page.click('#btnAuto'); await page.waitForFunction(() => state.facets.length > 0 && !document.querySelector('#btnAuto').disabled, null, { timeout: 180000 }); });
+  if (!jobFile) await step('get roof data', async () => { await page.click('#btnSolar'); await page.waitForFunction(() => state.solar || /class="err"/.test(document.querySelector('#solarOut').innerHTML), null, { timeout: 30000 }); });
+  if (!jobFile) await step('auto-trace', async () => { await page.click('#btnAuto'); await page.waitForFunction(() => (state.facets.length > 0 || (state.trace && state.trace.failed)) && !document.querySelector('#btnAuto').disabled, null, { timeout: 180000 }); const why = await page.evaluate(() => state.facets.length ? null : state.trace.failed); if (why) console.log('     no roof traced: ' + why); });
   await page.evaluate(() => { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); ((state.trace && state.trace.hiddenZones) || []).forEach((z) => z.path.forEach((p) => b.extend(p))); map.fitBounds(b, 60); });
   await page.waitForTimeout(5000);
   await page.locator('#map').screenshot({ path: path.join(out, 'map-overlay.png') });
@@ -40,7 +49,7 @@ try {
     const byType = {}; for (const k of Object.keys(t.byType)) byType[k] = { planFt: t.byType[k].plan, trueFt: t.byType[k].true, count: t.byType[k].count };
     const audit = typeof window.rmAudit === 'function' ? window.rmAudit() : null;
     return { roof: serialize(), totals: { slopedSqft: t.sloped, planSqft: t.plan, facetCount: t.facetCount, predominant: t.predominant, pitchGroups: t.pitchGroups, byType, structures: t.structures.map((g) => ({ index: g.index, sloped: g.sloped, facets: g.facetCount, predominant: g.predominant })), recWaste: t.recWaste,
-      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch })) },
+      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded, structure: x.f.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.f) : null })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch , structure: x.e.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.e) : null})) },
       solar: s ? { total: s.total, ground: s.ground, segs: s.segs.length, predominant: s.predominant, imageryDate: s.imageryDate, quality: s.quality } : null, audit };
   });
     fs.writeFileSync(path.join(out, `roof${sfx}.json`), JSON.stringify(data.roof));
@@ -57,7 +66,19 @@ try {
   });
   const fit = async () => { await page.evaluate(() => { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); ((state.trace && state.trace.hiddenZones) || []).forEach((z) => z.path.forEach((p) => b.extend(p))); map.fitBounds(b, 60); }); await page.waitForTimeout(4000); };
   let data = await snapshot('');
+  // the report flow a person uses: Preview, Print and Download must all carry the same bytes
+  // buttons live inside collapsed panels: open the panels first (what a person does by hand)
+  const clickBtn = async (id) => { await page.evaluate((id) => { const b = document.getElementById(id); for (let p = b; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; if (p.hidden) p.hidden = false; } b.scrollIntoView({ block: 'center' }); }, id); await page.click('#' + id, { timeout: 15000 }); };
+  await step('report: preview', async () => { await page.evaluate(() => { window.__rmNoConfirm = true; }); await clickBtn('btnReportPreview'); await page.waitForFunction(() => window.__rmLastReport && window.__rmLastReport.previewed, null, { timeout: 240000 }); });
+  const previewRec = await page.evaluate(() => ({ ...window.__rmLastReport }));
+  await step('report: print', async () => { await clickBtn('btnReport'); await page.waitForFunction(() => window.__rmLastReport && window.__rmLastReport.printed, null, { timeout: 240000 }); });
+  const printRec = await page.evaluate(() => ({ ...window.__rmLastReport }));
   await pdf('report.pdf');
+  const dlRec = await page.evaluate(() => ({ ...window.__rmLastReport }));
+  const same = previewRec.hash && previewRec.hash === printRec.hash && printRec.hash === dlRec.hash;
+  console.log(`     report: ${dlRec.pages} sheets; preview / print / download ${same ? 'identical' : 'DIFFER'} (sha256 ${String(dlRec.hash).slice(0, 12)}); printed via ${printRec.printed}`);
+  fs.writeFileSync(path.join(out, 'report-check.json'), JSON.stringify({ preview: previewRec, print: printRec, download: dlRec, identical: same }, null, 1));
+  if (!same) throw new Error('preview, print and download do not agree');
   // --alt: the reviewer's second look, through the same controls a person uses (Review roof from other angles)
   if (process.argv.includes('--alt')) {
     const panel = page.locator('#avPanel'); const busy = () => page.waitForFunction(() => !window.rmAltView.state.busy, null, { timeout: 240000 });
@@ -74,7 +95,7 @@ try {
       console.log('     check: ' + JSON.stringify(chk)); fs.writeFileSync(path.join(out, 'alt-check.json'), JSON.stringify(chk, null, 1));
       await panel.screenshot({ path: path.join(out, 'alt-dated-check.png') });
       if (chk.ok) {
-        await step('carry edges into the sketch', async () => { await page.check('#avCfg'); await page.fill('#avNoteTxt', arg('altnote', 'same roof in both images; tree removed in the newer one')); await page.click('#avCarry'); await page.waitForFunction(() => state.trace && state.trace.alt && state.trace.alt.used && !window.rmAltView.state.busy, null, { timeout: 240000 }); });
+        await step('carry edges into the sketch', async () => { await page.check('#avCfg'); await page.fill('#avNoteTxt', arg('altnote', 'same roof in both images; tree removed in the newer one')); await page.locator('#avCarry').scrollIntoViewIfNeeded(); await page.locator('#avCarry').evaluate((b) => b.click()); await page.waitForTimeout(500);   /* a toast can sit over the button at the bottom of a long panel */ await page.waitForFunction(() => !window.rmAltView.state.busy, null, { timeout: 240000 }); const used = await page.evaluate(() => !!(state.trace && state.trace.alt && state.trace.alt.used)); console.log('     carried into the sketch: ' + (used ? 'yes' : 'no (' + (await page.evaluate(() => (state.trace && state.trace.alt && (state.trace.alt.reasons || []).join(' ')) || 'not used')) + ')')); });
         await page.waitForTimeout(1000); await panel.screenshot({ path: path.join(out, 'alt-dated-after.png') });
         await page.evaluate(() => { window.rmAltView.state.v.swipe = 0.04; }); await page.mouse.wheel(0, 0); await page.evaluate(() => avPaint()); await panel.screenshot({ path: path.join(out, 'alt-dated-after-newimage.png') });
       }
@@ -117,7 +138,7 @@ try {
     await pdf(en + '.pdf', 'btnXmPDF');
     console.log(`     estimate: ${est.items.length} lines, line items ${est.lineItemTotal.toFixed(2)}, tax ${est.tax.toFixed(2)}, total ${est.rcv.toFixed(2)}`);
   }
-  const t = data.totals; console.log(`${address}: ${Math.round(t.slopedSqft)} sqft, ${t.facetCount} facets, predominant ${t.predominant}/12, ${t.structures.length} structure(s)`);
+  const t = data.totals; console.log(`${address || path.basename(arg('job', ''))}: ${Math.round(t.slopedSqft)} sqft, ${t.facetCount} facets, predominant ${t.predominant}/12, ${t.structures.length} structure(s)`);
 } catch (e) { code = 1; try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
 fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
 if (dialogs.length) console.log('export gate asked: ' + dialogs.join(' | ').replace(/\n+/g, ' '));

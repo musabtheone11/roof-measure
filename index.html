@@ -209,17 +209,16 @@
           <button id="btnPathCash" title="Cash job: opens the Diversity estimate builder with this roof's measurements filled in">Cash</button>
         </div>
         <div class="row wrap" style="margin-top:8px">
-          <button id="btnReportPDF" class="primary" title="Vector PDF with selectable text: summary, aerial overlay, length / area / pitch diagrams, facet and line schedules">Download PDF report</button>
+          <button id="btnReportPreview" title="Shows the report on screen. Print and Save in the preview use this same file">Preview report</button>
+          <button id="btnReport" title="Prints the report (US Letter, print at 100% / Actual size so the plan scale holds)">Print report</button>
+          <button id="btnReportPDF" class="primary" title="Saves the report as a vector PDF: roof overview &amp; takeoff, scaled measurement plan with keyed schedules">Download report</button>
           <button id="btnReportBoth" class="primary" title="One PDF: the roof report followed by the insurance estimate">Report + estimate PDF</button>
-          <button id="btnReport">Print</button>
-          <button id="btnReportHTML" title="Self-contained report file you can email or open later">Download report</button>
           <button id="btnCSV">Export CSV</button>
           <button id="btnJSON">Export JSON</button>
           <label class="filebtn">Import JSON<input id="fileJSON" type="file" accept="application/json" hidden></label>
         </div>
         <div class="row wrap" style="margin-top:6px;gap:14px">
-          <label class="chk"><input type="checkbox" id="chkPdf3d"> Add 3D view page</label>
-          <label class="chk"><input type="checkbox" id="chkPdfMaterials" checked> Add material order page</label>
+          <label class="chk"><input type="checkbox" id="chkPdfMaterials"> Add material order sheet</label>
         </div>
         <details class="help">
           <summary>Company details shown on the report</summary>
@@ -405,6 +404,10 @@
     <div id="hint"></div>
     <div id="crosshair" aria-hidden="true"></div>
     <!-- Review roof from other angles: 3D views, dated imagery, imported imagery (altview.js) -->
+    <div id="reportPreview" class="av rp-preview" hidden>
+      <div class="av-head"><strong>Report preview</strong><span id="reportPreviewName" class="small" style="opacity:.85;margin-left:8px"></span><span class="av-tabs"><button id="rpPrint" class="small" title="Prints this file at 100% on US Letter">Print</button><button id="rpSave" class="small primary" title="Saves this same file">Save PDF</button><button id="rpClose" class="small ghost">Close</button></span></div>
+      <iframe id="reportFrame" title="Report preview" style="flex:1;border:0;background:#fff"></iframe>
+    </div>
     <div id="avPanel" class="av" hidden>
       <div class="av-head">
         <strong>Review roof from other angles</strong>
