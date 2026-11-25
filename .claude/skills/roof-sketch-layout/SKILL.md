@@ -39,6 +39,10 @@ things: the reader must be able to read it at print size, and nothing on it may 
 - Draw a **two-segment scale bar** (filled, open) with 0 / step / 2 x step ft labels, and print its paper length
   ("bar = 0.63 in at 100%"): that is how a reader checks the print scale with a ruler.
 - The window must hold the whole roof, every review zone and every obstruction line. Clip only on detail sheets.
+- **Size the plan window from the content below it.** Measure the schedules, notes and evidence paragraphs first
+  (in their fonts) and give the drawing what is left: shrink when the content needs the room, keep the compact
+  height when the schedule continues on another sheet anyway, grow only when a taller window buys a larger scale.
+  Reserve about 26 pt outside the outline for dimension lines when that does not cost a scale step.
 
 ## 3. Labels: order and placement
 
@@ -89,8 +93,10 @@ Place in this order, each pass avoiding what is already on the page:
 
 1. Export through the product's real actions (preview, print, download), not a side channel, and confirm the
    three carry identical bytes.
-2. Render every page at 100 dpi and read it. Look for: text over text, tags on dimension lines, legend or
-   footnote running into a table, labels outside the window, a title colliding with a right-aligned note.
+2. Let the build check text over text itself: log every text box (page, string, bounds) while drawing and
+   report any two that overlap; the runner fails on one. Then render every page at 100 dpi and read it anyway,
+   for what boxes cannot see: tags on dimension lines, a legend or footnote running into a table, labels outside
+   the window, a title colliding with a right-aligned note, a north arrow or scale bar dropped onto a dimension.
 3. **Callouts match the schedule**: every key on the plan or a detail sheet has exactly one schedule row,
    and every row's key is placed somewhere or named as unplaced.
 4. **Scale is exact**: a known plan length L ft must draw at L x 72 / (feet per inch) points; the scale bar
@@ -106,6 +112,8 @@ Place in this order, each pass avoiding what is already on the page:
   busy, refs), `rpDetailWindows` / `rpSheetDetail`, `rpSheetSchedules`, `rpAxonModel` / `rpDrawAxon`,
   `rpSheetOverview` (budgeted lower half), `rpBuild` (probe pass, exact sheet count, layout self-check).
 - `report.js`: one `buildReportPDF()` for Preview, Print and Download (signature cache, fixed creation date).
+- The layout self-check returned by `rpBuild` carries `scaleCheck`, `keys` (overview / detail / unplaced /
+  unaccounted) and `textOverlaps`; `tools/dev/run-app.mjs` prints and asserts all three.
 - Check a job: `Key=... node tools/dev/run-app.mjs --job <file> --out .devcache/runs/x --port 81xx`, then
   `pdftoppm -png -r 100 report.pdf pg/p` and read the pages. The run fails if the three deliveries differ or the
   layout self-check (scale, key reconciliation) fails; `report-check.json` keeps the numbers.

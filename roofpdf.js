@@ -94,9 +94,17 @@ function rpDoc() {
 const rpColor = (doc, kind, c) => (kind === 'fill' ? doc.setFillColor(c[0], c[1], c[2]) : kind === 'draw' ? doc.setDrawColor(c[0], c[1], c[2]) : doc.setTextColor(c[0], c[1], c[2]));
 function rpText(doc, s, x, y, o = {}) {
   doc.setFont(o.font || 'helvetica', o.bold ? 'bold' : o.italic ? 'italic' : 'normal'); doc.setFontSize(o.size || 9); rpColor(doc, 'text', o.color || RP.INK);
-  if (o.maxWidth) { const ls = doc.splitTextToSize(String(s), o.maxWidth); doc.text(ls, x, y, { align: o.align || 'left', lineHeightFactor: o.lh || 1.3 }); return y + ls.length * (o.size || 9) * (o.lh || 1.3); }
-  doc.text(String(s), x, y, { align: o.align || 'left' }); return y + (o.size || 9) * 1.3;
+  const size = o.size || 9, lh = o.lh || 1.3, align = o.align || 'left'; const ls = o.maxWidth ? doc.splitTextToSize(String(s), o.maxWidth) : [String(s)];
+  if (o.maxWidth) doc.text(ls, x, y, { align, lineHeightFactor: lh }); else doc.text(ls[0], x, y, { align });
+  rpLogText(doc, ls, x, y, size, lh, align);
+  return y + ls.length * size * lh;
 }
+// the self-check keeps every text box of the real document (page, string, bounds) so overlapping text can be reported
+function rpLogText(doc, lines, x, y, size, lh, align) {
+  if (!doc.__rpText) return; let pg = 1; try { pg = doc.internal.getCurrentPageInfo().pageNumber; } catch (_) { /* older jsPDF */ }
+  lines.forEach((line, i) => { if (!String(line).trim()) return; const w = doc.getTextWidth(String(line)); const yy = y + i * size * lh; const x0 = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x; doc.__rpText.push({ pg, s: String(line), x0, y0: yy - size * 0.72, x1: x0 + w, y1: yy + size * 0.2 }); });
+}
+const rpLines = (doc, s, w, size, bold) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); return doc.splitTextToSize(String(s), w).length; };
 const rpCap = (doc, s, x, y, size = 7.7, align = 'left') => rpText(doc, String(s).toUpperCase(), x, y, { size, bold: true, color: RP.CAP, align });
 const rpWidth = (doc, s, size, bold, font) => { doc.setFont(font || 'helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); return doc.getTextWidth(String(s)); };
 function rpLn(doc, a, b, w = 0.55, g = 0.46, dash = []) { rpColor(doc, 'draw', GR(g)); doc.setLineWidth(w); doc.setLineDashPattern(dash, 0); doc.line(a[0], a[1], b[0], b[1]); doc.setLineDashPattern([], 0); }
@@ -150,7 +158,9 @@ function rpDim(doc, a, b, off, label) {
 function rpRotText(doc, s, x, y, deg, size, color, bold) {
   doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); rpColor(doc, 'text', color);
   const w = doc.getTextWidth(s), a = deg * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a), up = size * 0.34;
-  doc.text(s, x - ca * w / 2 + sa * up, y + sa * w / 2 + ca * up, { angle: deg }); return w;
+  doc.text(s, x - ca * w / 2 + sa * up, y + sa * w / 2 + ca * up, { angle: deg });
+  if (doc.__rpText) { let pg = 1; try { pg = doc.internal.getCurrentPageInfo().pageNumber; } catch (_) { /* older jsPDF */ } const q = [[-w / 2, -size * 0.5], [w / 2, -size * 0.5], [w / 2, size * 0.5], [-w / 2, size * 0.5]].map(([u, v]) => [x + u * ca + v * sa, y - u * sa + v * ca]); doc.__rpText.push({ pg, s, x0: Math.min(...q.map((p) => p[0])), y0: Math.min(...q.map((p) => p[1])), x1: Math.max(...q.map((p) => p[0])), y1: Math.max(...q.map((p) => p[1])) }); }
+  return w;
 }
 const rpInside = (p, r) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) if ((r[i][1] > p[1]) !== (r[j][1] > p[1]) && p[0] < (r[j][0] - r[i][0]) * (p[1] - r[i][1]) / (r[j][1] - r[i][1]) + r[i][0]) c = !c; return c; };
 // a point well inside a polygon for its label: the centroid when it is inside, else the middle of the widest chord
@@ -288,7 +298,7 @@ function rpDrawPlan(doc, M, V, o = {}) {
     if (o.noKeys) { missed.push(label); continue; }   // overview plan of a dense roof: keys live on the detail sheets
     const size = label.length > 2 ? 7.5 : 7.25; let done = false;
     // on the line first, then beside it, then further out on a leader (detail sheets allow longer leaders)
-    const cands = [[0, 0], [0, 0.3], [0, -0.3]]; for (const d of (V.ftBox ? [9, 15, 21, 27, 33, 39, 45, 51] : [9, 15, 21, 27, 33])) for (const sh of [0, 0.28, -0.28, 0.45, -0.45]) cands.push([d, sh], [-d, sh]);
+    const cands = [[0, 0], [0, 0.3], [0, -0.3]]; for (const d of (V.ftBox ? [9, 15, 21, 27, 33, 39, 45, 51, 57, 63] : [9, 15, 21, 27, 33])) for (const sh of [0, 0.28, -0.28, 0.45, -0.45]) cands.push([d, sh], [-d, sh]);
     for (const [d, sh] of cands) {
       const x = mx + n[0] * d + u[0] * sh * len, y = my + n[1] * d + u[1] * sh * len; const bx = tagBox(x, y, label, size); if (!fits(bx) || hit(bx)) continue;
       if (Math.abs(d) > 9.5) rpLn(doc, [mx + u[0] * sh * len, my + u[1] * sh * len], [x, y], 0.42, 0.44);
@@ -603,15 +613,26 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
   const mode = S.refs ? 'refs' : S.grouped ? 'simple' : 'busy';
   const rowh = mode === 'refs' ? 21 : mode === 'simple' ? 20 : 13.5, headH = 19, titleH = 33, footH = 56;
   const facetsInPanel = mode === 'busy' && nF <= 12; const edgeCols = mode === 'busy' ? (facetsInPanel ? 3 : 2) : 1;
-  const rowsBelow = (H) => Math.max(1, Math.floor((RP.FOOT - footH - (145 + H + titleH) - headH) / rowh));
   const needRows = mode === 'simple' ? Math.max(nE, nF) : mode === 'busy' && !facetsInPanel ? Math.max(Math.ceil(nE / 2), nF) : Math.ceil(nE / edgeCols);
-  let H = mode === 'simple' ? 314 : mode === 'refs' ? 327 : 368;
-  // a shorter plan only when that lets the whole schedule fit on this sheet; otherwise the plan keeps its size and the schedule continues
-  if (needRows > rowsBelow(H)) { const fitH = RP.FOOT - footH - titleH - headH - rowh * needRows - 145; if (fitH >= 260) H = Math.min(H, fitH); }
+  // Height budget: what the sheet needs below the plan is measured first (schedules; in the refs layout also the pitch note
+  // and the evidence paragraphs, in their fonts), and the plan gets what is left. It shrinks when the content needs the room,
+  // keeps its compact size when the schedule continues on another sheet anyway, and grows only when a taller window buys a
+  // larger architectural scale.
+  const evid = mode === 'refs' && M.src && M.src.evidence && M.src.evidence.length ? M.src.evidence : null;
+  let Hfit;
+  if (mode === 'refs') { const facetSide = headH + 20 * nF + (M.src && M.src.pitchNote ? 27 + rpLines(doc, M.src.pitchNote, 235, 8.5) * 8.5 * 1.3 : 0); const edgeSide = headH + rowh * nE;
+    const below = 24 + Math.max(facetSide, edgeSide) + 20 + (evid ? 17 + evid.reduce((a, q) => a + rpLines(doc, q, 548, 8.65) * 8.65 * 1.3 + 6, 0) : 26 + 2 * 8.45 * 1.3); Hfit = RP.FOOT - 40 - 145 - titleH + 24 - below; }
+  else Hfit = RP.FOOT - footH - titleH - headH - rowh * needRows - 145;
+  const Hcompact = mode === 'simple' ? 314 : mode === 'refs' ? 327 : 368, Hmin = 260, Hmax = mode === 'busy' ? 368 : mode === 'refs' ? 420 : 400;
+  let H = Hfit >= Hmin ? Math.min(Hcompact, Math.floor(Hfit)) : Hcompact;
+  const padFt = mode === 'simple' ? 3 : 2; const innerFor = (h) => (mode === 'refs' ? { x: 44, y: 165, w: 524, h: h - 48 } : mode === 'busy' ? { x: 44, y: 160, w: 318, h: h - 28 } : { x: 48, y: 170, w: 318, h: h - 36 });
+  const viewFor = (h) => { const inner = innerFor(h); const rot = M.src && !M.src.rotateToAxis ? 0 : rpChooseRotation(M, inner); return { inner, rot, V: rpView(M, inner, { rotDeg: rot, padFt }) }; };
+  if (Hfit > H + 12) { const top = Math.min(Hmax, Math.floor(Hfit)); const best = viewFor(top).V.perIn; if (best < viewFor(H).V.perIn) { let h = H + 6; while (h < top && viewFor(h).V.perIn > best) h += 6; H = Math.min(top, h); } }
   const box = { x: RP.L, y: 145, w: 548, h: H }; rpRect(doc, box.x, box.y, box.w, box.h, 0.993, 0.72);
   rpCap(doc, (M.src && M.src.planCaption) || (M.kind === 'source' ? 'Reported roof plan' : 'Roof plan'), 44, 162);
-  const inner = mode === 'refs' ? { x: 44, y: 165, w: 524, h: H - 58 } : mode === 'busy' ? { x: 44, y: 160, w: 318, h: H - 28 } : { x: 48, y: 170, w: 318, h: H - 36 };
-  const rot = M.src && !M.src.rotateToAxis ? 0 : rpChooseRotation(M, inner); const V = rpView(M, inner, { rotDeg: rot, padFt: mode === 'simple' ? 3 : 2 });
+  let { inner, rot, V } = viewFor(H);
+  // room for dimension lines outside the outline (about 26 pt), taken only when it does not cost a scale step
+  if (!(M.src && M.src.kind === 'source')) { const padDim = 26 / V.k; if (padDim > padFt) { const V2 = rpView(M, inner, { rotDeg: rot, padFt: padDim }); if (V2.perIn === V.perIn) V = V2; } }
   // a dry run on a throwaway document decides whether the keys fit this plan; when most would collide, the overview plan
   // carries facet IDs and dimensions only and every key goes to the detail sheets (same fonts, so the same placement)
   V.limit = { x0: box.x + 5, y0: box.y + 24, x1: mode === 'refs' ? box.x + box.w - 5 : mode === 'busy' ? 359 : 372, y1: box.y + box.h - (mode === 'refs' ? 30 : 5) };   // dimensions stay inside the drawing area
@@ -636,9 +657,11 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
     py = rpText(doc, (M.src && M.src.scaleNote ? M.src.scaleNote + ' ' : 'Print at 100% on US Letter. ') + 'Scale bar ' + barIn + ' in.' + rotNote, 379, py, { size: 7.9, color: GR(0.3), maxWidth: 190 });
     // north arrow and scale bar in a corner of the drawing the roof leaves free (bottom-left first, as on the reference sheet)
     const pts = [...M.facets, ...M.zones].flatMap((g) => g.xy.map(V.P)); const free = (x0, y0, x1, y1) => !pts.some((q) => q[0] > x0 && q[0] < x1 && q[1] > y0 && q[1] < y1) && !res.placed.some((b) => !(b.x1 < x0 || b.x0 > x1 || b.y1 < y0 || b.y0 > y1));
-    const corner = free(44, box.y + box.h - 90, 150, box.y + box.h) ? 'bl' : free(260, box.y + box.h - 90, 366, box.y + box.h) ? 'br' : free(44, box.y + 28, 150, box.y + 112) ? 'tl' : 'tr';
-    const nx = corner === 'bl' || corner === 'tl' ? 65 : 290, ny = corner === 'bl' || corner === 'br' ? box.y + box.h - 66 : box.y + 58;   // top corners sit below the caption
-    rpNorth(doc, nx, ny, rot); rpBar(doc, nx - 5, ny + 28, V.k, step);
+    const corners = { bl: [44, box.y + box.h - 90, 150, box.y + box.h], br: [260, box.y + box.h - 90, 366, box.y + box.h], tl: [44, box.y + 28, 150, box.y + 112], tr: [260, box.y + 28, 366, box.y + 112] };
+    const corner = Object.keys(corners).find((c) => free(...corners[c])) || null;
+    if (corner) { const nx = corner === 'bl' || corner === 'tl' ? 65 : 290, ny = corner === 'bl' || corner === 'br' ? box.y + box.h - 66 : box.y + 58; rpNorth(doc, nx, ny, rot); rpBar(doc, nx - 5, ny + 28, V.k, step); }   // top corners sit below the caption
+    else if (py + 62 < box.y + box.h - 12) { rpNorth(doc, 395, py + 34, rot); rpBar(doc, 428, py + 25, V.k, step); }   // no free corner (dimensions all round): under the scale text in the panel
+    else { rpNorth(doc, 290, box.y + 58, rot); rpBar(doc, 285, box.y + 86, V.k, step); }
   } else {
     rpNorth(doc, box.x + box.w - 44, box.y + 60, rot); rpBar(doc, box.x + box.w - 150, box.y + box.h - 74, V.k, step); rpText(doc, V.label + ' at 100%', box.x + box.w - 150 + V.k * step, box.y + box.h - 44, { size: 8.5, bold: true, color: GR(0.25), align: 'center' }); rpText(doc, 'scale bar ' + barIn + ' in', box.x + box.w - 150 + V.k * step, box.y + box.h - 32, { size: 7.8, color: GR(0.35), align: 'center' });
     rpText(doc, 'Solid = visible edge     Dashed = documented continuation     Hatched = unresolved review zone', 44, box.y + box.h - 14, { size: 8.7, bold: true });
@@ -661,7 +684,9 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
     if (nE > first.length) ctx.spill.edges = S.edgeRows.slice(first.length); }
   // evidence used (source sketches carry it on this sheet), else the geometry note
   y = yEnd + 20;
-  if (M.src && M.src.evidence && M.src.evidence.length && y < RP.FOOT - 72) { rpTitleBar(doc, y, 'Evidence used'); y += 17; for (const ptxt of M.src.evidence) { if (y > RP.FOOT - 40) break; y = rpText(doc, ptxt, RP.L, y, { size: 8.65, color: GR(0.2), maxWidth: 548 }) + 6; } }
+  if (M.src && M.src.evidence && M.src.evidence.length && y < RP.FOOT - 72) { rpTitleBar(doc, y, 'Evidence used'); y += 17; let held = 0;
+    for (const ptxt of M.src.evidence) { const h = rpLines(doc, ptxt, 548, 8.65) * 8.65 * 1.3; if (y + h > RP.FOOT - 40) { held++; continue; } y = rpText(doc, ptxt, RP.L, y, { size: 8.65, color: GR(0.2), maxWidth: 548 }) + 6; }
+    if (held) rpText(doc, `+ ${held} more evidence note${held > 1 ? 's' : ''} in the job's review panel (no room on this sheet).`, RP.L, Math.min(y, RP.FOOT - 30), { size: 8.3, color: GR(0.32) }); }
   else {
     const note = M.kind === 'source' ? ((M.src.notes && M.src.notes[1]) || `${M.src.document || 'Source report'}. Edge entries reproduce the displayed dimensions.`)
       : M.kind === 'illustrative' ? 'Plan dimensions are horizontal. Rakes and hips use their true sloped lengths. Facet areas include slope. Each schedule rounds for display after the model calculates its totals.'
@@ -734,7 +759,7 @@ async function rpBuild(opts = {}) {
   if (!window.jspdf) throw new Error('PDF library did not load; check the internet connection');
   const M = rpModel(); if (!M || !M.facets.length) { if (state.trace && state.trace.failed) return rpBuildNoRoof(); throw new Error('Trace the roof first'); }
   await rpLoadLogo(); const hero = await rpHeroAerial(M); const S = rpSchedules(M);
-  const doc = rpDoc(); const ctx = { spill: {} };
+  const doc = rpDoc(); doc.__rpText = []; const ctx = { spill: {} };
   // first pass on sheet 2 decides whether detail sheets are needed; the sheets are then drawn in order with "n of N"
   const probe = rpDoc(); const pctx = { spill: {} }; const probeRes = rpSheetPlan(probe, M, S, 2, 2, pctx); const wins = probeRes.missed.length ? rpDetailWindows(M) : [];
   // detail sheets on the throwaway doc too: a key counts as unplaced only when no window had room for it
@@ -756,6 +781,11 @@ async function rpBuild(opts = {}) {
   const Lk = ctx.layout || null; let layout = null;
   if (Lk) { const accounted = new Set([...Lk.keys.placed, ...hadRoom, ...unplaced]); const unaccounted = [...Lk.keys.placed, ...Lk.keys.missed].filter((k) => !accounted.has(k));
     layout = { ...Lk, keys: { total: Lk.keys.total, overview: Lk.keys.placed.length, detail: hadRoom.size, unplaced, unaccounted }, sheets: { total, detail: wins.length, schedules: extraSched, evidence: hasEvidence, materials: !!opts.materials } }; }
+  // text over text anywhere in the document is a layout defect: report every overlapping pair (page, both strings)
+  if (layout) { const byPage = new Map(); for (const t of doc.__rpText) { if (!byPage.has(t.pg)) byPage.set(t.pg, []); byPage.get(t.pg).push(t); } const hits = [];
+    for (const [pg, arr] of byPage) for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) { const a = arr[i], b = arr[j]; const ow = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oh = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); if (ow > 0.75 && oh > 0.75) hits.push({ page: pg, a: a.s, b: b.s, at: [Math.round(a.x0), Math.round(a.y0)] }); }
+    layout.textOverlaps = { count: hits.length, first: hits.slice(0, 12) }; }
+  doc.__rpText = null;
   return { doc, M, pages: doc.getNumberOfPages(), layout };
 }
 // no roof could be measured from the imagery: a one-sheet REVIEW REQUIRED report with what was found and what is needed
