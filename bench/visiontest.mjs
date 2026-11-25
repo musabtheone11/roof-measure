@@ -47,6 +47,21 @@ const obs = (o) => ({ source: 'test-image', role: 'outline', model: 'recorded', 
   const R3 = fuseModel({ job, obs: [obs({ kind: 'corner', type: 'convex', ll: [ll(truth[0], truth[1])] })], dsm: P.dsmT, mask: P.maskT });
   out(R3.summary.moved === 0 && R3.proposals[0] && R3.proposals[0].kind === 'confirms', 'the true corner observed on a correct trace only confirms it', R3.proposals[0] && R3.proposals[0].kind);
 }
+// ---- scene 1b: line names. The hip roof's hips are relabelled "ridge" in the sketch; a reviewer calls them hips: the height model
+// shows a sloping convex crease, so the name is corrected; the same claim against a true ridge is rejected
+{
+  const house = W({}); const sc = render([house], rng(74), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false });
+  const P = property(sc); const r = await runApp(P, ROOT, { quiet: true }); const job = jobOf(r);
+  const hips = job.edges.filter((e) => e.type === 'hip'), ridges = job.edges.filter((e) => e.type === 'ridge');
+  out(hips.length >= 2 && ridges.length >= 1, 'fixture: the traced hip roof has hips and a ridge', `${hips.length} hips, ${ridges.length} ridges`);
+  const bad = JSON.parse(JSON.stringify(job)); for (const e of bad.edges) if (e.type === 'hip') e.type = 'ridge';
+  const h0 = hips[0]; const O = [obs({ role: 'challenge', kind: 'edge', type: 'hip', verdict: 'misclassified', sketch_type: 'ridge', ll: [[h0.path[0].lat, h0.path[0].lng], [h0.path[h0.path.length - 1].lat, h0.path[h0.path.length - 1].lng]] })];
+  const R = fuseModel({ job: bad, obs: O, dsm: P.dsmT, mask: P.maskT }); const p = R.proposals.find((q) => q.kind === 'misclassified');
+  out(p && p.decision === 'accept' && R.summary.retyped === 1 && R.edited.edges.filter((e) => e.type === 'hip').length === 1, 'a hip mislabelled as a ridge is renamed when a reviewer says hip and the height model shows a sloping convex crease', p ? `${p.decision}: ${p.why.slice(-90)}` : 'no proposal');
+  const rg = ridges[0]; const O2 = [obs({ role: 'challenge', kind: 'edge', type: 'hip', verdict: 'misclassified', sketch_type: 'ridge', ll: [[rg.path[0].lat, rg.path[0].lng], [rg.path[rg.path.length - 1].lat, rg.path[rg.path.length - 1].lng]] })];
+  const R2 = fuseModel({ job, obs: O2, dsm: P.dsmT, mask: P.maskT }); const p2 = R2.proposals.find((q) => q.kind === 'misclassified');
+  out(p2 && p2.decision === 'reject' && R2.summary.retyped === 0, 'calling the true ridge a hip is rejected: the height model shows a level crease', p2 ? `${p2.decision}: ${p2.why.slice(-80)}` : 'no proposal');
+}
 // ---- scene 2: a corner under tree canopy (mask kept, height model shows the crown): the image may show the corner, the height
 // model cannot confirm it, so the move is refused and the matter stays open
 {

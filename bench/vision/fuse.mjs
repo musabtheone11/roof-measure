@@ -40,6 +40,14 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
     return { len: L, n: cnt, step: cnt ? step / cnt : 0, crease: cnt ? crease / cnt : 0, maskEdge: cnt ? maskEdge / cnt : 0, maskRoofSide: cnt ? maskRoofSide / cnt : 0 };
   }
   const outlineSupport = (a, b) => { const e = segmentEvidence(a, b); return Math.max(e.step, e.maskEdge); };
+  // what kind of interior line the height model shows along a run: a ridge is a level convex crease, a hip a sloping convex
+  // crease, a valley a sloping concave one (heights 0.6 m to either side against the line itself; slope = rise along the run)
+  function interiorKind(a, b) {
+    const L = dist(a, b); if (L < 1.0) return null; const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nrm = [-u[1], u[0]]; let conv = 0, conc = 0, n = 0; const hs = [];
+    for (let t = 0.3; t <= L - 0.3; t += 0.3) { const q = [a[0] + u[0] * t, a[1] + u[1] * t]; const h0 = hAt(q), hp = hAt([q[0] + nrm[0] * 0.6, q[1] + nrm[1] * 0.6]), hm = hAt([q[0] - nrm[0] * 0.6, q[1] - nrm[1] * 0.6]); if (h0 == null || hp == null || hm == null) continue; n++; hs.push([t, h0]); const d = h0 - (hp + hm) / 2; if (d > 0.05) conv++; else if (d < -0.05) conc++; }
+    if (n < 3) return null; const rise = Math.abs(hs[hs.length - 1][1] - hs[0][1]) / (hs[hs.length - 1][0] - hs[0][0] || 1);
+    if (conv / n >= 0.6) return rise < 0.12 ? 'ridge' : 'hip'; if (conc / n >= 0.6) return 'valley'; return null;
+  }
   // lumpiness of the height model along a run (mean absolute second difference at 0.3 m): roof planes ~0.03 m, tree crowns > 0.15 m
   // measured 0.8 m to either side of the run (on the run itself a blurred roof edge reads lumpy); a roof edge has a smooth
   // plane on at least one side, a tree crown is lumpy on both: the smaller of the two is used
@@ -143,7 +151,9 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
     else if (kind === 'confirms' && near.s.e.type !== type && (INTERIOR.has(type) || OUTLINE.has(type)) && type !== 'outline') {
       const evS = segmentEvidence(near.s.a, near.s.b); const outl = Math.max(evS.step, evS.maskEdge);
       const obsOK = OUTLINE.has(type) ? outl >= minSupport : evS.crease >= minSupport, skOK = OUTLINE.has(near.s.e.type) ? outl >= minSupport : evS.crease >= minSupport;
-      if (obsOK && !skOK) { kind = 'misclassified'; decision = 'accept'; why += `; height model supports ${type}, not ${near.s.e.type} (step ${evS.step.toFixed(2)}, mask ${evS.maskEdge.toFixed(2)}, crease ${evS.crease.toFixed(2)})`; }
+      const CREASE = new Set(['ridge', 'hip', 'valley']); const shown = CREASE.has(type) && CREASE.has(near.s.e.type) ? interiorKind(near.s.a, near.s.b) : null;
+      if (shown) { kind = 'misclassified'; if (shown === type && shown !== near.s.e.type) { decision = 'accept'; why += `; the height model shows a ${shown} here (${type} proposed, sketch says ${near.s.e.type})`; } else if (shown === near.s.e.type) { decision = 'reject'; why += `; ${type} proposed but the height model shows the sketch's ${near.s.e.type}`; } else { decision = 'unresolved'; why += `; the height model shows a ${shown}, neither the proposed ${type} nor the sketch's ${near.s.e.type}`; } }
+      else if (obsOK && !skOK) { kind = 'misclassified'; decision = 'accept'; why += `; height model supports ${type}, not ${near.s.e.type} (step ${evS.step.toFixed(2)}, mask ${evS.maskEdge.toFixed(2)}, crease ${evS.crease.toFixed(2)})`; }
       else if (!obsOK && skOK) why += `; ${type} proposed but the height model supports the sketch's ${near.s.e.type}`;
       else { kind = 'misclassified'; decision = 'unresolved'; why += `; height model cannot tell ${type} from ${near.s.e.type}`; }
     }
