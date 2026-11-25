@@ -64,6 +64,36 @@ const empty = new Uint8Array(house.mask.length);
   const P = property(house); const r = await runApp(P, ROOT, { quiet: true, hook: altHook(P) }); const st = statusOf(r.ctx, r.ctx.state.trace);
   out(r.facets.length >= 3 && st.status === 'COMPLETE', 'D4 clear current roof: COMPLETE', st.reasons.map((q) => q.text).join(' | '));
 }
+// D5 (regional benchmark): the geocoded address point fell on an empty lot and Google picked the neighbouring house; the
+// report said COMPLETE. Now the distance from the address point to the measured building is checked.
+{
+  const P = property(house); const far = { ...P.loc, lng: P.loc.lng + 25 / KX };
+  const r = await runApp({ ...P, loc: far }, ROOT, { quiet: true, hook: altHook(P) }); const tr = r.ctx.state.trace;
+  const st = RM.reportStatus({ facets: r.facets.length, reconcileOk: true, imageryQuality: 'HIGH', addressCheck: tr.addressCheck });
+  out(tr.addressCheck && tr.addressCheck.distM > 15 && st.status === 'REVIEW REQUIRED' && st.reasons.some((q) => q.code === 'selection'), 'D5 address point 25 m from the measured building: REVIEW REQUIRED (building selection)', JSON.stringify(tr.addressCheck));
+  const r2 = await runApp(P, ROOT, { quiet: true, hook: altHook(P) }); const ac = r2.ctx.state.trace.addressCheck;
+  out(ac && ac.distM === 0 && !RM.reportStatus({ facets: 3, reconcileOk: true, addressCheck: ac }).reasons.length, 'D5 address point on the roof: no selection reason');
+}
+// D6 (regional benchmark): a screen enclosure / pergola (low slope, uneven surface in the height model) was reported as
+// measured roof. Now such a section is marked for verification and the report asks for review.
+{
+  const c = Math.cos(0.2), s = Math.sin(0.2);
+  const sc = render([W(), W({ cx: -9 * s, cy: 9 * c, L: 8, W: 6, kind: 'gable', s: 0.12, sEnd: 0.12, eaveZ: 2.6, th: 0.2 })], rng(12), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false });
+  const r0 = rng(99); const lowZ = 4.0; for (let i = 0; i < sc.dsm.length; i++) if (sc.mask[i] && sc.dsm[i] < lowZ) sc.dsm[i] += (r0() - 0.5) * 0.45;   // open lattice: deck seen through the cover
+  const P = property(sc); const r = await runApp(P, ROOT, { quiet: true, hook: altHook(P) });
+  const flagged = r.facets.filter((f) => f.verify); const plain = render([W()], rng(13), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false }); const rp = await runApp(property(plain), ROOT, { quiet: true, hook: altHook(property(plain)) });
+  out(flagged.length >= 1 && flagged.every((f) => f.slope <= 0.34), 'D6 uneven low-slope section marked for verification', `${flagged.length} of ${r.facets.length} facets flagged`);
+  out(!rp.facets.some((f) => f.verify), 'D6 plain pitched roof: nothing marked');
+}
+// D7 (regional benchmark): hips stopping short of the outline corner left short sloped corner pieces counted as rakes (rakes
+// over-counted on hip roofs). They are eave round the corner now.
+{
+  let bad = 0, tot = 0;
+  for (const seed of [21, 22, 23, 24, 25, 26]) { const sc = render([W({ L: 16 + seed % 4, W: 9 + seed % 3 })], rng(seed), { clutter: false, trees: 0, hard: true }); const P = property(sc); const r = await runApp(P, ROOT, { quiet: true, hook: altHook(P) });
+    const kxy = (v) => [(v.lng - LNG0) * KX, (v.lat - LAT0) * KY]; const lows = r.edges.filter((e) => e.type === 'hip').map((e) => e.path.map(kxy));
+    for (const e of r.edges) { if (e.type !== 'rake' || e.paired) continue; tot++;   /* outline pieces only (paired = the upper edge of a height break) */ const g = e.path.map(kxy); const L = Math.hypot(g[1][0] - g[0][0], g[1][1] - g[0][1]); if (L < 2.5 && lows.some((h) => h.some((q) => g.some((p) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.3)))) bad++; } }
+  out(bad === 0, 'D7 pure hip roofs: no short outline rake at a hip end', `${bad} of ${tot} rakes`);
+}
 // status rules: every open item is a reason with the evidence it needs; zero only for a verified absence
 {
   const st = RM.reportStatus({ facets: 4, hiddenZones: [{ id: 'H1' }], hiddenUpperSqft: 300, inferredSqft: 120, verify: [{ label: 'L3 rake' }], geometryErrors: 1, reconcileOk: false, imageryQuality: 'MEDIUM' });

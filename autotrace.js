@@ -503,6 +503,24 @@ function altCheck(dsm, al, roofMask, treeMask, curMask, w, h, geo) {
 }
 
 // why no building could be traced: Google has a building record here but its image shows no building outline
+// A low-slope section (4/12 or less) whose surface does not fit a plane well (rms 6 cm or more, 50 sq ft or more) is
+// what a screen enclosure, a pergola or an open patio cover looks like in the height model: the model cannot tell them
+// from roofing. Such a section stays in the sketch but is marked for verification, so the report asks for review.
+function rmOpenCover(f) {
+  if (!(f.slope != null && f.slope <= 0.34 && (f.rms || 0) >= 0.06 && (f.areaM2 || 0) * Math.sqrt(1 + f.slope * f.slope) >= 4.65)) return null;
+  return { source: 'Height model', date: '', note: `Low-slope section with an uneven surface (${(f.rms * 100).toFixed(0)} cm from a flat plane): it may be a screen enclosure, a pergola or an open patio cover rather than roofing.` };
+}
+// how far the address point is from the building that was measured (Google picks the building nearest the point; a
+// geocode on an empty lot or between houses can pick the neighbour's)
+function rmAddressCheck(res, kx, ky, cLat, cLng) {
+  const loc = state.location; if (!loc || !res || !res.facets) return null;
+  const P = [(loc.lng - cLng) * kx, (loc.lat - cLat) * ky]; let best = Infinity, inside = false;
+  for (const f of res.facets) { const r = f.path.map((v) => [(v.lng - cLng) * kx, (v.lat - cLat) * ky]); let c = false;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > P[1]) !== (b[1] > P[1]) && P[0] < (b[0] - a[0]) * (P[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+      const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-9; const t = Math.max(0, Math.min(1, ((P[0] - a[0]) * dx + (P[1] - a[1]) * dy) / l2)); best = Math.min(best, Math.hypot(P[0] - a[0] - t * dx, P[1] - a[1] - t * dy)); }
+    if (c) inside = true; }
+  return { distM: inside ? 0 : best, precision: loc.precision || null, partial: !!loc.partial };
+}
 const fmtDate = (d) => (d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : 'an unknown date');
 function rmNoBuilding(layers, main) {
   const d = (layers && layers.imageryDate) || main.imageryDate; const date = d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : 'an unknown date';
@@ -670,7 +688,7 @@ async function autoTraceRoof(opts = {}) {
     if (res.obstruction && res.obstruction.hiddenZones) for (const z of res.obstruction.hiddenZones) hiddenZones.push({ ...z, id: 'H' + (hiddenZones.length + 1), structure: idx + 1, facetName: z.facet != null ? 'F' + (base + z.facet + 1) : null });
     for (const f of res.facets) {
       // engine evidence kept on the facet: exact fitted slope, fit quality, Measured / Inferred / Unresolved, raw outline
-      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null } : { azimuth: f.azimuth, structure: idx + 1 });
+      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, verify: rmOpenCover(f) } : { azimuth: f.azimuth, structure: idx + 1 });
       if (idx === 0) mainSqft += facetMetrics(added).sloped;
     }
     for (const e of res.edges) addEdge(e.type, e.path, null, '', e.factor != null ? { factor: e.factor, basis: e.basis, status: e.status, autoType: e.type, obscuredFt: e.obscuredFt, structure: idx + 1, evidence: e.evidence, missing: e.missing, paired: e.paired, confirmedBy: e.confirmedBy ? { source: e.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, altFt: e.altFt } : { structure: idx + 1 });
@@ -681,7 +699,7 @@ async function autoTraceRoof(opts = {}) {
   const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}`, obstruction: mainRes.obstruction || null, hiddenZones, repairs: mainRes.repairs || [], plot: mainRes.plot || null, alt: altInfo };
   // what the trace was made from, for the review panel, the audit trail and the report
   state.trace = { engine: 'v2.1', tracedAt: new Date().toISOString(), imageryDate: (layers || {}).imageryDate || main.imageryDate || null, imageryQuality: (layers || {}).imageryQuality || main.imageryQuality || null, source: 'Google Solar API height model (DSM) and building mask, 0.1 m per pixel', hasRgb: !!rgbT, noiseSigmaM: mainRes.noiseSigma || null,
-    layerChoice, obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
+    layerChoice, addressCheck: rmAddressCheck(results[0] && results[0].res, kx, ky, cLat, cLng), obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
     raw: results.map(({ res }, idx) => ({ structure: idx + 1, facets: res.facets.map((f) => ({ pitch: f.pitch, slope: f.slope, status: f.status, path: f.path, rawPath: f.rawPath || null })), edges: res.edges.map((e) => ({ type: e.type, factor: e.factor, status: e.status, path: e.path })) })) };
   recompute();   // after state.trace is set: labels, hatching and the review panel read the hidden zones from it
   if (!opts.quiet) toast(`Auto-traced ${fi} facets, ${state.edges.length} lines, ${results.length} structure${results.length === 1 ? '' : 's'}`);

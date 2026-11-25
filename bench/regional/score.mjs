@@ -44,7 +44,7 @@ function reportStatus(dir, tot, runRec, isAlt) {
 }
 const rows = [];
 for (const p of M.properties) {
-  const dir = path.join(RUN, p.slug); const runRec = rd(path.join(dir, 'version.json')); const T = rd(path.join(PRIV, 'truth', p.slug + '.json'));
+  const dir = path.join(RUN, p.slug); if (!fs.existsSync(dir)) continue; /* not part of this run (e.g. blind properties in a development run) */ const runRec = rd(path.join(dir, 'version.json')); const T = rd(path.join(PRIV, 'truth', p.slug + '.json'));
   const out = { slug: p.slug, id: p.id, group: p.group, town: p.town, roofType: p.roofType, obstruction: p.obstruction, features: p.features || [], conditions: COND[p.slug] || null, reference: 'none', run: null, versions: {} };
   for (const v2 of ['', '-alt']) {
     const tot = rd(path.join(dir, `totals${v2}.json`)); if (!tot && v2) continue;

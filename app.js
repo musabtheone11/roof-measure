@@ -321,7 +321,7 @@ async function goToAddress() {
     const res = await geocoder.geocode({ address: q });
     const r = res.results && res.results[0];
     if (!r) throw new Error('No results');
-    const loc = { lat: r.geometry.location.lat(), lng: r.geometry.location.lng() };
+    const loc = { lat: r.geometry.location.lat(), lng: r.geometry.location.lng(), precision: r.geometry.location_type || null, partial: !!r.partial_match };
     setLocation(loc, r.formatted_address);
   } catch (err) {
     toast('Address not found: ' + (err.message || err), true);

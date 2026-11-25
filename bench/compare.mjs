@@ -70,7 +70,9 @@ function rowsFor(T, old, neu) {
   return rows;
 }
 
-const files = fs.readdirSync(TRUTH).filter((f) => f.endsWith('.json')).filter((f) => !arg('only') || f.startsWith(arg('only'))).slice(0, +arg('limit', 999));
+// properties frozen for blind validation (regional benchmark) are never traced or scored here: tuning must not see them
+const BLIND = (() => { try { return new Set(JSON.parse(fs.readFileSync(path.join(BENCH, 'private', 'regional', 'manifest.json'), 'utf8')).properties.filter((p) => p.group === 'blind').map((p) => p.slug)); } catch (_) { return new Set(); } })();
+const files = fs.readdirSync(TRUTH).filter((f) => f.endsWith('.json') && !BLIND.has(f.replace(/\.json$/, ''))).filter((f) => !arg('only') || f.startsWith(arg('only'))).slice(0, +arg('limit', 999));
 const all = [];
 for (const file of files) {
   const slug = file.replace(/\.json$/, ''); const T = JSON.parse(fs.readFileSync(path.join(TRUTH, file), 'utf8'));

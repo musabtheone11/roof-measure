@@ -40,6 +40,7 @@ var AT2 = {
   eaveBufferM: 0,      // outward offset of the footprint (benchmarked: 0.15 m made well-traced houses 4-5% too big)
   fpSquareJog: true,   // a short slanted stretch between two parallel offset walls becomes a square step through its middle
   fpSquareJogMaxM: 5,  // ... when the slanted stretch is shorter than this (longer ones can be real angled walls)
+  hipCornerEave: true,  // short sloped outline pieces at the low end of a hip are part of the eave round the corner
   edgeHalfHeight: false, // move each outline wall to the half-way point of the height drop. Benchmarked: synthetic 93.0% -> 93.7% within 3%, but real houses got worse (median area error 6.0% -> 8.4%), so it stays off
   regularizeFootprint: true,
   bendGapM: 0.15,      // a pitch break is continuous: one plane rising and one falling across a line with a bigger gap is a step
@@ -956,6 +957,14 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
     }
   }
   function planeOf(id) { return id >= 0 && regions[id] ? regions[id].plane : null; }
+  // ---- a hip that ends a little short of its outline corner leaves a short sloped piece of outline between the two eaves
+  // there. It is part of the eave line round the corner (where the drip edge runs), not a rake: a rake runs from an eave up
+  // to a ridge or a gable peak. Short outline pieces (< 2.5 m) touching the LOW end of a hip are counted as eave.
+  if (AT2.hipCornerEave) {
+    const lowEnds = []; for (const e of edges) { if (e.type !== 'hip' || !e.pl) continue; const z = (pt) => e.pl.a * pt[0] + e.pl.b * pt[1] + e.pl.c; const g0 = e.g[0], g1 = e.g[e.g.length - 1]; lowEnds.push(z(g0) <= z(g1) ? g0 : g1); }
+    for (const e of edges) { if (e.type !== 'rake' || e.paired || (e.regions || []).length !== 1) continue; const g0 = e.g[0], g1 = e.g[e.g.length - 1]; const L = Math.hypot(g1[0] - g0[0], g1[1] - g0[1]); if (L >= 2.5) continue;
+      if (lowEnds.some((q) => Math.min(Math.hypot(q[0] - g0[0], q[1] - g0[1]), Math.hypot(q[0] - g1[0], q[1] - g1[1])) < 0.3)) { e.type = 'eave'; e.why = 'hip-corner'; } }
+  }
   // ---- line list clean-up: pieces of the same line (same type, same two planes) that meet end to end and run straight on
   // become one line; leftovers shorter than 6 in. are tracing crumbs, not roof features, and are dropped
   { const keyOf = (e) => e.type + '|' + (e.paired || '') + '|' + (e.regions || []).slice().sort().join(',');
