@@ -84,7 +84,13 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
   const cornerObs = obs.filter((o) => o.kind === 'corner' && o.ll && o.ll.length >= 1).map((o) => ({ o, p: toM({ lat: o.ll[0][0], lng: o.ll[0][1] }) }));
   const regionObs = obs.filter((o) => o.kind === 'region' && o.ll && o.ll.length >= 3).map((o) => ({ o, pts: o.ll.map((q) => toM({ lat: q[0], lng: q[1] })) }));
   const groups = [];
-  for (const e of edgeObs) { const g = groups.find((G) => angDiff(e.a, e.b, G.a, G.b) < 12 && (segDist(e.a, G.a, G.b) + segDist(e.b, G.a, G.b)) / 2 < 0.8); if (g) g.members.push(e); else groups.push({ a: e.a, b: e.b, members: [e] }); }
+  // members of a group lie on one line: same direction, both ends within 0.8 m of the group's line (perpendicular, not
+  // clamped to the segment) and overlapping it along the line, so two parallel eaves 2.7 m apart never share a fit
+  const sameLine = (e, G) => { const L = dist(G.a, G.b); if (L < 0.3) return false; const u = [(G.b[0] - G.a[0]) / L, (G.b[1] - G.a[1]) / L], nrm = [-u[1], u[0]];
+    const perp = (p) => Math.abs((p[0] - G.a[0]) * nrm[0] + (p[1] - G.a[1]) * nrm[1]), along = (p) => (p[0] - G.a[0]) * u[0] + (p[1] - G.a[1]) * u[1];
+    const ta = along(e.a), tb = along(e.b); const gap = Math.max(ta, tb) < 0 ? -Math.max(ta, tb) : Math.min(ta, tb) > L ? Math.min(ta, tb) - L : 0;
+    return angDiff(e.a, e.b, G.a, G.b) < 12 && perp(e.a) < 0.8 && perp(e.b) < 0.8 && gap < 1.0; };
+  for (const e of edgeObs) { const g = groups.find((G) => sameLine(e, G)); if (g) g.members.push(e); else groups.push({ a: e.a, b: e.b, members: [e] }); }
   const proposals = [];
   for (const G of groups) {
     const srcs = [...new Set(G.members.map((m) => m.o.source))], models = [...new Set(G.members.map((m) => m.o.model))]; const types = G.members.map((m) => m.o.type || 'outline');
