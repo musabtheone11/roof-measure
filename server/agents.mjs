@@ -19,8 +19,8 @@ export async function runRoofAgents(input, options={}) {
  if(!key)stop('MISSING_API_KEY','The server APINEX_API_KEY is not configured');
  const budget=input.budget||{},maxRequests=budget.maxRequests??8,maxTokens=budget.maxTokens??3200000,maxUsd=budget.maxUsd??budget.maxCostUsd??1.6,maxOutput=budget.maxOutputTokens??2400;
  const pricing={...VERIFIED_PRICING,...options.pricing},models={...VERIFIED_MODELS,...input.models};
- const ledger={requests:0,completed:0,promptTokens:0,completionTokens:0,billedUsd:0,billedCostTokens:0,usageMissing:0,reservedTokens:0,reservedUsd:0,pricingSources:[],costStatus:'provider-reported when available; failed or missing usage retains conservative reservation'};
- const failures=[],events=[],raw={},originalOutputs={},results={};
+ const ledger={requests:0,completed:0,promptTokens:0,completionTokens:0,billedUsd:0,billedCostTokens:0,usageMissing:0,reportedUsageRequests:0,unknownBillingRequests:0,exactCostRequests:0,rateEstimatedCostRequests:0,reservedTokens:0,reservedUsd:0,pricingSources:[],costStatus:'provider-reported when available; failed or missing usage retains conservative reservation'};
+ const failures=[],events=[],raw={},originalOutputs={},originalOutputHistory={},results={};
  const current=()=>{aborted(signal);if(options.isCurrent&&!options.isCurrent(input.revision))stop('STALE_REVISION','The roof changed while agents were processing');};
  const emit=(role,state,detail={})=>{const e={role,state,...detail,elapsedMs:Date.now()-started};events.push(e);options.onProgress?.(e);};
  async function request(url,body,timeoutMs=45000) {
@@ -28,9 +28,17 @@ export async function runRoofAgents(input, options={}) {
   try{return await fetcher(url,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${key}`,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:combined});}
   catch(e){aborted(signal);if(timeout.aborted)stop('TIMEOUT','The model request timed out');if(e instanceof AgentError)throw e;stop('NETWORK_ERROR','The model service could not be reached');}
  }
+ async function readBoundedJSON(response,maxBytes=2*1024*1024) {
+  const reader=response.body?.getReader();
+  if(!reader)stop('INVALID_AGENT_OUTPUT','The model response body is unavailable');
+  const chunks=[];let size=0;
+  try{while(true){current();const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>maxBytes){await reader.cancel();stop('INVALID_AGENT_OUTPUT','The model response exceeds the bounded body limit');}chunks.push(value);}}
+  finally{reader.releaseLock();}
+  try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{stop('INVALID_AGENT_OUTPUT','The model response was not JSON');}
+ }
  const rosterResponse=await request('https://api.apinex.bond/v1/models',null,20000);
  if(!rosterResponse.ok)stop('ROSTER_UNAVAILABLE','The authenticated model roster could not be verified');
- let roster;try{roster=await rosterResponse.json();}catch{stop('ROSTER_UNAVAILABLE','The model roster is not valid JSON');}
+ let roster;try{roster=await readBoundedJSON(rosterResponse);}catch{stop('ROSTER_UNAVAILABLE','The model roster is not valid JSON');}
  const available=new Set((roster.data||[]).map(m=>m.id));
  for(const role of ROLES){if(!available.has(models[role]))stop('MODEL_UNAVAILABLE','A configured model is absent from the authenticated roster');const p=pricing[models[role]];if(!p||!Number.isFinite(p.inputPerMillion)||!Number.isFinite(p.outputPerMillion)||p.inputPerMillion<0||p.outputPerMillion<0||!Number.isFinite(p.contextTokens)||p.contextTokens<128)stop('PRICING_UNKNOWN','Configure verified pricing before using a dollar budget');}
  ledger.pricingSources=[...new Set(Object.values(models).map(m=>pricing[m].source).filter(Boolean))];
@@ -43,31 +51,45 @@ export async function runRoofAgents(input, options={}) {
   // The provider does not publish an image-token formula. Reserve the verified
   // entire context capacity, never pretend base64 bytes are a token estimate.
   const tokenReserve=price.contextTokens,usdReserve=tokenReserve*Math.max(price.inputPerMillion,price.outputPerMillion)/1e6;
+  let repairError=null;
+  for(let repair=0;repair<=1;repair++) {
+  const attemptMessages=repair?[...messages,{role:'user',content:'Your previous response failed strict local validation: '+repairError+'. Return a fresh complete JSON object satisfying the contract. Every region must have at least three distinct vertices; line edges alone may have two points. Do not invent or silently convert geometry. Required contract: '+OUTPUT_CONTRACTS[role]}]:messages;
   for(let attempt=0;attempt<=number(options.retries,1,0,2);attempt++) {
    current();
    if(maxOutput===0||ledger.requests+1>maxRequests||ledger.reservedTokens+tokenReserve>maxTokens||ledger.reservedUsd+usdReserve>maxUsd)stop('BUDGET_LIMIT','The processing budget is exhausted; remaining roles need review');
-   ledger.requests++;ledger.reservedTokens+=tokenReserve;ledger.reservedUsd+=usdReserve;emit(role,'running',{model,attempt:attempt+1});
-   const r=await request('https://api.apinex.bond/v1/chat/completions',{model,messages,max_tokens:maxOutput,stream:false,...(['claude-opus-5.5','gpt-6.2-astra'].includes(model)?{response_format:{type:'json_object'}}:{})},number(options.timeoutMs,45000,100,120000));
+   ledger.requests++;ledger.usageMissing++;ledger.unknownBillingRequests++;ledger.reservedTokens+=tokenReserve;ledger.reservedUsd+=usdReserve;emit(role,'running',{model,attempt:attempt+1});
+   const r=await request('https://api.apinex.bond/v1/chat/completions',{model,messages:attemptMessages,max_tokens:maxOutput,stream:false,...(['claude-opus-5.5','gpt-6.2-astra'].includes(model)?{response_format:{type:'json_object'}}:{})},number(options.timeoutMs,45000,100,120000));
    if(!r.ok){const retryable=r.status===429||r.status>=500;emit(role,'request-failed',{httpStatus:r.status,attempt:attempt+1});if(retryable&&attempt<number(options.retries,1,0,2)){
       const header=r.headers?.get('retry-after');let wait=Math.min(2000,number(options.retryDelayMs,250,0,2000)*2**attempt);
       if(header){const seconds=Number(header),date=Date.parse(header);const advised=Number.isFinite(seconds)?seconds*1000:Number.isFinite(date)?Math.max(0,date-Date.now()):0;wait=Math.max(wait,advised);}
       if(wait>number(options.maxRetryWaitMs,10000,0,10000))stop('RATE_LIMIT','The model service requests a longer retry wait; retry this job later'+' (retry after at least '+Math.ceil(wait/1000)+' seconds)');
       await sleep(wait,signal);continue;
     }stop(r.status===429?'RATE_LIMIT':'UPSTREAM_ERROR','A model request failed with HTTP '+r.status);}
-   let response;try{response=await r.json();}catch{stop('INVALID_AGENT_OUTPUT','The model response was not JSON');}
+   const response=await readBoundedJSON(r);
    current();
    const usage=response.usage;const prompt=usage?.prompt_tokens,completion=usage?.completion_tokens;
-   if(Number.isFinite(prompt)&&prompt>=0&&Number.isFinite(completion)&&completion>=0){ledger.promptTokens+=prompt;ledger.completionTokens+=completion;const actual=prompt+completion;ledger.reservedTokens+=actual-tokenReserve;
+   if(Number.isFinite(prompt)&&prompt>=0&&Number.isFinite(completion)&&completion>=0){ledger.usageMissing--;ledger.unknownBillingRequests--;ledger.reportedUsageRequests++;ledger.promptTokens+=prompt;ledger.completionTokens+=completion;const actual=prompt+completion;ledger.reservedTokens+=actual-tokenReserve;
     const costTokens=usage.cost_tokens??response.cost_tokens;const usd=Number.isFinite(costTokens)&&costTokens>=0?costTokens/1e6:(prompt*price.inputPerMillion+completion*price.outputPerMillion)/1e6;
-    ledger.reservedUsd+=usd-usdReserve;ledger.billedUsd+=usd;if(Number.isFinite(costTokens))ledger.billedCostTokens+=costTokens;
-   }else ledger.usageMissing++;
+    ledger.reservedUsd+=usd-usdReserve;ledger.billedUsd+=usd;if(Number.isFinite(costTokens)&&costTokens>=0){ledger.billedCostTokens+=costTokens;ledger.exactCostRequests++;}else ledger.rateEstimatedCostRequests++;
+   }
    if(ledger.reservedTokens>maxTokens||ledger.reservedUsd>maxUsd)stop('BUDGET_LIMIT','Provider usage exceeded the conservative reservation; further requests stopped');
-   const choice=response.choices?.[0];if(!choice||choice.finish_reason==='length')stop('INVALID_AGENT_OUTPUT','The model response was missing or truncated');
-   originalOutputs[role]={requestedModel:model,returnedModel:typeof response.model==='string'?response.model.slice(0,200):null,content:typeof choice.message?.content==='string'?choice.message.content.slice(0,250000):null,finishReason:choice.finish_reason||null};
-   originalOutputs[role].normalization=normalizeAgentJSON(choice.message?.content).normalization;
-   const value=validateResponse(role,parseAgentJSON(choice.message?.content),input.imageMetadata);
-   raw[role]=value;ledger.completed++;emit(role,'complete',{model});return value;
+   const choice=response.choices?.[0];
+   const record={requestedModel:model,returnedModel:typeof response.model==='string'?response.model.slice(0,200):null,content:typeof choice?.message?.content==='string'?choice.message.content.slice(0,250000):null,truncated:typeof choice?.message?.content==='string'&&choice.message.content.length>250000,originalLength:typeof choice?.message?.content==='string'?choice.message.content.length:null,finishReason:choice?.finish_reason||null,repairAttempt:repair,usage:usage?structuredClone(usage):null};
+   originalOutputs[role]=record;(originalOutputHistory[role]??=[]).push(record);
+   try {
+    if(!choice||choice.finish_reason==='length')stop('INVALID_AGENT_OUTPUT','The model response was missing or truncated');
+    record.normalization=normalizeAgentJSON(choice.message?.content).normalization;
+    const value=validateResponse(role,parseAgentJSON(choice.message?.content),input.imageMetadata);
+    record.validation={valid:true};raw[role]=value;ledger.completed++;emit(role,'complete',{model,repairAttempt:repair});return value;
+   }catch(error){
+    if(error.code!=='INVALID_AGENT_OUTPUT')throw error;
+    record.validation={valid:false,code:error.code,message:error.message};
+    if(repair===1)throw error;
+    repairError=error.message;emit(role,'schema-repair',{model,code:error.code});break;
+   }
   }
+  }
+
  });}
  async function optional(role,extra){try{const result=await run(role,extra);results[role]=result;return result;}catch(e){current();const failure={role,code:e.code||'AGENT_FAILED',message:e instanceof AgentError||e.name==='ContractError'?e.message:'The agent could not complete its task'};failures.push(failure);emit(role,'failed',{code:failure.code});return null;}}
  const quality=await optional('quality');
@@ -88,5 +110,5 @@ export async function runRoofAgents(input, options={}) {
  if(comparison)comparison={...comparison,needsReview:disputes.length>0,reviewThresholds:{minIoU:0.95,maxBoundaryPixels:boundaryLimit,accuracyAcceptance:false}};
  if(results.outline&&results.independent&&(disputes.length||comparison?.needsReview))await optional('adjudication',{first,independent,disputes});
  current();
- return{revision:input.revision,status:'REVIEW REQUIRED',...results,proposal:first,independentProposal:independent,comparison,geometryValidation,disputes,raw,originalOutputs,failures,events,ledger:{...ledger,elapsedMs:Date.now()-started},provenance:{models,sourceImage:{width:input.imageMetadata.width,height:input.imageMetadata.height,view:input.imageMetadata.view,purpose:input.imageMetadata.purpose||'photo',sourcePage:input.imageMetadata.sourcePage||1,rotation:input.imageMetadata.rotation||0},externalProcessingAuthorized:true,structuredOutput:'JSON object mode observed compatible on selected models; locally schema-validated, provider schema enforcement is not assumed',confidence:'Uncalibrated model proposals; agreement is not measurement evidence'}};
+ return{revision:input.revision,status:'REVIEW REQUIRED',...results,proposal:first,independentProposal:independent,comparison,geometryValidation,disputes,raw,originalOutputs,originalOutputHistory,failures,events,ledger:{...ledger,elapsedMs:Date.now()-started},provenance:{models,sourceImage:{width:input.imageMetadata.width,height:input.imageMetadata.height,view:input.imageMetadata.view,purpose:input.imageMetadata.purpose||'photo',sourcePage:input.imageMetadata.sourcePage||1,rotation:input.imageMetadata.rotation||0},externalProcessingAuthorized:true,structuredOutput:'JSON object mode observed compatible on selected models; locally schema-validated, provider schema enforcement is not assumed',confidence:'Uncalibrated model proposals; agreement is not measurement evidence'}};
 }

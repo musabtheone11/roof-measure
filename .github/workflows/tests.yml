@@ -71,3 +71,34 @@ jobs:
         run: |
           node --test server/*.test.mjs
           node bench/runtime-agents-test.mjs
+      - name: Source-image report quantity and revision checks
+        run: node bench/ai-report-test.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned browser test dependencies
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+          python -m pip install PyMuPDF==1.26.6
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          node -e "console.log('CHROMIUM_PATH=' + require('playwright').chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Browser source review, local PDF pages and rendered reports
+        run: |
+          APINEX_API_KEY= node server/main.mjs > /tmp/roof-runtime.log 2>&1 &
+          roof_runtime_pid=$!
+          trap 'kill "$roof_runtime_pid"' EXIT
+          for attempt in 1 2 3 4 5; do
+            curl -fsS http://127.0.0.1:3000/api/ai/config > /dev/null && break
+            sleep 1
+          done
+          node tools/dev/ai-ui-test.mjs
+          node tools/dev/pdf-ui-test.mjs
+          node tools/dev/ai-report-test.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-review-browser-artifacts
+          path: .devcache/ai-report-tests/
+          if-no-files-found: ignore

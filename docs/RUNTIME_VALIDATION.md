@@ -75,3 +75,36 @@ The final live integration run completed all five schema-valid APINEX roles,
 including adjudication of the detected plane gap, in 30.375 seconds. Reported
 debit was $0.004387. The unresolved gap and unknown pitch still withheld physical
 quantities; adjudication did not promote its opinion into measurement evidence.
+
+## Supervised continuation
+
+The continuation adds local PDF.js 6.5.438 page rendering, hash-bound JSON reopen,
+actual quarter-turn pixel transforms, literal sketch annotations, and revision-bound
+source-image review PDFs. Both PDF.js and the existing jsPDF 2.5.1 are bundled
+locally with licenses; model inference still requires explicit selected-image consent.
+The original geographic report layout remains separate and unchanged.
+
+Independent supervision reproduced and verified fixes for concurrent admission,
+invalid/off-roof edges, enlarged explicit budgets, stale correction histories,
+perspective gating, pending-source races, and short pen segments. A model response
+may receive one bounded same-model schema repair; original attempts and their costs
+remain visible. Unknown billing is never counted as a free failed request.
+
+An authenticated, hardened Docker run completed one real synthetic APINEX job:
+five schema-valid roles, 14,992 input and 2,273 output tokens, $0.007834 reported
+debit. The first report attempt failed because the CDN library was unavailable
+and the model lacked a selected exterior outline. These were real failures.
+After local-library and honest missing-outline review fixes, a separate replay of
+that saved output produced an 83,673-byte, three-page Letter PDF with CDN scripts
+blocked and no browser errors. It displayed the missing outline and withheld
+physical quantities. The replay made no API calls; it is not a second inference
+trial or validated roof accuracy.
+
+The final tested image hash was
+`sha256:2103f61a3b2f8f59ebb9f9c38af6a01a43ee19315147320cb62d1c2e7c026da6`.
+Synthetic proof is retained locally under `.devcache/deployment/`. An externally
+reachable preview is still blocked by Vercel team authorization and remote secret
+configuration. No public URL or production release is claimed.
+
+Remaining supervised work includes cancellation before the creation response and
+manual recovery of missing AI outlines; see the live supervision ledger.

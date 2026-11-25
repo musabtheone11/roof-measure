@@ -1,0 +1,21 @@
+# Allow-list build context: no job exports, uploads, benchmark cases or credentials.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!*.js
+!*.css
+!index.html
+!assets/
+!assets/**
+!server/
+!server/*.mjs
+server/*.test.mjs
+!bench/
+!bench/package.json
+!bench/package-lock.json
+
+!pdf-import.mjs
+!vendor/
+!vendor/**

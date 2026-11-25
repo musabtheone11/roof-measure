@@ -229,3 +229,14 @@ and [provider verification and measured limitations](docs/API_VERIFICATION.md).
 
 `npm run test:runtime` and `node bench/runtime-agents-test.mjs` test deterministic
 geometry and real local HTTP orchestration without paid requests.
+
+The image-review workspace also opens local PDFs (selected page only), rotates pages,
+reopens hash-matched review JSON, and exports a branded source-image review PDF.
+Page/source changes clear calibration and consent. Printed dimensions remain
+source-reported annotations until independently verified. Source review PDFs do
+not invent geographic placement, north, or purchasing quantities.
+
+The private single-process container preview is described in
+[private preview deployment](docs/PRIVATE_PREVIEW_DEPLOYMENT.md). The ongoing
+[supervision ledger](docs/ENHANCEMENT_SUPERVISION.md) distinguishes accepted fixes
+from remaining defects and access blockers.

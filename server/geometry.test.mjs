@@ -59,3 +59,15 @@ const endpointOnly={...model,edges:[{id:'EA',type:'eave',points:[[0,0],[10,0]]},
 const noFacets={outline:model.outline,facets:[],edges:[{id:'EA',type:'eave',points:[[0,0],[20,0]]}]};assert.equal(measureProposal(noFacets,meta).status,'REVIEW REQUIRED');assert(measureProposal(noFacets,meta).edges[0].horizontalLengthM>0);assert.equal(measureProposal({...noFacets,edges:[{id:'R',type:'ridge',points:[[10,0],[10,10]]}]},meta).edges[0].horizontalLengthM,null);
 assert(validateProposal({...model,edges:[{id:model.facets[0].id,type:'eave',points:[[0,0],[20,0]]}]},meta).issues.some(i=>i.code==='duplicate-id'),'facets and edges use a shared ID namespace');
 const perspective={...sharedRidge,measurementRestrictions:{perspective:true,reasons:['oblique roof']}};for(const p of[perspective,{...structuredClone(perspective),revision:'edited'}]){const m=measureProposal(p,meta);assert.equal(m.projectedAreaM2,null);assert.equal(m.slopedAreaM2,null);assert.equal(m.edges[0].horizontalLengthM,null);assert(m.issues.some(i=>i.code==='perspective-restriction'));}
+// Independent WGS84 ECEF chord reference verifies the small Florida frame.
+const ecef=([lon,lat])=>{const rad=Math.PI/180,p=lat*rad,l=lon*rad,e2=.00669437999014,n=6378137/Math.sqrt(1-e2*Math.sin(p)**2);return[n*Math.cos(p)*Math.cos(l),n*Math.cos(p)*Math.sin(l),n*(1-e2)*Math.sin(p)];};
+const d3=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
+const floridaMeta={...meta,calibration:null,georef:{verified:true,source:'Survey orthomosaic',date:'2026-11-25',crs:'EPSG:4326',affine:[.000001,0,-81,0,-.000001,30]}};
+const floridaEdge=measureProposal(model,floridaMeta).edges[0].horizontalLengthM;
+const reference=d3(ecef([-81,30]),ecef([-81+.00002,30]));assert(Math.abs(floridaEdge/reference-1)<1e-6,'ordinary Florida roof agrees with independent ECEF distance');
+const wideMeta={...floridaMeta,georef:{...floridaMeta.georef,affine:[.001,0,-81,0,-.2,30]}};
+assert(Math.abs(Math.cos(30*Math.PI/180)/Math.cos(10*Math.PI/180)-1)>.1,'old unbounded top-latitude frame distorts remote rows by over ten percent');
+assert.equal(measureProposal(model,wideMeta).projectedAreaM2,null,'regional geographic frames withhold physical quantities');
+for(const latitude of[76,89,-80]){const polar={...floridaMeta,georef:{...floridaMeta.georef,affine:[.000001,0,-81,0,-.000001,latitude]}};assert.equal(measureProposal(model,polar).edges[0].horizontalLengthM,null,'unsupported polar projection cannot yield physical lengths');}
+const largeLocal={...meta,calibration:null,georef:{verified:true,source:'Local survey',date:'2026-11-25',crs:'LOCAL_EN_METERS',affine:[30,0,0,0,30,0]}};assert.equal(measureProposal(model,largeLocal).projectedAreaM2,null,'local metric frame must also remain roof scale');
+assert.equal(measureProposal(model,{...floridaMeta,width:undefined}).projectedAreaM2,null,'georeference validation needs the complete source extent');

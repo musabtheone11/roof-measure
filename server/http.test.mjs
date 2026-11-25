@@ -34,3 +34,11 @@ test('malformed explicit HTTP budgets never start a provider job',async()=>{
  assert.equal(calls,0);
  }finally{s.closeAllConnections();await new Promise(r=>s.close(r));}
 });
+
+test('valid dollar aliases clamp consistently and local PDF modules have executable MIME',async()=>{
+ let captured;const s=await startRuntime({port:0,apiKey:'test-only-key',runAgents:async x=>{captured=x;return{};},measure:x=>x});
+ try{const base='http://127.0.0.1:'+s.address().port,r=await fetch(base+'/api/ai/config'),cookie=r.headers.get('set-cookie').split(';')[0],c=await r.json();
+ const q=await fetch(base+'/api/ai/trace',{method:'POST',headers:{cookie,'x-roof-csrf':c.csrfToken,'content-type':'application/json'},body:JSON.stringify({revision:'cap',consentExternal:true,budget:{maxCostUsd:3}})});assert.equal(q.status,202);assert.equal(captured.budget.maxUsd,2);assert.equal(Object.hasOwn(captured.budget,'maxCostUsd'),false);
+ const module=await fetch(base+'/vendor/pdfjs/pdf.mjs',{method:'HEAD'});assert.equal(module.status,200);assert.match(module.headers.get('content-type'),/javascript/);
+ }finally{s.closeAllConnections();await new Promise(r=>s.close(r));}
+});

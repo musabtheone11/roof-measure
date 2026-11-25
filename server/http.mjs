@@ -5,7 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.jpg':'image/jpeg','.json':'application/json'};
+const TYPES={'.mjs':'application/javascript','.wasm':'application/wasm','.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.jpg':'image/jpeg','.json':'application/json'};
 export async function startRuntime({port=3000,host='127.0.0.1',runAgents,measure,compareTraces,apiKey=process.env.APINEX_API_KEY,root=ROOT}={}) {
  const jobs=new Map(),sessions=new Map();
  const server=http.createServer(async(req,res)=>{
@@ -33,6 +33,7 @@ export async function startRuntime({port=3000,host='127.0.0.1',runAgents,measure
      if(jobs.size>=30)return send(429,{error:'Processing history is full. Try again after older jobs expire.'});
      if(input.budget!==undefined)validateBudget(input.budget);
      input.budget={...input.budget,maxRequests:Math.min(8,input.budget?.maxRequests??8),maxTokens:Math.min(6000000,input.budget?.maxTokens??6000000),maxUsd:Math.min(2,input.budget?.maxUsd??input.budget?.maxCostUsd??2)};
+     delete input.budget.maxCostUsd;
      const id=crypto.randomUUID(),controller=new AbortController(),job={id,owner:sid,created:now,status:'running',progress:[],revision:input.revision,controller};jobs.set(id,job);
      Promise.resolve().then(()=>runAgents(input,{apiKey,signal:controller.signal,compareTraces,onProgress:event=>job.progress.push(event),isCurrent:revision=>job.status==='running'&&job.revision===revision})).then(async result=>{if(controller.signal.aborted)return;job.result=result;job.status='completed';}).catch(err=>{if(controller.signal.aborted){job.status='cancelled';return;}job.status='failed';job.error={code:err.code||'PROCESSING_FAILED',message:String(err.message||'Roof processing failed.').split(apiKey).join('[redacted]')};});
      return send(202,{jobId:id});

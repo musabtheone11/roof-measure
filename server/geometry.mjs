@@ -100,10 +100,23 @@ export function measurementTransform(metadata={}){
  const g=metadata.georef;
  if(g?.verified===true&&g.source&&dated(g.date)&&Array.isArray(g.affine)&&g.affine.length===6&&g.affine.every(Number.isFinite)){
   invertAffine(g.affine);
-  if(g.crs==='LOCAL_EN_METERS')return{ok:true,basis:g,point:p=>transformPoint(p,g.affine)};
+  const unsupported=reason=>({ok:false,reason});
+  if(!Number.isFinite(metadata.width)||!Number.isFinite(metadata.height)||metadata.width<=0||metadata.height<=0)return unsupported('Georeferencing requires finite source image dimensions.');
+  const corners=[[0,0],[metadata.width,0],[0,metadata.height],[metadata.width,metadata.height]];
+  const extent=points=>Math.max(...points.flatMap(a=>points.map(b=>dist(a,b))));
+  // This roof-scale local frame is intentionally bounded; it is not a regional GIS projection.
+  if(g.crs==='LOCAL_EN_METERS'){const point=p=>transformPoint(p,g.affine);if(extent(corners.map(point))>2000)return unsupported('Georeferenced image exceeds the supported 2 km roof-scale frame.');return{ok:true,basis:g,point};}
+
   if(['EPSG:4326','EPSG:3857'].includes(g.crs)||/^EPSG:32[67]\d\d$/.test(g.crs||'')){
-   const crs=g.crs;let def=crs;if(/^EPSG:32[67]\d\d$/.test(crs)){const n=+crs.slice(5);def=`+proj=utm +zone=${n%100} ${n>=32700?'+south':''} +datum=WGS84 +units=m +no_defs`;}
-   const ll=p=>{const q=proj4(def,'EPSG:4326',transformPoint(p,g.affine));if(!q.every(Number.isFinite)||Math.abs(q[0])>180||Math.abs(q[1])>90)throw Error('Georeference outside geographic bounds');return q;};for(const p of [[0,0],[metadata.width||0,0],[0,metadata.height||0],[metadata.width||0,metadata.height||0]])ll(p);const o=ll([0,0]),k=RM.scale(o[1]);return{ok:true,basis:g,point:p=>{const q=ll(p);return[(q[0]-o[0])*k.kx,(q[1]-o[1])*k.ky];},geographic:ll};
+   const crs=g.crs;let def=crs;if(/^EPSG:32[67]\d\d$/.test(crs)){const n=+crs.slice(5);if(n%100<1||n%100>60)return unsupported('UTM zone must be between 1 and 60.');def=`+proj=utm +zone=${n%100} ${n>=32700?'+south':''} +datum=WGS84 +units=m +no_defs`;}
+   const ll=p=>{const q=proj4(def,'EPSG:4326',transformPoint(p,g.affine));if(!q.every(Number.isFinite)||Math.abs(q[0])>180||Math.abs(q[1])>90)throw Error('Georeference outside geographic bounds');return q;};
+   const geographicCorners=corners.map(ll);
+   if(geographicCorners.some(q=>Math.abs(q[1])>75))return unsupported('Polar georeferencing requires a separately validated projection; pixel measurements only.');
+   const o=ll([metadata.width/2,metadata.height/2]),k=RM.scale(o[1]);
+   const point=p=>{const q=ll(p);return[(q[0]-o[0])*k.kx,(q[1]-o[1])*k.ky];};
+   if(extent(corners.map(point))>2000)return unsupported('Georeferenced image exceeds the supported 2 km roof-scale frame.');
+   if(geographicCorners.some(q=>{const v=RM.scale(q[1]);return Math.abs(v.kx/k.kx-1)>.001||Math.abs(v.ky/k.ky-1)>.001;}))return unsupported('Geographic scale variation exceeds the supported local frame.');
+   return{ok:true,basis:g,point,geographic:ll};
   }
  }
  const raw=metadata.calibration; const c=raw&&{...raw,a:raw.a||raw.start,b:raw.b||raw.end,distance:raw.distance??raw.lengthFt,unit:raw.unit||(raw.lengthFt!=null?'ft':null)};
