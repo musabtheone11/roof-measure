@@ -32,7 +32,8 @@ if (prop.rgbT && prop.rgbT.bands) {
 // hillshade of the DSM (sun from the north-west, 45 degrees up) with the mask boundary drawn in red
 {
   const T = prop.dsmT, mk = prop.maskT, w = T.w, h = T.h, d = T.data, buf = Buffer.alloc(w * h * 3); const px = 0.1;
-  const az = 315 * Math.PI / 180, alt = 45 * Math.PI / 180;
+  // light from the north-west: the aspect formula below uses the mathematical convention, so the azimuth is (360 - 315 + 90) degrees
+  const az = (360 - 315 + 90) * Math.PI / 180, alt = 45 * Math.PI / 180;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x; const xl = Math.max(0, x - 1), xr = Math.min(w - 1, x + 1), yu = Math.max(0, y - 1), yd = Math.min(h - 1, y + 1);
     const dzdx = (d[y * w + xr] - d[y * w + xl]) / (2 * px), dzdy = (d[yd * w + x] - d[yu * w + x]) / (2 * px);

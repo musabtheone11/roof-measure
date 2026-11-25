@@ -19,6 +19,7 @@ ap.add_argument('--image', required=True); ap.add_argument('--frame', required=T
 ap.add_argument('--sketch', default=None); ap.add_argument('--half', type=float, default=None, help='half-size (m) of the building window; default from the sketch, else 22')
 ap.add_argument('--tiles', type=int, default=2, help='tiles per side for the detail crops'); ap.add_argument('--overlap', type=float, default=0.25)
 ap.add_argument('--size', type=int, default=896, help='output size of each view (px)')
+ap.add_argument('--marker', default=None, help='lat,lng of the address point to mark (helps the reviewers say which building is the one asked about)')
 a = ap.parse_args()
 os.makedirs(a.out, exist_ok=True)
 F = json.load(open(a.frame))
@@ -66,6 +67,11 @@ def render(box, name, with_sketch, label):
         for e in sketch['edges']:
             c = EDGE_RGB.get(e['type'], EDGE_RGB['unspecified']); q = [P(p) for p in e['px']]
             d.line(q, fill=c + (235,), width=3)
+    if a.marker:
+        mlat, mlng = [float(v) for v in a.marker.split(',')]; mp = P(to_px(mlat, mlng))
+        if -20 < mp[0] < vw + 20 and -20 < mp[1] < vh + 20:
+            d.line([(mp[0] - 14, mp[1]), (mp[0] + 14, mp[1])], fill=(0, 255, 255, 255), width=3); d.line([(mp[0], mp[1] - 14), (mp[0], mp[1] + 14)], fill=(0, 255, 255, 255), width=3)
+            d.ellipse([mp[0] - 9, mp[1] - 9, mp[0] + 9, mp[1] + 9], outline=(0, 255, 255, 255), width=2); d.text((mp[0] + 12, mp[1] + 6), 'address point', fill=(0, 255, 255, 255), font=font)
     # grid: letters across, numbers down, one cell = gridM metres
     gridM = 5 if (x1 - x0) * mPerPx > 30 else 2; step = gridM / mPerPx * s
     n = 0; x = 0.0
