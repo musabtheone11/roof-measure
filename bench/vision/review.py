@@ -22,11 +22,11 @@ ap.add_argument('--local', action='store_true'); ap.add_argument('--dry', action
 a = ap.parse_args()
 M = json.load(open(os.path.join(a.crops, 'manifest.json'))); views = {v['id']: v for v in M['views']}
 os.makedirs(a.out, exist_ok=True)
-DEFAULT_MODELS = {   # free models for the broad passes; the paid challenge models are added for disputed cases by the caller
-  'outline': ['free/gemini-3.1-pro', 'free/qwen-3.8-max', 'free/kimi-k3'],
-  'planes': ['free/gemini-4-hydrogen', 'free/mimo-v2.6-pro', 'free/hy4'],
-  'obstruction': ['free/gemini-3.8-flash', 'free/minimax-m3'],
-  'challenge': ['free/claude-opus-4.6', 'free/claude-sonnet-4.6', 'free/mimo-v2.6-flash'],
+DEFAULT_MODELS = {   # free models for the broad pass (two per role: agreement on one image counts once anyway); the paid
+  'outline': ['free/gemini-3.1-pro', 'free/qwen-3.8-max'],                # challenge models are added for disputed cases by rereview.py
+  'planes': ['free/gemini-4-hydrogen', 'free/mimo-v2.6-pro'],
+  'obstruction': ['free/gemini-3.8-flash'],
+  'challenge': ['free/claude-opus-4.6', 'free/claude-sonnet-4.6'],
 }
 models = json.loads(a.models) if a.models else DEFAULT_MODELS
 VIEW_SETS = {'outline': ['whole', 'building', 'tile-A1', 'tile-B1', 'tile-A2', 'tile-B2'], 'planes': ['building', 'tile-A1', 'tile-B1', 'tile-A2', 'tile-B2'],
