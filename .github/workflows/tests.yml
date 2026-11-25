@@ -45,3 +45,6 @@ jobs:
       - name: Roof summary totals (two-story, two-layer and average pitch net of cut-outs)
         run: node summarytest.mjs
         working-directory: bench
+      - name: Vision-review fusion (corner moved back on evidence, decoy refused, canopy corner never moved, missed shed opened)
+        run: node visiontest.mjs
+        working-directory: bench

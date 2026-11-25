@@ -24,6 +24,8 @@ const rd = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch
 function engineNumbers(tot, mainOnly) {
   if (!tot) return null;
   const F = tot.facets.filter((f) => !f.excluded && (!mainOnly || (f.structure || 1) === 1)), E = tot.edges.filter((e) => !mainOnly || (e.structure || 1) === 1);
+  // a run that traced nothing (no building in the imagery, no roof data) produced no measurement: every value is MISSING, never zero
+  if (!F.length) return { sloped: null, facets: null, predominant: null, byType: Object.fromEntries(TYPES.map((t) => [t, null])), statusArea: {}, empty: true };
   const by = {}; for (const t of TYPES) by[t] = 0; for (const e of E) if (by[e.type] != null) by[e.type] += e.trueFt;
   const pa = {}; for (const f of F) pa[f.pitch] = (pa[f.pitch] || 0) + f.sloped; const pred = Object.keys(pa).sort((a, b) => pa[b] - pa[a])[0];
   return { sloped: F.reduce((s, f) => s + f.sloped, 0), facets: F.length, predominant: pred != null ? +pred : null, byType: by, statusArea: F.reduce((o, f) => { o[f.status || 'measured'] = (o[f.status || 'measured'] || 0) + f.sloped; return o; }, {}) };
@@ -34,7 +36,8 @@ function reportStatus(dir, tot, runRec, isAlt) {
   const core = (runRec && runRec.failedSteps || []).filter((f) => /^(load app|address|get roof data|auto-trace|download PDF report\.pdf)/.test(f));
   const altFail = (runRec && runRec.failedSteps || []).filter((f) => !core.includes(f));
   const want = isAlt ? 'report-alt.pdf' : 'report.pdf';
-  if (!runRec || core.length || !fs.existsSync(path.join(dir, want)) || (isAlt && altFail.length && !fs.existsSync(path.join(dir, 'totals-alt.json')))) return { status: 'failed', why: runRec ? [...core, ...(isAlt ? altFail : [])].join('; ') || 'no ' + want : 'not run' };
+  const headless = !!(runRec && runRec.version && runRec.version.headless);   // original-pipeline runs: no browser, no PDF, no gate
+  if (!runRec || core.length || (!headless && !fs.existsSync(path.join(dir, want))) || (isAlt && altFail.length && !fs.existsSync(path.join(dir, 'totals-alt.json')))) return { status: 'failed', why: runRec ? [...core, ...(isAlt ? altFail : [])].join('; ') || 'no ' + want : 'not run' };
   const log = fs.existsSync(path.join(dir, 'run.log')) ? fs.readFileSync(path.join(dir, 'run.log'), 'utf8') : '';
   const a0 = tot && tot.audit; if (a0 && a0.reportStatus) return { status: a0.reportStatus.status === 'COMPLETE' ? 'complete' : 'review-required', why: a0.reportStatus.reasons.map((q) => q.text).join('; '), stated: true };
   const gate = /export gate asked: (.*)/.exec(log); const a = tot && tot.audit; const reasons = [];
@@ -60,7 +63,7 @@ for (const p of M.properties) {
     }
     if (ad && ad.roofSketch && ad.scope === 'whole-roof') { const sk = ad.roofSketch; add('Net sloped area (adjuster)', 'sq ft', v(sk.surfaceAreaSf), 'adjuster sketch', Eall ? Eall.sloped : null); add('ridge (adjuster)', 'ft', v(sk.ridgeLf), 'adjuster sketch', Eall ? Eall.byType.ridge : null); add('hip (adjuster)', 'ft', v(sk.hipLf), 'adjuster sketch', Eall ? Eall.byType.hip : null); add('valley (adjuster)', 'ft', v(sk.valleyLf), 'adjuster sketch', Eall ? Eall.byType.valley : null); add('eave + rake (adjuster)', 'ft', v(sk.perimeterLf), 'adjuster sketch', Eall ? Eall.byType.eave + Eall.byType.rake : null); }
     // missing / extra by line type (only where the reference prints the type); possible misclassification between confusable types
-    const edges = {}; if (mr && mr.ft && E) for (const t of TYPES) { const r = v(mr.ft[t]); if (r == null) continue; edges[t] = { ref: r, run: E.byType[t], missingFt: Math.max(0, r - E.byType[t]), extraFt: Math.max(0, E.byType[t] - r) }; }
+    const edges = {}; if (mr && mr.ft && E) for (const t of TYPES) { const r = v(mr.ft[t]); if (r == null) continue; if (E.byType[t] == null) continue; edges[t] = { ref: r, run: E.byType[t], missingFt: Math.max(0, r - E.byType[t]), extraFt: Math.max(0, E.byType[t] - r) }; }
     const swap = []; for (const [a, b] of CONFUSE) if (edges[a] && edges[b]) { const m1 = Math.min(edges[a].extraFt, edges[b].missingFt), m2 = Math.min(edges[b].extraFt, edges[a].missingFt); if (m1 > 5) swap.push(`${a}->${b} up to ${Math.round(m1)} ft`); if (m2 > 5) swap.push(`${b}->${a} up to ${Math.round(m2)} ft`); }
     const unspec = mr && mr.ft ? v(mr.ft.unspecified) : null;
     // discrepancy between the two references (investigate, do not average)
