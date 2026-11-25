@@ -22,3 +22,12 @@ Aggregates only: the property-by-property table, addresses and reference documen
 | clear | 9 | 67% / 33% / 0% | 5.6 (8) | +3.7 | 0.0 (8) | -8.0 (8) | 1,466 / 589 | 0 | 2 |
 | partial tree cover | 9 | 44% / 56% / 0% | 2.1 (9) | +0.7 | 0.0 (9) | -3.0 (9) | 1,204 / 384 | 0 | 1 |
 | unknown | 2 | 0% / 0% / 100% | - (0) | - | - (0) | - (0) | 0 / 0 | 22 | 0 |
+
+## By town
+
+| Town | Properties | Complete / review required / failed | Area: median abs. diff % (n scored) | Area: median signed % | Pitch: median abs. diff (n) | Facets: median run - ref (n) | Edge ft missing / extra (sum over scored types) | Values missing from runs | Release blockers |
+|---|---|---|---|---|---|---|---|---|---|
+| Middleburg | 2 | 50% / 50% / 0% | 20.3 (2) | -20.3 | 0.5 (2) | -1.0 (2) | 180 / 125 | 0 | 2 |
+| Jacksonville | 19 | 32% / 63% / 5% | 5.2 (16) | +1.6 | 0.0 (16) | -6.0 (16) | 2,952 / 1,150 | 11 | 1 |
+| other towns (one property each) | 3 | 33% / 67% / 0% | 2.6 (3) | +2.6 | 0.0 (3) | -2.0 (3) | 137 / 112 | 0 | 0 |
+| St. Johns | 4 | 50% / 25% / 25% | 5.1 (3) | +5.1 | 0.0 (3) | -7.0 (3) | 371 / 171 | 11 | 0 |

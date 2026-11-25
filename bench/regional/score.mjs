@@ -24,6 +24,8 @@ const rd = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch
 function engineNumbers(tot, mainOnly) {
   if (!tot) return null;
   const F = tot.facets.filter((f) => !f.excluded && (!mainOnly || (f.structure || 1) === 1)), E = tot.edges.filter((e) => !mainOnly || (e.structure || 1) === 1);
+  // a run that traced nothing (no building in the imagery, no roof data) produced no measurement: every value is MISSING, never zero
+  if (!F.length) return { sloped: null, facets: null, predominant: null, byType: Object.fromEntries(TYPES.map((t) => [t, null])), statusArea: {}, empty: true };
   const by = {}; for (const t of TYPES) by[t] = 0; for (const e of E) if (by[e.type] != null) by[e.type] += e.trueFt;
   const pa = {}; for (const f of F) pa[f.pitch] = (pa[f.pitch] || 0) + f.sloped; const pred = Object.keys(pa).sort((a, b) => pa[b] - pa[a])[0];
   return { sloped: F.reduce((s, f) => s + f.sloped, 0), facets: F.length, predominant: pred != null ? +pred : null, byType: by, statusArea: F.reduce((o, f) => { o[f.status || 'measured'] = (o[f.status || 'measured'] || 0) + f.sloped; return o; }, {}) };
@@ -34,7 +36,8 @@ function reportStatus(dir, tot, runRec, isAlt) {
   const core = (runRec && runRec.failedSteps || []).filter((f) => /^(load app|address|get roof data|auto-trace|download PDF report\.pdf)/.test(f));
   const altFail = (runRec && runRec.failedSteps || []).filter((f) => !core.includes(f));
   const want = isAlt ? 'report-alt.pdf' : 'report.pdf';
-  if (!runRec || core.length || !fs.existsSync(path.join(dir, want)) || (isAlt && altFail.length && !fs.existsSync(path.join(dir, 'totals-alt.json')))) return { status: 'failed', why: runRec ? [...core, ...(isAlt ? altFail : [])].join('; ') || 'no ' + want : 'not run' };
+  const headless = !!(runRec && runRec.version && runRec.version.headless);   // original-pipeline runs: no browser, no PDF, no gate
+  if (!runRec || core.length || (!headless && !fs.existsSync(path.join(dir, want))) || (isAlt && altFail.length && !fs.existsSync(path.join(dir, 'totals-alt.json')))) return { status: 'failed', why: runRec ? [...core, ...(isAlt ? altFail : [])].join('; ') || 'no ' + want : 'not run' };
   const log = fs.existsSync(path.join(dir, 'run.log')) ? fs.readFileSync(path.join(dir, 'run.log'), 'utf8') : '';
   const a0 = tot && tot.audit; if (a0 && a0.reportStatus) return { status: a0.reportStatus.status === 'COMPLETE' ? 'complete' : 'review-required', why: a0.reportStatus.reasons.map((q) => q.text).join('; '), stated: true };
   const gate = /export gate asked: (.*)/.exec(log); const a = tot && tot.audit; const reasons = [];
@@ -60,7 +63,7 @@ for (const p of M.properties) {
     }
     if (ad && ad.roofSketch && ad.scope === 'whole-roof') { const sk = ad.roofSketch; add('Net sloped area (adjuster)', 'sq ft', v(sk.surfaceAreaSf), 'adjuster sketch', Eall ? Eall.sloped : null); add('ridge (adjuster)', 'ft', v(sk.ridgeLf), 'adjuster sketch', Eall ? Eall.byType.ridge : null); add('hip (adjuster)', 'ft', v(sk.hipLf), 'adjuster sketch', Eall ? Eall.byType.hip : null); add('valley (adjuster)', 'ft', v(sk.valleyLf), 'adjuster sketch', Eall ? Eall.byType.valley : null); add('eave + rake (adjuster)', 'ft', v(sk.perimeterLf), 'adjuster sketch', Eall ? Eall.byType.eave + Eall.byType.rake : null); }
     // missing / extra by line type (only where the reference prints the type); possible misclassification between confusable types
-    const edges = {}; if (mr && mr.ft && E) for (const t of TYPES) { const r = v(mr.ft[t]); if (r == null) continue; edges[t] = { ref: r, run: E.byType[t], missingFt: Math.max(0, r - E.byType[t]), extraFt: Math.max(0, E.byType[t] - r) }; }
+    const edges = {}; if (mr && mr.ft && E) for (const t of TYPES) { const r = v(mr.ft[t]); if (r == null) continue; if (E.byType[t] == null) continue; edges[t] = { ref: r, run: E.byType[t], missingFt: Math.max(0, r - E.byType[t]), extraFt: Math.max(0, E.byType[t] - r) }; }
     const swap = []; for (const [a, b] of CONFUSE) if (edges[a] && edges[b]) { const m1 = Math.min(edges[a].extraFt, edges[b].missingFt), m2 = Math.min(edges[b].extraFt, edges[a].missingFt); if (m1 > 5) swap.push(`${a}->${b} up to ${Math.round(m1)} ft`); if (m2 > 5) swap.push(`${b}->${a} up to ${Math.round(m2)} ft`); }
     const unspec = mr && mr.ft ? v(mr.ft.unspecified) : null;
     // discrepancy between the two references (investigate, do not average)
@@ -104,10 +107,13 @@ function propTable(priv) {
   return L.join('\n');
 }
 function groupTable(key) {
-  const keys = [...new Set(rows.map((r) => r[key] || 'untagged'))];
-  const L = [`| ${key === 'roofType' ? 'Roof type' : 'Obstruction'} | Properties | Complete / review required / failed | Area: median abs. diff % (n scored) | Area: median signed % | Pitch: median abs. diff (n) | Facets: median run - ref (n) | Edge ft missing / extra (sum over scored types) | Values missing from runs | Release blockers |`, '|' + '---|'.repeat(10)];
+  // towns with a single property are pooled so no public row describes one property
+  const tag = (r) => (r[key] || 'untagged'); const nOf = {}; for (const r of rows) nOf[tag(r)] = (nOf[tag(r)] || 0) + 1;
+  const kOf = (r) => (key === 'town' && nOf[tag(r)] < 2 ? 'other towns (one property each)' : tag(r));
+  const keys = [...new Set(rows.map(kOf))];
+  const L = [`| ${key === 'roofType' ? 'Roof type' : key === 'town' ? 'Town' : 'Obstruction'} | Properties | Complete / review required / failed | Area: median abs. diff % (n scored) | Area: median signed % | Pitch: median abs. diff (n) | Facets: median run - ref (n) | Edge ft missing / extra (sum over scored types) | Values missing from runs | Release blockers |`, '|' + '---|'.repeat(10)];
   for (const k of keys) {
-    const G = rows.filter((r) => (r[key] || 'untagged') === k); const A = G.map((r) => r.versions.automatic).filter(Boolean);
+    const G = rows.filter((r) => kOf(r) === k); const A = G.map((r) => r.versions.automatic).filter(Boolean);
     const st = (s) => G.filter((r) => (r.versions.automatic ? r.versions.automatic.status : 'failed') === s).length;
     const pick = (m) => A.map((a) => (a.compare || []).find((x) => x.metric === m)).filter((x) => x && x.state === 'scored');
     const ar = pick('Net sloped area'), pt = pick('Predominant pitch'), fc = pick('Facets');
@@ -119,6 +125,6 @@ function groupTable(key) {
   return L.join('\n');
 }
 const head = `Run \`${label}\`, code ${(rows.find((r) => r.run) || {}).run ? JSON.stringify((rows.find((r) => r.run)).run.code && { commit: rows.find((r) => r.run).run.code.commit, appHash: rows.find((r) => r.run).run.code.appHash, dirty: rows.find((r) => r.run).run.code.dirty }) : '?'}. ${rows.length} properties.\nNo approved tolerances exist: differences are shown, nothing is called a pass. "Not scored" = the reference does not print the value. Values the run did not produce are counted as missing, never as zero.\n`;
-fs.writeFileSync(path.join(PRIV, 'regional', `score-${label}.md`), `# Regional benchmark (PRIVATE: addresses)\n\n${head}\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n\n## Property by property\n\n${propTable(true)}\n`);
-fs.writeFileSync(path.join(REPO, 'bench', 'regional', `RESULTS-${label}.md`), `# Regional benchmark: aggregate results\n\n${head}\nAggregates only: the property-by-property table, addresses and reference documents stay in the private folder (bench/private/regional/score-<label>.md).\n\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n`);
-console.log(groupTable('roofType')); console.log(); console.log(groupTable('obstruction'));
+fs.writeFileSync(path.join(PRIV, 'regional', `score-${label}.md`), `# Regional benchmark (PRIVATE: addresses)\n\n${head}\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n\n## By town\n\n${groupTable('town')}\n\n## Property by property\n\n${propTable(true)}\n`);
+fs.writeFileSync(path.join(REPO, 'bench', 'regional', `RESULTS-${label}.md`), `# Regional benchmark: aggregate results\n\n${head}\nAggregates only: the property-by-property table, addresses and reference documents stay in the private folder (bench/private/regional/score-<label>.md).\n\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n\n## By town\n\n${groupTable('town')}\n`);
+console.log(groupTable('roofType')); console.log(); console.log(groupTable('obstruction')); console.log(); console.log(groupTable('town'));

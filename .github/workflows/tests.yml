@@ -36,3 +36,15 @@ jobs:
       - name: Report acceptance example and status rules
         run: node reporttest.mjs
         working-directory: bench
+      - name: Independent PDF reconciliation (consistent, altered, stale, dropped line)
+        run: node reconciletest.mjs
+        working-directory: bench
+      - name: Mixed-pitch, multi-level takeoff (hand-derived expectations)
+        run: node takeofftest.mjs
+        working-directory: bench
+      - name: Roof summary totals (two-story, two-layer and average pitch net of cut-outs)
+        run: node summarytest.mjs
+        working-directory: bench
+      - name: Vision-review fusion (corner moved back on evidence, decoy refused, canopy corner never moved, missed shed opened)
+        run: node visiontest.mjs
+        working-directory: bench

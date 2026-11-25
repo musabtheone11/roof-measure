@@ -199,9 +199,12 @@ function summarize(fs, cs, es) {
   let predominant = null, predArea = -1;
   for (const p of pitches) if (pitchGroups[p] > predArea) { predArea = pitchGroups[p]; predominant = p; }
   const flat = pitchGroups[0] || 0;
-  const twoStory = fs.filter((x) => x.f.twoStory).reduce((s, x) => s + x.m.sloped, 0);
-  const twoLayer = fs.filter((x) => x.f.twoLayer).reduce((s, x) => s + x.m.sloped, 0);
-  const wp = sloped > 0 ? fs.reduce((s, x) => s + x.m.sloped * x.f.pitch, 0) / sum(fs, 'sloped') : state.defaultPitch;
+  // two-story / two-layer areas are net of the cut-outs sitting on those facets, like the roof total
+  const netFlag = (k) => fs.filter((x) => x.f[k]).reduce((s, x) => s + x.m.sloped, 0) - cs.reduce((s, c, i) => s + (hosts[i] && hosts[i].f[k] ? c.m.sloped : 0), 0);
+  const twoStory = netFlag('twoStory'), twoLayer = netFlag('twoLayer');
+  // average pitch weighted by the net area of each pitch group (cut-outs already taken off their host's group)
+  const groupArea = pitches.reduce((s, p) => s + Math.max(pitchGroups[p], 0), 0);
+  const wp = groupArea > 0 ? pitches.reduce((s, p) => s + p * Math.max(pitchGroups[p], 0), 0) / groupArea : state.defaultPitch;
   return { facets: fs, cutouts: cs, edges: es, plan, sloped, pitched: sloped - flat, flat, twoStory, twoLayer, byType, pitchGroups, pitches, predominant, predArea: Math.max(predArea, 0), facetCount: fs.length, weightedPitch: wp, areaByStatus, lineByStatus, unresolvedItems, complete: unresolvedItems === 0, confirmedSloped: areaByStatus.measured, inferredSloped: areaByStatus.inferred, obstructionFt: byType.obstruction.true, roofLineFt, squares: sloped / 100, squaresWaste: sloped / 100 * (1 + state.waste / 100) };
 }
 // Roofr-style recommended waste. Fitted to Roofr reports: cut edges (hips + valleys + rakes + step flashing) per square.

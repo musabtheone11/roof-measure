@@ -37,4 +37,8 @@ ok('subtotals reconcile', rec.ok, rec.checks.filter((c) => !c.ok));
 ok('a wrong total is caught', !RM.reconcile([{ sloped: 600, plan: 500 }], [], { sloped: 601, plan: 500, pitchGroups: { 6: 600 }, byType: {} }).ok);
 // ellipsoid: one degree of latitude at 30.2 N is about 110,857 m (the sphere formula gives 111,319 m)
 ok('WGS84 metres per degree', Math.abs(k.ky - 110857) < 25 && Math.abs(k.kx - 111319.5 * Math.cos(lat0 * Math.PI / 180) * 1.00085) < 25, k);
+// a sloped line with no pitch anywhere is an error, not a NaN (external implementation review of lineMeasure)
+{ let threw = false; try { RM.lineMeasure({ type: 'rake', path: [P(0, 0), P(30, 0)] }, null, undefined); } catch (e) { threw = /needs a pitch/.test(e.message); }
+  ok('a rake with no adjoining pitch and no default pitch throws instead of returning NaN', threw);
+  ok('a level line needs no pitch at all', Math.abs(RM.lineMeasure({ type: 'eave', path: [P(0, 0), P(30, 0)] }, null, undefined).trueFt - 30) < 0.01); }
 process.exit(fail ? 1 : 0);

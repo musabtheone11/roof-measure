@@ -387,7 +387,7 @@ async function traceBuildingV1(resp, tif, mask, comp, geo, opts) {
     }
     if (poly.length < 3) continue;
     const pl = planes[r.label];
-    facets.push({ path: poly.map((p) => tif.toLL(p[0], p[1])), pitch: pl ? pl.pitch : (planes.length ? 0 : state.defaultPitch), azimuth: pl ? pl.az : null, areaM2: r.n * geo.pxM2 });
+    facets.push({ path: poly.map((p) => tif.toLL(p[0], p[1])), pitch: pl ? pl.pitch : (planes.length ? 0 : state.defaultPitch), azimuth: pl ? pl.az : null, areaM2: r.n * geo.pxM2, pitchAssumed: !pl && !planes.length });   // no plane for this region: the pitch is an assumption, flagged below
   }
   return { facets, edges, unassignedPct: total ? Math.round(unassigned / total * 1000) / 10 : 0, planes: planes.length, datum: Math.round(datum * 100) / 100 };
 }
@@ -707,7 +707,7 @@ async function autoTraceRoof(opts = {}) {
     if (res.obstruction && res.obstruction.hiddenZones) for (const z of res.obstruction.hiddenZones) hiddenZones.push({ ...z, id: 'H' + (hiddenZones.length + 1), structure: idx + 1, facetName: z.facet != null ? 'F' + (base + z.facet + 1) : null });
     for (const f of res.facets) {
       // engine evidence kept on the facet: exact fitted slope, fit quality, Measured / Inferred / Unresolved, raw outline
-      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, verify: rmOpenCover(f) } : { azimuth: f.azimuth, structure: idx + 1 });
+      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, verify: rmOpenCover(f) } : { azimuth: f.azimuth, structure: idx + 1, verify: f.pitchAssumed ? { source: 'assumed', date: '', note: 'no roof plane could be fitted here: the pitch is the job default, not a measurement' } : null });
       if (idx === 0) mainSqft += facetMetrics(added).sloped;
     }
     for (const e of res.edges) addEdge(e.type, e.path, null, '', e.factor != null ? { factor: e.factor, basis: e.basis, status: e.status, autoType: e.type, obscuredFt: e.obscuredFt, structure: idx + 1, evidence: e.evidence, missing: e.missing, paired: e.paired, confirmedBy: e.confirmedBy ? { source: e.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, altFt: e.altFt } : { structure: idx + 1 });

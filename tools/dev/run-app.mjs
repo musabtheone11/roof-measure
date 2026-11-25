@@ -1,6 +1,7 @@
 // Headless address-to-PDF run through the real UI (same buttons a person clicks).
 //   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090] [--alt] [--estimate [--xm "deck=membrane,lossType="] [--est-name estimate]]
 //   Key=<google key> node tools/dev/run-app.mjs --job <saved job .json> --out .devcache/runs/name      (a saved / exported job, loaded the way Import JSON loads it)
+//   --strict fails the run on a layout self-check finding (acceptance runs); without it the finding is a WARN line (benchmark runs)
 //   --alt also runs the reviewer's second look (3D views, dated imagery, configuration check, carry) and writes report-alt.pdf
 // Every run exercises the report flow a person uses: Preview report, Print report, Download report. The three must carry
 // the same PDF bytes (sha256); the run fails otherwise and report-check.json records the hashes and sheet count.
@@ -48,8 +49,10 @@ try {
     const t = computeTotals(); const s = solarSummary();
     const byType = {}; for (const k of Object.keys(t.byType)) byType[k] = { planFt: t.byType[k].plan, trueFt: t.byType[k].true, count: t.byType[k].count };
     const audit = typeof window.rmAudit === 'function' ? window.rmAudit() : null;
+    const st = typeof reviewReportStatus === 'function' ? reviewReportStatus() : null;
     return { roof: serialize(), totals: { slopedSqft: t.sloped, planSqft: t.plan, facetCount: t.facetCount, predominant: t.predominant, pitchGroups: t.pitchGroups, byType, structures: t.structures.map((g) => ({ index: g.index, sloped: g.sloped, facets: g.facetCount, predominant: g.predominant })), recWaste: t.recWaste,
-      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded, structure: x.f.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.f) : null })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch , structure: x.e.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.e) : null})) },
+      status: st ? st.status : null, statusReasons: st ? st.reasons.map((r) => r.code) : null, areaByStatus: t.areaByStatus || null,
+      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded, structure: x.f.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.f) : null, inferredSqft: x.f.inferredSqft || 0, edited: !!x.f.edited, basis: x.m.basis, slope12: x.m.slope12 })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch , structure: x.e.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.e) : null})) },
       solar: s ? { total: s.total, ground: s.ground, segs: s.segs.length, predominant: s.predominant, imageryDate: s.imageryDate, quality: s.quality } : null, audit };
   });
     fs.writeFileSync(path.join(out, `roof${sfx}.json`), JSON.stringify(data.roof));
@@ -75,6 +78,12 @@ try {
   const printRec = await page.evaluate(() => ({ ...window.__rmLastReport }));
   await pdf('report.pdf');
   const dlRec = await page.evaluate(() => ({ ...window.__rmLastReport }));
+  // independent reconciliation: the PDF's printed numbers read back and compared with the app's own model (needs pdftotext)
+  try { const { reconcileRun } = await import('./pdf-reconcile.mjs'); const rc = reconcileRun(out); const bad = rc.checks.filter((c) => !c.ok);
+    console.log(`     reconcile: ${rc.checks.length - bad.length} of ${rc.checks.length} printed values agree with the model` + (bad.length ? ' | ' + bad.map((c) => `${c.name}: printed ${JSON.stringify(c.printed)} vs ${JSON.stringify(c.expected)}`).join(' | ') : ''));
+    fs.writeFileSync(path.join(out, 'reconcile.json'), JSON.stringify(rc, null, 1));
+    if (bad.length) { if (process.argv.includes('--strict')) throw new Error('PDF does not reconcile with the model'); console.log('WARN report: reconciliation mismatch'); } }
+  catch (e) { if (/pdftotext/.test(String(e.message))) console.log('     reconcile: skipped (' + e.message.split('\n')[0] + ')'); else throw e; }
   const same = previewRec.hash && previewRec.hash === printRec.hash && printRec.hash === dlRec.hash;
   console.log(`     report: ${dlRec.pages} sheets; preview / print / download ${same ? 'identical' : 'DIFFER'} (sha256 ${String(dlRec.hash).slice(0, 12)}); printed via ${printRec.printed}`);
   fs.writeFileSync(path.join(out, 'report-check.json'), JSON.stringify({ preview: previewRec, print: printRec, download: dlRec, identical: same }, null, 1));
@@ -83,8 +92,10 @@ try {
   const L = dlRec.layout; if (L && L.scaleCheck) {
     console.log(`     layout: ${L.scale} (${L.ptPerFt.toFixed(3)} pt/ft${L.rotationDeg ? ', turned ' + Math.round(Math.abs(L.rotationDeg)) + ' deg' : ''}); keys ${L.keys.total}: ${L.keys.overview} on the plan, ${L.keys.detail} on detail sheets, ${L.keys.unplaced.length} named unplaced; ${L.dims} dimension lines; scale bar ${L.bar.inches} in; scale check ${L.scaleCheck.ok ? 'exact' : 'FAILED'} (${L.scaleCheck.segmentFt.toFixed(2)} ft -> ${L.scaleCheck.segmentPt.toFixed(2)} pt, expected ${L.scaleCheck.expectedPt.toFixed(2)})`);
     const ov = L.textOverlaps || { count: 0, first: [] }; console.log(`     text overlaps: ${ov.count}` + (ov.count ? ' ' + JSON.stringify(ov.first) : ''));
-    if (!L.scaleCheck.ok || L.keys.unaccounted.length || ov.count) throw new Error('layout self-check failed: ' + JSON.stringify({ scale: L.scaleCheck, unaccounted: L.keys.unaccounted, textOverlaps: ov.first }));
+    if (!L.scaleCheck.ok || L.keys.unaccounted.length || ov.count) { const why = JSON.stringify({ scale: L.scaleCheck.ok ? 'ok' : L.scaleCheck, unaccounted: L.keys.unaccounted, textOverlaps: ov.first }); if (process.argv.includes('--strict')) throw new Error('layout self-check failed: ' + why); console.log('WARN report: layout self-check: ' + why); }
   }
+  // the report preview stays open after the download (as it does for a person); close it before the next panel is used
+  await page.evaluate(() => { const c = document.getElementById('rpClose'); if (c) c.click(); const p = document.getElementById('reportPreview'); if (p) p.hidden = true; });
   // --alt: the reviewer's second look, through the same controls a person uses (Review roof from other angles)
   if (process.argv.includes('--alt')) {
     const panel = page.locator('#avPanel'); const busy = () => page.waitForFunction(() => !window.rmAltView.state.busy, null, { timeout: 240000 });

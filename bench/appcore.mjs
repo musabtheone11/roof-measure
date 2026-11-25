@@ -93,6 +93,7 @@ export async function runApp(prop, engineDir = ROOT, opt = {}) {
   const entry = { layers: prop.layers, maskT: prop.maskT, dsmT: prop.dsmT, rgbT: prop.rgbT }; ctx.__layerCache = {}; for (let d = -2; d <= 2; d++) ctx.__layerCache[prop.main.name + '|' + (prop.radius + d)] = entry;
   if (opt.hook) opt.hook(ctx);          // debugging: wrap engine globals before the trace runs
   const t0 = Date.now();
-  const info = await vm.runInContext('autoTraceRoof({ quiet: true' + (opt.plot ? ', plot: true' : '') + ' })', ctx);
+  const extra = opt.traceOpts ? ', ' + JSON.stringify(opt.traceOpts).slice(1, -1) : '';   // e.g. { altProbe: { quality: 'HIGH' } } to run the second-dataset check
+  const info = await vm.runInContext('autoTraceRoof({ quiet: true' + (opt.plot ? ', plot: true' : '') + extra + ' })', ctx);
   return { info, facets, edges, ms: Date.now() - t0, extra: ctx.state.traceExtra || ctx.__traceExtra || null, ctx };
 }
