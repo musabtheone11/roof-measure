@@ -1,8 +1,32 @@
 # Enhancement supervision
 
-Reviewed on 2026-11-25 against commit `595bdb0`. This file records an active
+Initial audit on 2026-11-25 used commit `595bdb0`; later acceptance entries cover
+`7cbd3d0` and the parent-frozen subsequent working tree. This file records an active
 implementation review; it does not promise unattended monitoring after agents stop.
 The supervisor owns this record and reviews fixes independently of their authors.
+
+## Ownership and task ledger
+
+| Canonical agent | Owned work | Acceptance evidence / remaining work |
+|---|---|---|
+| `/root/runtime_ui` | `ai-trace.js`, `ai-trace.css`, image/PDF/cancellation browser tests | Source identity, edits, manual outline, remove/undo, real PDF, import, unknown billing and basic nonce tests pass; held-DELETE cancellation, compact 100-edit reopening and all target/source scope-reset checks independently pass. Final Docker replay proof is owned by deployment. |
+| `/root/runtime_geometry` | `server/geometry.mjs`, geometry/manual-pen tests; coordinated `app.js` pen handlers | Independent bounds/topology/overlap/retrace, supported line paths, projection extent/polar and pen regressions pass. No field-accuracy certification. |
+| `/root/runtime_orchestrator` | `server/agents.mjs`, contracts and local HTTP provider tests | Blind input, bounded repair, response limits, budget/usage accounting and one-call target-selection gate pass. No additional paid inference needed for those controls. |
+| `/root/artifacts` | `ai-report.js`, report contract and real-PDF tests | Independent current snapshot, calibrated/unknown/perspective/missing-outline cases, visible vector edges, aspect ratio and Letter/layout checks pass. Geographic quantities are explicitly withheld in this source-image PDF. |
+| `/root/engine_diagnosis` | Docker/private-preview modules and tests, deployment configuration/evidence | Protected local container and one bounded live synthetic call set exercised; public hosted route remains blocked by the external access grant. No public deployment claimed. |
+| `/root/supervisor` | This ledger and independent acceptance review | Reproduces defects and challenges owners' fixes without changing their modules. Current open items are stated below; no unattended monitoring promise. |
+
+`/root` owns integration: `server/http.mjs`, `server/main.mjs`, script/module includes,
+dependency manifests, CI, branch/PR delivery and final cross-module checks. Tests
+that span owners are coordinated before edits. A completed agent turn does not
+mean its later queued findings have been fixed.
+
+Current status: all current server/UI/report correctness findings have passed their
+stated independent acceptance checks. The final zero-inference Docker human-repair
+replay remains under review, and the public hosted route is still blocked by the
+external access grant. Field accuracy remains unvalidated. Historical descriptions
+below preserve the defects as found; later acceptance entries supersede earlier
+pending statuses.
 
 ## Acceptance rules
 
@@ -229,3 +253,107 @@ recovery requirement, not a reason to certify incomplete geometry or issue repea
 paid calls. Entering manual drawing must invalidate old measurements/PDF export;
 Done must require a valid current-image polygon; Cancel must not restore geometry
 onto a different source. Corrections and original AI output must remain distinct.
+
+## Request cancellation protocol — server acceptance
+
+The server now accepts an owner-scoped request ID before a job ID exists. A
+cancellation record can precede the POST or arrive while its body is uploading;
+after reading, admission checks the cancellation atomically. Identical retries
+recover the same job, while a changed image/revision/body with that ID is rejected
+with 409. Another owner's identical opaque ID cannot cancel or retrieve the job.
+
+Independent checks passed the root's request-ID regressions, abrupt mid-body
+connection failure with capacity recovery and no unhandled rejection, and a
+post-read capacity-loss interleaving: two other owners occupied the job slots,
+the delayed request returned 429 and its recovery record correctly became failed.
+The supervisor also created 5,000 cancellation records, confirmed the next was
+refused, advanced only the test clock by 15 minutes, and confirmed old records
+expired and capacity returned. That load test made zero provider calls and is
+not a roof-accuracy test.
+
+The server-side race fix is accepted. Browser cancellation before a delayed/lost
+202 response, initial-session single-flight, and honest failed-cancellation status
+remain separate UI acceptance checks. Server shutdown now aborts remaining work
+and clears its maps, verified by the local server test.
+
+The live synthetic Docker result also illustrates why adjudication is advisory:
+its first outline had no selected target, and the adjudicator incorrectly assumed
+an implicit boundary from facets. The deterministic gate retained the missing-
+boundary finding and withheld physical quantities despite the model's preference.
+Five schema-valid roles therefore did not mean five correct geometric decisions.
+
+## Manual recovery accepted; one cancellation interleaving still open
+
+The independent current-runtime browser run passed the new human outline recovery:
+an AI model with no target boundary was repaired by explicit corner clicks. With
+an analytic independently supplied scale, the rectangle recalculated to 2,000 ft²
+and exported through the actual PDF builder. Removal and undo remain user actions;
+no inferred union was silently promoted. These are synthetic workflow checks.
+
+The tracked nonce UI suite also passed initial-config single-flight, cancellation
+before admission, a held 202 response, and failed-cancellation retry. A separate
+supervisor challenge exposed a further case outside that suite: cancellation first
+returned 503, Analyze retried while the cleanup DELETE was held, the user clicked
+Cancel and saw Cancelled, then releasing the old DELETE caused a second POST and
+Processing. The UI needs a cancellation-in-flight guard and user-intent generation
+across cleanup waits. Server admission prevents concurrent work for that owner,
+but that is not sufficient to promise the user's cancelled intent will not restart.
+This case remains open until a deterministic held-DELETE regression passes.
+
+## Further bounded-work checks
+
+The latest browser fixture confirms billing is displayed as a known subtotal plus
+an explicit count of unknown-charge requests, instead of calling failed requests
+free. The target-selection gate also passes its HTTP fixture: a traceable image
+with neither an explicit user target nor a quality-agent target stops after one
+quality call and requests a roof point. A supplied point does not bypass an
+untraceable-image refusal. Neither check needs new paid inference.
+
+A saved-review size issue remains queued: the actual two-facet/seven-edge model
+contains 91,408 serialized bytes because raw AI output and an original proposal
+are embedded within it. Each correction currently clones that whole model. About
+90 such edits alone would exceed the 8 MiB reopen limit, before the export's other
+audit records. Keep original raw output once, retain canonical geometry/provenance
+in edit snapshots, and prove a substantial edit/export/reopen cycle without
+silently discarding history. This is a usability/data-retention issue, not an
+accuracy pass or a reason to relax the import size bound.
+
+The supervisor independently reran the latest eight HTTP tests and two main-module
+tests. Malformed request URLs now return 400 without stopping the runtime. The
+canonical editable model no longer embeds raw provider responses; raw output is
+still retained separately. The 100-edit export/reopen acceptance remains assigned
+to the UI owner before closing the broader history-size finding.
+
+## Held-DELETE and compact-history acceptance
+
+The supervisor repeated its original adversarial cancellation sequence after the
+fix. For both a delayed 200 and delayed 503 cleanup response, fresh Cancel prevented
+a second POST. Cancellation was single-flight; after 503 the original nonce was
+retained and the later retry confirmed cancellation. This closes the previously
+reproduced restart-after-Cancel defect.
+
+The independent latest UI run also passed 100 facets, 100 edits and 500 KB of
+distinct legacy raw evidence through export/reopen. The export was 980,519 bytes,
+retained the raw records once and reopened with the complete correction history.
+Editable models and changed-shape/metadata deltas no longer duplicate raw outputs.
+No paid API call or browser error occurred in these checks.
+
+One final mode-switch check is pending: choosing a new target while manually tracing
+must end the draft before the canvas consumes its next click. Source, PDF page,
+rotation and applied-target changes already clear undo/committed geometry; the
+mode switch must make the target branch reachable as well.
+
+## Final scope-reset acceptance
+
+The supervisor independently tested all four scope changes after first creating
+undo history and an active manual draft: selecting a different target, replacing
+the image, rotating the source, and replacing the PDF page. Each ended the draft,
+cleared the active model/undo state, and refused to resurrect old geometry when
+Undo was invoked directly. The corrected target-mode switch recorded the clicked
+point instead of appending it to the old outline. This closes the last current UI
+scope finding without changing any owner module during the frozen Docker replay.
+
+The current batch's correctness fixes are accepted. This does not establish
+real-roof accuracy or a public deployed preview. Preserve the documented mixed
+benchmark results, zero strictly qualified regional comparisons, and the actual
+model disagreement/refusal examples in the final handoff.

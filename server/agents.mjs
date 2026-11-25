@@ -93,7 +93,8 @@ export async function runRoofAgents(input, options={}) {
  });}
  async function optional(role,extra){try{const result=await run(role,extra);results[role]=result;return result;}catch(e){current();const failure={role,code:e.code||'AGENT_FAILED',message:e instanceof AgentError||e.name==='ContractError'?e.message:'The agent could not complete its task'};failures.push(failure);emit(role,'failed',{code:failure.code});return null;}}
  const quality=await optional('quality');
- if(quality?.traceable===true){await Promise.all([optional('outline'),optional('independent'),optional('structure')]);}
+ if(quality?.traceable===true&&!input.imageMetadata.targetPixel&&!quality.target){failures.push({role:'quality',code:'TARGET_SELECTION_REQUIRED',message:'Choose the intended roof point on this image before tracing'});emit('quality','target-selection-required');}
+ else if(quality?.traceable===true){await Promise.all([optional('outline'),optional('independent'),optional('structure')]);}
  else failures.push({role:'quality',code:'IMAGE_NOT_TRACEABLE',message:'The image quality agent could not support reliable tracing'});
  current();
  const first=proposalFromAgents(results.outline,results.structure),independent=proposalFromAgents(results.independent,null);

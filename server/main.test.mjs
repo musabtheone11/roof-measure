@@ -6,3 +6,8 @@ test('quality perspective evidence blocks physical quantities across edits',()=>
  const edited=structuredClone(first.model);edited.facets[0].pitch={rise:6,run:12,source:'Synthetic source',uncertainty:0,status:'user-provided'};
  const next=analyzeRoofModel(edited,input.imageMetadata,{revision:'r2'});assert.equal(next.measurements.projectedAreaM2,null);assert.equal(next.measurements.slopedAreaM2,null);assert.equal(next.model.measurementRestrictions.perspective,true);
 });
+test('canonical editable geometry does not duplicate raw provider output',()=>{
+ const ring=[[0,0],[100,0],[100,100],[0,100]],raw={quality:{traceable:true,issues:[]},outline:{buildings:[{id:'B1',target:true,vertices:ring}]},structure:{planes:[{id:'F1',vertices:ring,status:'inferred'}],edges:[]},originalOutputHistory:{outline:[{content:'x'.repeat(200000)}]}};
+ const result=canonicalResult(raw,{revision:'lean',imageMetadata:{width:100,height:100,view:'unknown'}});
+ assert.equal(result.originalAI,raw);assert.equal(Object.hasOwn(result.model,'originalAI'),false);assert.equal(JSON.stringify(result.model).includes('x'.repeat(1000)),false);assert(JSON.stringify(result.model).length<5000);
+});

@@ -108,3 +108,35 @@ configuration. No public URL or production release is claimed.
 
 Remaining supervised work includes cancellation before the creation response and
 manual recovery of missing AI outlines; see the live supervision ledger.
+
+## Human recovery and cancellation acceptance
+
+The final key-free authenticated container replay used the saved actual AI output,
+not a new provider response. Human canvas clicks supplied the four missing exterior
+corners; sourced analytic 6/12 pitches were entered for the two actual candidate
+facets. Deterministic validation passed and the UI/current JSON/three-page PDF
+agreed on 960.00 ft² projected and 1,073.31 ft² sloped area. The PDF was 83,633 bytes.
+All CDN scripts were blocked and browser errors were zero. Authenticated local
+two-page PDF rendering and page replacement also passed with new fingerprint and
+cleared model, consent and calibration.
+
+Tested container: `sha256:b0a6c1801a7be9a50ea45c6a24bf8c41e348baddb0f9b7626ebe88f6736c8b3a`.
+Source manifest: `572f99fa0a36ccbcb8fb35b7b98394b62397ea68e54f4af1db7d3c7ba0ee5ed6`.
+Proof remains under `.devcache/deployment/`. These analytic measurements are not
+a new field-accuracy benchmark. Total paid inference remains the single five-call
+Docker trial ($0.007834); both repair replays were key-free.
+
+Request-nonce tests cover cancellation before POST, during a chunked body, after a
+lost creation response, cross-owner denial, input-bound idempotency, failed creation
+recovery and shutdown abortion. The browser challenge additionally holds a previous
+DELETE response while the user presses Cancel: no queued analysis starts afterward,
+and unconfirmed cancellation retains the same nonce for retry.
+
+A 100-facet/100-edit fixture with 500 KB legacy AI data exported 980,519 bytes and
+reopened 101 correction records. Raw evidence is retained once; correction records
+contain changed-shape/metadata differences. Manual trace, removal, undo, target
+switching, rotation and page/source replacement preserve source/revision safety.
+
+When quality reports no target and the user has supplied no target point, the runtime
+now stops after that quality call and asks for an intended-roof click. It does not
+guess a center or infer an exterior boundary from the candidate facets.

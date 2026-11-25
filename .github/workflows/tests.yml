@@ -94,6 +94,7 @@ jobs:
             sleep 1
           done
           node tools/dev/ai-ui-test.mjs
+          node tools/dev/ai-cancel-ui-test.mjs
           node tools/dev/pdf-ui-test.mjs
           node tools/dev/ai-report-test.mjs
       - uses: actions/upload-artifact@v4

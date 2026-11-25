@@ -25,3 +25,13 @@ supported pitch. The editor retains original agent output and a correction log.
 Official provider docs: https://apinex.bond/developers/models/chat.md,
 https://apinex.bond/developers/errors.md and https://apinex.bond/pricing.md.
 JSON mode compatibility is tested empirically; local response schemas remain authoritative.
+
+Client-generated processing IDs support owner-bound cancellation before a job ID
+is returned. Identical retries recover the same job; changed image/revision inputs
+reject. Cancellation records expire after 15 minutes and remain bounded. Closing
+the runtime aborts remaining provider work. Calls already sent may still be billed.
+
+The review editor can trace a missing outline manually, remove false facets/edges,
+and undo corrections. It never substitutes an inferred facet union for an omitted
+exterior boundary. Compact correction records retain source metadata and raw AI
+evidence once, so large editing sessions remain reopenable.
