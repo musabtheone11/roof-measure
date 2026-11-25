@@ -219,7 +219,15 @@
         </div>
         <div class="row wrap" style="margin-top:6px;gap:14px">
           <label class="chk"><input type="checkbox" id="chkPdfMaterials"> Add material order sheet</label>
+          <label class="chk" title="The report is built around the scaled plan. A small 3D drawing is added on the takeoff sheet only when the measured elevations agree."><input type="checkbox" id="chkPdf3d" checked> 3D illustration when the elevations support it</label>
         </div>
+        <details id="model3d" style="margin-top:8px">
+          <summary>3D view of the traced roof (optional)</summary>
+          <div class="body">
+            <canvas id="model3dCanvas" width="460" height="260" style="width:100%;max-width:460px;border:1px solid #ccc;background:#fff"></canvas>
+            <div class="row wrap" style="gap:10px;align-items:center"><label>Turn <input id="model3dTurn" type="range" min="-180" max="180" step="5" value="-24"></label><span id="model3dNote" class="muted small"></span></div>
+          </div>
+        </details>
         <details class="help">
           <summary>Company details shown on the report</summary>
           <div class="grid2">

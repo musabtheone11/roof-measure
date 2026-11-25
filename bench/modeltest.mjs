@@ -41,4 +41,10 @@ ok('WGS84 metres per degree', Math.abs(k.ky - 110857) < 25 && Math.abs(k.kx - 11
 { let threw = false; try { RM.lineMeasure({ type: 'rake', path: [P(0, 0), P(30, 0)] }, null, undefined); } catch (e) { threw = /needs a pitch/.test(e.message); }
   ok('a rake with no adjoining pitch and no default pitch throws instead of returning NaN', threw);
   ok('a level line needs no pitch at all', Math.abs(RM.lineMeasure({ type: 'eave', path: [P(0, 0), P(30, 0)] }, null, undefined).trueFt - 30) < 0.01); }
+// planes meeting at a shared corner must agree on its height, except along a drawn height break (step, wall)
+{ const ref = { lat: 30, lng: -81, kx: 96000, ky: 110850 }; const Q = (e, n) => ({ lat: 30 + n / 110850, lng: -81 + e / 96000 });
+  const A = { name: 'A', plane: [0, 0.5, 3], path: [Q(0, 0), Q(10, 0), Q(10, 5), Q(0, 5)] }, B = { name: 'B', plane: [0, -0.5, 8], path: [Q(0, 5), Q(10, 5), Q(10, 10), Q(0, 10)] }, C = { ...B, name: 'C', plane: [0, -0.5, 9] };
+  ok('planes meeting at a ridge agree: no conflict', RM.planeConflicts([A, B], ref).length === 0);
+  const c = RM.planeConflicts([A, C], ref); ok('planes 1 m apart at a shared corner are a conflict, worst first', c.length === 2 && Math.abs(c[0].spreadM - 1) < 1e-6 && c[0].names.includes('A') && c[0].names.includes('C'), c);
+  ok('the same corners on a drawn step line are not a conflict', RM.planeConflicts([A, C], ref, 0.6, [[Q(-1, 5), Q(11, 5)]]).length === 0); }
 process.exit(fail ? 1 : 0);

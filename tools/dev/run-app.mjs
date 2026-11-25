@@ -91,8 +91,9 @@ try {
   // the report's own layout check: exact scale, every key accounted for (plan, detail sheet or named as unplaced)
   const L = dlRec.layout; if (L && L.scaleCheck) {
     console.log(`     layout: ${L.scale} (${L.ptPerFt.toFixed(3)} pt/ft${L.rotationDeg ? ', turned ' + Math.round(Math.abs(L.rotationDeg)) + ' deg' : ''}); keys ${L.keys.total}: ${L.keys.overview} on the plan, ${L.keys.detail} on detail sheets, ${L.keys.unplaced.length} named unplaced; ${L.dims} dimension lines; scale bar ${L.bar.inches} in; scale check ${L.scaleCheck.ok ? 'exact' : 'FAILED'} (${L.scaleCheck.segmentFt.toFixed(2)} ft -> ${L.scaleCheck.segmentPt.toFixed(2)} pt, expected ${L.scaleCheck.expectedPt.toFixed(2)})`);
+    if (L.callouts) console.log(`     callouts: ${L.callouts.onPlan} IDs on the plan, ${L.callouts.rows} schedule rows; on the plan but not in a table: ${JSON.stringify(L.callouts.notInSchedule)}; in a table but not on any sheet: ${JSON.stringify(L.callouts.notOnPlan)}; plan ${Math.round((L.planShare || 0) * 100)}% of the sheet below the summary; 3D ${L.axon ? (L.axon.ok ? 'drawn' : 'left out: ' + L.axon.why) : 'n/a'}`);
     const ov = L.textOverlaps || { count: 0, first: [] }; console.log(`     text overlaps: ${ov.count}` + (ov.count ? ' ' + JSON.stringify(ov.first) : ''));
-    if (!L.scaleCheck.ok || L.keys.unaccounted.length || ov.count) { const why = JSON.stringify({ scale: L.scaleCheck.ok ? 'ok' : L.scaleCheck, unaccounted: L.keys.unaccounted, textOverlaps: ov.first }); if (process.argv.includes('--strict')) throw new Error('layout self-check failed: ' + why); console.log('WARN report: layout self-check: ' + why); }
+    if (!L.scaleCheck.ok || L.keys.unaccounted.length || ov.count || (L.callouts && !L.callouts.ok)) { const why = JSON.stringify({ scale: L.scaleCheck.ok ? 'ok' : L.scaleCheck, unaccounted: L.keys.unaccounted, textOverlaps: ov.first }); if (process.argv.includes('--strict')) throw new Error('layout self-check failed: ' + why); console.log('WARN report: layout self-check: ' + why); }
   }
   // the report preview stays open after the download (as it does for a person); close it before the next panel is used
   await page.evaluate(() => { const c = document.getElementById('rpClose'); if (c) c.click(); const p = document.getElementById('reportPreview'); if (p) p.hidden = true; });
@@ -156,7 +157,7 @@ try {
     console.log(`     estimate: ${est.items.length} lines, line items ${est.lineItemTotal.toFixed(2)}, tax ${est.tax.toFixed(2)}, total ${est.rcv.toFixed(2)}`);
   }
   const t = data.totals; console.log(`${address || path.basename(arg('job', ''))}: ${Math.round(t.slopedSqft)} sqft, ${t.facetCount} facets, predominant ${t.predominant}/12, ${t.structures.length} structure(s)`);
-} catch (e) { code = 1; try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
+} catch (e) { code = 1; console.log('ERROR ' + String(e && e.stack || e).split('\n').slice(0, 4).join(' | ')); try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
 fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
 if (dialogs.length) console.log('export gate asked: ' + dialogs.join(' | ').replace(/\n+/g, ' '));
 await browser.close(); srv.close(); process.exit(code);

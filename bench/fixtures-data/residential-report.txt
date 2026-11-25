@@ -1,150 +1,159 @@
-                               ROOF MEASURE
-                                                                                                                                         ILLUSTRATIVE
-                               Residential study
-                               Main house and detached garage                                                                     Imagery / Model only
+                                Roof Measurement Report                                                                                                                                 ILLUSTRATIVE
+                                Residential study, Main house and detached garage
+                                Imagery Model only · Residential study · Report Nov 25, 2026
 
 
+  NET SLOPED AREA                   NET SQUARES              PREDOMINANT PITCH         EAVES                          RAKES                             RIDGES              HIPS           VALLEYS
 
-ROOF OVERVIEW & TAKEOFF
+  1,714.73 ft²                      17.15 SQ                 6 / 12                    184' 0"                        33' 9"                            36' 0"              84' 0"         0' 0"
 
+Illustrative model: all coordinates and quantities are examples, not measurements.
 
-Residential hip roof
-   AXONOMETRIC / ILLUSTRATIVE MODEL                                                                          ROOFLINE KEY
 
 
 
-                                                                                         F6
+                                                                                                                                                                 E5 20'-0"
 
-                                     F3                                             F5
-                  F4
 
 
 
-                              F1                      F2
+                                                                                                                                 K1 8'-5"
 
 
 
 
-                                                                                                              Main house + detached garage
-   6 roof planes with modelled elevations across 2 buildings.                                                 Same model as sheet 2
-   Same model as sheet 2. All coordinates are illustrative.
+                                                                                                                                                                                            K2 8'-5"
+                                                                                                                                                                    F6
 
 
+                                                                                                                                                                 R2 20'-0"
 
-  NET SLOPED AREA                                          NET SQUARES                              MAIN ROOF PITCH
 
-  1,714.73 ft²                                             17.15 SQ                                 6 / 12
-  All buildings                                            100 ft² per square                       Detached garage at 4 / 12
 
 
+                                                                                                                                 K3 8'-5"
 
-Building takeoff                                                                                               Roof-surface quantities / before waste
 
- Building                                   Net ft²              SQ             Pitch         Eave ft         Rake ft           Hip ft         Ridge ft
 
- Main house                               1,377.42            13.77         6 / 12            144.00            0.00            84.00              16.00
 
- Detached garage                           337.31              3.37         4 / 12             40.00           33.73             0.00              20.00
+                                                                                                                                                                                            K4 8'-5"
+                                                                                                                                                                    F5
 
- Total                                    1,714.73            17.15                           184.00           33.73            84.00              36.00
 
-Each building has 0 ft of valley. Totals use unrounded geometry.
 
 
+                                                                                                                                                                 E6 20'-0"
 
-Waste & order quantities
-ILLUSTRATIVE ALLOWANCE                         AREA WITH WASTE                                          EXAMPLE PURCHASE
 
-10% / 171.47 ft²                               1,886.20 ft² / 18.86 SQ                                  57 bundles / 19 SQ
 
 
-MODEL BASIS
-All coordinates, elevation profiles and quantities are illustrative. The order assumes three equal-coverage bundles per square and rounds up
-once across both buildings.
+                                                                      E1 44'-0"
 
 
 
 
-DIVERSITY CONTRACTING / ROOF MEASURE                                                                                    Overview & takeoff     /    1 of 2
-                               ROOF MEASURE
-                                                                                                                                                   ILLUSTRATIVE
-                               Residential study
-                               Main house and detached garage                                                                                   Imagery / Model only
+                                                                                                                   "
+                                                                            F3                                  '-0
+                            H
+                                1                                                                          21
+                                    21                                                                 2
+                                        '-0                                                           H
+                                             "
+              E2 28'-0"
 
 
 
-RESIDENTIAL STUDY / ILLUSTRATIVE GEOMETRY
 
+                                                                                                                                            E3 28'-0"
 
-Scaled measurement plan
-   ROOF PLAN
 
 
-                                                                                                                    N
 
-                                                              K1              F6
-                                                                                                                              0    5     10 ft
+                                                                      R1 16'-0"
+                           F4                                                                                               F2
 
 
 
 
-                                                                                                   16'-0"
-                                                                              R2
-                                                                                                                DRAWING SCALE
-                                                                              F5
-                                                                                      E3                        1/16" = 1'-0"
-                                                                                                                Print at 100% on US Letter; the scale bar
-                                                                             20'-0"                             measures 0.63 in.
-                                44'-0"                                                                          LINE & FACET KEY
+                                                 "                                                         H
+                                                                                                            4
+                                          '-0                                                                   21
+                                        21                                                                            '-0
+                                    3                                                                                    "
+                             H
+                                                                            F1
 
-                                                                                                                        Eave
-                                                                                                                        Hip
-                                  F3                          E2
-                                                                                                                        Ridge
-                                                                                                                        Rake
-                                                                    28'-0"
 
 
 
+                                                                      E4 44'-0"
 
-             F4                   R1                     F2                                                       F1    Sloped plane
 
-                                                                                                                Repeated equal edges share one key. Counts
-                                                    H1                                                          appear below.
-                                  F1
 
 
-                                  E1
+                                                                                                                                                                                                       N
+           Eave              Rake                    Ridge            Hip                                                                                 1" = 10'-0"
+                                                                                                                                                                        0          5    10 ft
 
+Scale 1" = 10'-0" at 100% on US Letter (bar 1 in). North up. Labels give true (sloped) lengths in feet and inches; the drawing is a horizontal projection.
 
 
 
-Edge lengths                                                                               Facet areas & pitches
- Key        Edge                   Qty         Each ft             Total ft                Facet            Building                   Pitch                   Net ft²
+DIVERSITY CONTRACTING / ROOF MEASURE                                                                                                                                                   Roof plan · 1 of 2
+                           Roof Measurement Report                                                                                                                   ILLUSTRATIVE
+                           Residential study, Main house and detached garage
+                           Imagery Model only · Residential study · Report Nov 25, 2026
 
- E1         House eave                 2         44.00              88.00                  F1               House                      6 / 12               469.57
 
- E2         House eave                 2         28.00              56.00                  F2               House                      6 / 12               219.13
+Buildings                                                                                                                                  Net roof-surface quantities, before waste
 
- H1         House hip                  4         21.00              84.00                  F3               House                      6 / 12               469.57
+ Building                                                  Net ft²                 SQ            Pitch             Eave ft           Rake ft                Hip ft             Ridge ft
 
- R1         House ridge                1         16.00              16.00                  F4               House                      6 / 12               219.13
+ 1 Main house                                            1,377.42             13.77              6 / 12            144.00                0.00               84.00                    16.00
+ 2 Detached garage                                         337.31                 3.37           4 / 12              40.00            33.73                  0.00                    20.00
+ Total                                                   1,714.73             17.15                                184.00             33.73                 84.00                    36.00
 
- E3         Garage eave                2         20.00              40.00                  F5               Garage                     4 / 12               168.65
+NET, BEFORE WASTE                                              ORDERING, 10% WASTE                                           3D ILLUSTRATION
 
- K1         Garage rake                4          8.43              33.73                  F6               Garage                     4 / 12               168.65
+ Quantity                                          Value            Item                                      Quantity
 
- R2         Garage ridge               1         20.00              20.00
+ Net sloped area                        1,714.73 ft²                Area with waste                        1,886.20 ft²             F4             F3                        F5
+ Plan (horizontal) area                 1,552.00 ft²                Squares with waste                       18.86 SQ                         F1            F2
+ Squares                                     17.15 SQ               Bundles (3 per SQ)                                57
+ Facets                                               6             Starter / drip edge                            240 ft
+                                                                    Hip & ridge cap                                132 ft
+                                                                    Valley lining                                    0 ft     Same planes as the plan; heights from the height model. Not
+                                                                                                                              to scale.
 
 
 
+Edge lengths by type                                                                                                                  Keys match the plan · true (sloped) length
 
-GEOMETRY CHECK
-Plan dimensions are horizontal. Rakes and hips use their true sloped lengths. Facet areas include slope. Each schedule rounds for display after the
-model calculates its totals.
+ Key     Type                 Length          ft     Bldg        Key       Type                  Length       ft     Bldg    Key     Type                     Length            ft     Bldg
+ E1      Eave                  44' 0"   44.00        1           K1        Rake                    8' 5"    8.43     2       H1      Hip                         21' 0"   21.00        1
+ E2      Eave                  28' 0"   28.00        1           K2        Rake                    8' 5"    8.43     2       H2      Hip                         21' 0"   21.00        1
+ E3      Eave                  28' 0"   28.00        1           K3        Rake                    8' 5"    8.43     2       H3      Hip                         21' 0"   21.00        1
+ E4      Eave                  44' 0"   44.00        1           K4        Rake                    8' 5"    8.43     2       H4      Hip                         21' 0"   21.00        1
+ E5      Eave                  20' 0"   20.00        2           R1        Ridge                  16' 0"   16.00     1
+ E6      Eave                  20' 0"   20.00        2           R2        Ridge                  20' 0"   20.00     2
 
+Facet areas and pitch                                                                                                                                                Area includes slope
 
+ Facet      Bldg                     Pitch               Area ft²           Plan ft²     Basis
+ F1         1                       6 / 12                 469.57             420.0      measured
+ F2         1                       6 / 12                 219.13             196.0      measured
+ F3         1                       6 / 12                 469.57             420.0      measured
+ F4         1                       6 / 12                 219.13             196.0      measured
+ F5         2                       4 / 12                 168.65             160.0      measured
+ F6         2                       4 / 12                 168.65             160.0      measured
 
 
-DIVERSITY CONTRACTING / ROOF MEASURE                                                                                              Measurement plan         /     2 of 2
+
+
+All coordinates, elevation profiles and quantities are illustrative. The order assumes three equal-coverage bundles per square and rounds up once across both buildings.
+
+
+
+
+DIVERSITY CONTRACTING / ROOF MEASURE                                                                                                                                  Takeoff · 2 of 2
 
