@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Roof Measure - Diversity Roofing</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="ai-trace.css">
 </head>
 <body>
 <div id="app">
@@ -185,6 +186,11 @@
           </div>
         </details>
       </div>
+    </details>
+
+    <details class="panel" id="panelAITrace">
+      <summary>AI roof tracing &amp; image review</summary>
+      <div class="body"><p class="muted">Trace an authorized image with independent AI proposals, review disagreements, and correct the geometry. Real dimensions require a calibrated overhead image.</p><button id="btnOpenAITrace" class="primary">Open AI image review</button></div>
     </details>
 
     <!-- EXPORT -->
@@ -459,6 +465,7 @@
 <script src="leadopen.js"></script>
 <script src="leads.js"></script>
 <script src="cashpath.js"></script>
+<script src="ai-trace.js"></script>
 <script>(function () { var el = document.getElementById('deployStamp'); var t = new Date(document.lastModified); if (el && !isNaN(t)) el.textContent = ' Site updated ' + t.toUTCString().replace(/:\d\d GMT$/, ' UTC') + '.'; })();</script>
 </body>
 </html>

@@ -206,8 +206,26 @@ Check pitch with the **Street View** and **Google Earth 3D** links in the Proper
 
 ### Local API verification
 
-`node tools/dev/check-apis.mjs` reads `GOOGLE_MAPS_KEY` and `APINEX_API_KEY` from the process environment. It checks Google Geocoding/Solar and makes the authenticated APInex `GET /v1/models` request. It prints statuses and discovered model IDs, never credentials. APInex is local tooling only; no secret is shipped in public JavaScript. A missing key is recorded as not run. Do not place credentials in tracked files.
+`node tools/dev/check-apis.mjs` reads `GOOGLE_MAPS_KEY` and `APINEX_API_KEY` from the process environment. It checks Google Geocoding/Solar and makes the authenticated APInex `GET /v1/models` request. It prints statuses and discovered model IDs, never credentials. APINEX also powers the server-side image-review runtime described below; no secret is shipped in public JavaScript. A missing key is recorded as not run. Do not place credentials in tracked files.
 
 For report UI checks without a key, `node tools/dev/run-app.mjs --offline --job <illustrative-job.json> --out <directory>` uses a test-only geometry adapter. This verifies PDF delivery/layout, not Google imagery, geocoding, orbit rendering or numerical accuracy on real properties.
 
 On Node 24 behind an environment HTTP proxy, use `node --use-env-proxy tools/dev/check-apis.mjs`.
+
+## Server-backed AI image review
+
+The **AI roof tracing & image review** panel opens an editable source-image plan.
+The Node runtime calls verified APINEX models for image quality, outline, structure,
+blind independent tracing, and disputed-region adjudication. Geometry and measurements
+are calculated locally on the server. Explicit image consent, verified overhead scale,
+and supported pitch are required for their respective operations; AI results remain
+REVIEW REQUIRED. Uploaded-image reviews export correction/provenance JSON and stay
+separate from the existing map job and PDF until geographic placement is verified.
+
+Run Node 24 with `APINEX_API_KEY` in the environment, `npm ci --prefix bench`,
+and `npm start`. Open the server's port 3000 and the AI image review panel.
+Static GitHub Pages cannot host this secret-backed API. See [runtime setup](server/README.md)
+and [provider verification and measured limitations](docs/API_VERIFICATION.md).
+
+`npm run test:runtime` and `node bench/runtime-agents-test.mjs` test deterministic
+geometry and real local HTTP orchestration without paid requests.

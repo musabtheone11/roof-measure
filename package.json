@@ -1,0 +1,11 @@
+{
+  "name": "roof-measure-runtime",
+  "private": true,
+  "scripts": {
+    "start": "node --use-env-proxy server/main.mjs",
+    "test:runtime": "node --test server/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
