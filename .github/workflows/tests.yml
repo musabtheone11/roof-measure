@@ -33,3 +33,6 @@ jobs:
       - name: Regression fixtures (defects found on the regional benchmark)
         run: node fixtures.mjs
         working-directory: bench
+      - name: Report acceptance example and status rules
+        run: node reporttest.mjs
+        working-directory: bench

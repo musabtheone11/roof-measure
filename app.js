@@ -44,6 +44,7 @@ const state = {
   altViews: [],            // other views the reviewer opened: [{id, kind, label, date, georef, measurable, result, at}]
   evidence: [],            // log of what each alternate view / dated image resolved or flagged
   trace: null,             // what the last auto-trace was made from: imagery, obstruction layer, repairs, raw geometry
+  source: null,            // a job imported from a source document (reported takeoff) or an illustrative model: {kind, title, totals, estimate, zones, ...}; null = measured here
   showRaw: false,          // overlay the raw (unstraightened) height-model outlines for audit
   showObstruction: true,   // overlay tree canopy / nearby structures found by the trace
   solar: null,             // Solar API response for the main building
@@ -224,8 +225,10 @@ function computeTotals() {
   all.facetsAll = facetsAll;
   // hidden zones (possible roof under canopy that nothing seen supports): never in the totals, reported as a range
   const omitted = new Set(state.facets.filter((f) => f.omit).map((f) => f.structure || 1));
-  all.hiddenZones = state.trace && state.trace.hiddenZones ? state.trace.hiddenZones.filter((z) => !omitted.has(z.structure || 1)) : [];
-  all.hiddenUpperSloped = all.hiddenZones.reduce((a, z) => a + z.upperSqft, 0);
+  // review zones a source document carries (extent only, no upper bound) count the same way
+  const srcZones = state.source && Array.isArray(state.source.zones) ? state.source.zones : [];
+  all.hiddenZones = [...(state.trace && state.trace.hiddenZones ? state.trace.hiddenZones : []), ...srcZones].filter((z) => !omitted.has(z.structure || 1));
+  all.hiddenUpperSloped = all.hiddenZones.reduce((a, z) => a + (z.upperSqft || 0), 0); all.hiddenUpperKnown = all.hiddenZones.every((z) => z.upperSqft != null);
   all.unresolvedItems += all.hiddenZones.length; all.complete = all.unresolvedItems === 0;
   return all;
 }
@@ -590,7 +593,9 @@ function addFacet(path, pitch, name, flags = {}) {
   const id = nextId++;
   const f = { id, name: name || `F${state.facets.length + 1}`, pitch, twoStory: !!flags.twoStory, twoLayer: !!flags.twoLayer, excluded: !!flags.excluded, azimuth: flags.azimuth == null ? null : flags.azimuth,
     status: ['measured', 'inferred', 'unresolved'].includes(flags.status) ? flags.status : 'measured', level: flags.level || (flags.twoStory ? 2 : 1), slope: flags.slope == null ? null : +flags.slope, rms: flags.rms == null ? null : +flags.rms, auto: !!flags.auto, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null,
-    rangeSqft: flags.rangeSqft || null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', rawPath: flags.rawPath || null, inferredSqft: flags.inferredSqft || 0, omit: !!flags.omit, edited: !!flags.edited, plane: flags.plane || null, repaired: flags.repaired || 0, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, evidenceKind: flags.evidenceKind || null, altSqft: flags.altSqft || 0 };
+    rangeSqft: flags.rangeSqft || null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', rawPath: flags.rawPath || null, inferredSqft: flags.inferredSqft || 0, omit: !!flags.omit, edited: !!flags.edited, plane: flags.plane || null, repaired: flags.repaired || 0, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, evidenceKind: flags.evidenceKind || null, altSqft: flags.altSqft || 0,
+    // source takeoffs: the document's own figures for this plane and its name in the report; pitchUnknown = no supported slope (area prints blank)
+    label: flags.label || null, reportedSqft: flags.reportedSqft == null ? null : +flags.reportedSqft, reportedPitch: flags.reportedPitch == null ? null : +flags.reportedPitch, pitchUnknown: !!flags.pitchUnknown, areaUnsupported: !!flags.areaUnsupported };
   f.shape = new google.maps.Polygon({ map, paths: path, clickable: state.tool === 'select', zIndex: f.excluded ? 12 : 10, geodesic: false, ...facetStyle(f, false) });
   state.facets.push(f); attachShape(f, 'facet'); recompute();
   return f;
@@ -610,7 +615,9 @@ function edgeStyle(e, selected) {
 function addEdge(type, path, pitch, name, flags = {}) {
   const id = nextId++;
   const e = { id, type, pitch: pitch == null ? null : pitch, name: name || '', status: flags.status || 'measured', factor: flags.factor == null ? null : flags.factor, basis: flags.basis || null, autoType: flags.autoType || null,
-    obscuredFt: +flags.obscuredFt || 0, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', paired: flags.paired || null, omit: !!flags.omit, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, altFt: flags.altFt || 0 };
+    obscuredFt: +flags.obscuredFt || 0, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', paired: flags.paired || null, omit: !!flags.omit, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, altFt: flags.altFt || 0,
+    // source takeoffs: the document's reference key (D1 ...), its displayed length and its name
+    ref: flags.ref || null, displayedFt: flags.displayedFt == null ? null : +flags.displayedFt, label: flags.label || null };
   e.shape = new google.maps.Polyline({ map, path, clickable: state.tool === 'select', zIndex: 20, ...edgeStyle(e, false) });
   state.edges.push(e); attachShape(e, 'edge'); recompute();
   return e;
@@ -641,7 +648,7 @@ function clearAll() {
   if (draft) cancelDraft();
   for (const f of state.facets) f.shape.setMap(null);
   for (const e of state.edges) e.shape.setMap(null);
-  state.facets = []; state.edges = []; state.selected = null; state.solar = null; state.otherSolar = []; state.trace = null; state.acceptedHidden = []; state.evidence = []; state.altFusion = null; state.altViews = []; if (window.rmAltView) { if (window.rmAltView.state.isOpen) window.rmAltView.close(); window.rmAltView.reset(); } clearSolar();
+  state.facets = []; state.edges = []; state.selected = null; state.solar = null; state.otherSolar = []; state.trace = null; state.acceptedHidden = []; state.evidence = []; state.altFusion = null; state.altViews = []; state.source = null; if (window.rmAltView) { if (window.rmAltView.state.isOpen) window.rmAltView.close(); window.rmAltView.reset(); } clearSolar();
   $('#solarOut').innerHTML = ''; $('#jobName').value = ''; state.jobName = '';
   recompute();
 }
@@ -816,9 +823,9 @@ function serialize() {
     app: 'roof-measure', version: 3, savedAt: new Date().toISOString(),
     jobName: state.jobName, address: state.address, location: state.location, defaultPitch: state.defaultPitch, waste: state.waste, mat: state.mat,
     facets: state.facets.map((f) => ({ name: f.name, pitch: f.pitch, twoStory: f.twoStory, twoLayer: f.twoLayer, excluded: f.excluded, azimuth: f.azimuth, path: pathToLiteral(f.shape),
-      status: RM.statusOf(f), level: f.level || 1, slope: f.slope, rms: f.rms, auto: f.auto, structure: f.structure, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, note: f.note, rawPath: f.rawPath, inferredSqft: f.inferredSqft, omit: f.omit, edited: f.edited, plane: f.plane, repaired: f.repaired, verify: f.verify, confirmedBy: f.confirmedBy, evidenceKind: f.evidenceKind, altSqft: f.altSqft })),
-    edges: state.edges.map((e) => ({ type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit, verify: e.verify, confirmedBy: e.confirmedBy, altFt: e.altFt })),
-    trace: state.trace,
+      status: RM.statusOf(f), level: f.level || 1, slope: f.slope, rms: f.rms, auto: f.auto, structure: f.structure, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, note: f.note, rawPath: f.rawPath, inferredSqft: f.inferredSqft, omit: f.omit, edited: f.edited, plane: f.plane, repaired: f.repaired, verify: f.verify, confirmedBy: f.confirmedBy, evidenceKind: f.evidenceKind, altSqft: f.altSqft, label: f.label, reportedSqft: f.reportedSqft, reportedPitch: f.reportedPitch, pitchUnknown: f.pitchUnknown, areaUnsupported: f.areaUnsupported })),
+    edges: state.edges.map((e) => ({ type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit, verify: e.verify, confirmedBy: e.confirmedBy, altFt: e.altFt, ref: e.ref, displayedFt: e.displayedFt, label: e.label })),
+    trace: state.trace, source: state.source,
     acceptedHidden: state.acceptedHidden, evidence: state.evidence, altFusion: state.altFusion, altViews: state.altViews,
     solar: state.solar, otherSolar: state.otherSolar,
   };
@@ -834,6 +841,7 @@ function restore(d) {
   for (const f of d.facets || []) addFacet(f.path, f.pitch, f.name, f);
   for (const e of d.edges || []) addEdge(EDGE_TYPES[e.type] ? e.type : 'unspecified', e.path, e.pitch, '', e);
   state.solar = d.solar || null; state.otherSolar = d.otherSolar || []; state.trace = d.trace || null; state.acceptedHidden = Array.isArray(d.acceptedHidden) ? d.acceptedHidden : []; state.evidence = Array.isArray(d.evidence) ? d.evidence : []; state.altFusion = d.altFusion || null; if (state.altFusion && !state.altFusion.building && d.solar) state.altFusion.building = d.solar.name; state.altViews = Array.isArray(d.altViews) ? d.altViews : [];
+  state.source = d.source && typeof d.source === 'object' ? d.source : null;
   drawSolar(); renderSolar(); $('#btnAuto').disabled = !state.solar;
   recompute();
   if (state.facets.length) { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 80); }

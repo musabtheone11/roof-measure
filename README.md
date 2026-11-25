@@ -15,18 +15,19 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
 
 ## The report
 
-*Print / PDF report* opens the print dialog (choose "Save as PDF"). *Download report* saves a self-contained HTML file with its own Print button (on the local server it saves straight into the `reports` folder). The pages follow Roofr's roof report exactly:
+**Preview report**, **Print report** and **Download report** (panel 6) all use one generated PDF: the preview shows it inside the app, Print sends that same file to the print dialog, Download saves it. US Letter, grayscale, vector (selectable text), with the Diversity Contracting logo. The sheets are built from the selected job's own address, geometry and quantities:
 
-1. Cover: "Roof Report", prepared by, total sqft, facet count, predominant pitch, address, satellite photo and imagery date.
-2. Diagram: all structures at one scale, facets shaded by pitch; excluded facets (skylights, chimneys) drawn dashed.
-3. Length measurement report: Eaves, Valleys, Hips, Ridges, Rakes, Wall flashing, Step flashing, Transitions, Parapet wall, Unspecified, plus the diagram with every edge length.
-4. Area measurement report: total, pitched, flat, two story, two layer, predominant pitch and its area, unspecified pitch area, plus facet areas on the diagram.
-5. Pitch & direction measurement report: pitch per facet with down-slope arrows.
-6. Structure #1, #2... summary: one page per detached structure (house, shed, detached garage) with Measurements, Pitch and Waste tables. Only printed when there is more than one structure.
-7. Report summary: the same tables for everything combined.
-8. Material calculations: Shingle, Starter, Ice and Water, Synthetic, Capping by brand (IKO, CertainTeed, GAF, Owens Corning, Atlas) in bundles or rolls at 0%, your chosen waste, 10% and 15%, plus valley metal and drip edge sheets.
+1. **Roof overview & takeoff**: compact header (logo, property address, imagery date, report status: COMPLETE, REVIEW REQUIRED, SOURCE TAKEOFF or ILLUSTRATIVE); the grayscale axonometric roof sketch as the focal point (heights from the measured height model when there is one, walls to the ground) with a smaller aerial beside it; net sloped area, squares, pitch and edge totals; the main house and each detached building on its own row; waste and order quantities separate from the net area; items for field review; measurement basis.
+2. **Scaled measurement plan**: a vector plan at an architectural scale (1/4" to 1/64" = 1'-0", else 1" = N'), north arrow, scale bar, overall dimensions, keyed edge and facet schedules. Offsets and diagonals are kept. The plan, the sketch and the schedules come from the same geometry and facet IDs; a job imported from a source document keeps that document's references (D1, D2 ...).
+3. **Plan detail** sheets when keys would otherwise overlap (on dense roofs the overview plan then carries facet IDs and dimensions only), **Schedules (continued)** when a schedule outgrows its sheet, **Evidence used** for measured jobs (views and sources checked and what each settled), and optional **Material order quantities**.
 
-The "Recommended" waste column is computed the way Roofr does it, from the cut edges on the roof: hips + valleys + rakes + step flashing in linear feet per square of roof area, roughly 1% plus 1.18% per foot-per-square, rounded. This reproduces every recommendation in your Roofr reports (6%, 7%, 11%, 12%, 33% and 10% for flat roofs). Each structure gets its own recommendation. The waste selector in the app only drives the quick materials list in the sidebar.
+Incomplete measurements are explicit: measured edges solid, evidence-backed continuations dashed, unresolved lines stippled, hidden or unresolved zones hatched. Unsupported dimensions, pitches and areas stay blank (never zero). A REVIEW REQUIRED report says what has been checked, how it was checked, and what still needs field review; a partial sketch is drawn when elevations are missing; every synthetic model is labelled illustrative.
+
+`examples/residential-study.json` is an illustrative two-building model (main house 44 x 28 ft hip at 6/12, detached garage 20 x 16 ft gable at 4/12). Load it with *Import JSON*; it measures 1,714.73 ft² / 17.15 SQ and `bench/reporttest.mjs` checks that in CI. `node tools/dev/handoff-examples.mjs` rebuilds it. `node tools/dev/run-app.mjs --job <file>` (or `--address`) runs Preview, Print and Download through the real UI and fails if the three do not carry the same bytes.
+
+Known limits: the PDF uses Helvetica (built into the PDF library) rather than the design's Segoe UI; keys that find no room even on the detail sheets are named there with their lengths in the schedule; the materials sheet is optional and shows order quantities, not measurements.
+
+The "Recommended" waste in the materials list is computed the way Roofr does it, from the cut edges on the roof: hips + valleys + rakes + step flashing in linear feet per square of roof area, roughly 1% plus 1.18% per foot-per-square, rounded. Each structure gets its own recommendation. The waste selector in the app drives the quick materials list in the sidebar and the report's waste and order line.
 
 ## Auto-trace (no hand tracing)
 
@@ -71,7 +72,7 @@ Licence notes for the owner: Google's terms restrict tracing from its map imager
 - Totals are sums of unrounded values; waste and order quantities are shown separately from the net area; the report prints its own reconciliation checks.
 - Distances use the WGS84 ellipsoid at the roof's latitude (the old spherical formula read north-south distances 0.4% long).
 
-**Download PDF report** now draws the report directly as vectors with selectable text. The summary states the **confirmed sloped area first**, then any supported estimate for hidden roof with its evidence and range, and says the full roof area is unresolved when hidden zones remain. The aerial overlay and every plan use the same geometry and facet IDs (obstruction boundaries appear as gaps, hidden zones as hatching). Pages: summary, aerial with roofline, to-scale roof plan (north arrow, scale bar), length / area / pitch diagrams with the same facet IDs, enlarged length-diagram windows for busy roofs, facet schedule, line schedule (every line keyed to the diagram), trees and obstructions, other views and evidence, totals with subtotals by structure, counting rules and reconciliation, optional 3D view and material quantities. *Print* and *Download report* (HTML) keep the earlier layout.
+The report (see *The report* above) states the **confirmed sloped area first**, then any supported estimate for hidden roof with its evidence and range, and shows hidden zones as hatched review items that are in no total. The aerial overlay in the app and every sheet of the report use the same geometry and facet IDs (obstruction boundaries appear as gaps, hidden zones as hatching).
 
 ## Commercial tab (flat / low-slope roofs)
 
@@ -161,7 +162,7 @@ The key is stored only in your browser's local storage. It is never written into
 3. Pick the **Facet** tool, click around each roof plane. Double-click, press Enter, or click the first corner to close. Points snap to existing corners so adjacent facets share edges.
 4. Trace **Ridge / Hip / Valley / Eave / Rake** lines on top for linear footage. Those drive the starter, ice and water, cap, drip edge and valley quantities on the report.
 5. Adjust pitch per facet in the Facets list if some planes differ.
-6. Set the waste factor, type the customer name, and click **Print / PDF report** or **Download report**.
+6. Set the waste factor, type the customer name, and click **Preview report**, **Print report** or **Download report** (all three are the same PDF).
 
 Keyboard: `S` select, `F` facet, `E` eave, `V` valley, `H` hip, `R` ridge, `K` rake, `W` wall flashing, `T` step flashing, `N` transition, `P` parapet, `U` unspecified, `Enter` finish, `Backspace` undo point, `Esc` cancel, `Delete` remove selected.
 
@@ -183,14 +184,15 @@ Check pitch with the **Street View** and **Google Earth 3D** links in the Proper
 - `index.html` - the app
 - `app.js` - map, tracing, measurement engine
 - `roofmodel.js` - coordinate math, measurement rules, geometry audit and reconciliation (shared by app, PDF and benchmark)
-- `report.js` - Roofr-format HTML report, company details, brand material catalog
-- `roofpdf.js` - the vector PDF report (Diversity Contracting header, schedules, diagrams)
+- `report.js` - report delivery (one generated PDF for preview, print and download), company details, brand material catalog, estimate PDF
+- `roofpdf.js` - the US Letter report: roof overview & takeoff, scaled measurement plan, detail / schedule / evidence sheets
+- `examples/residential-study.json` - illustrative two-building example job (1,714.73 ft²); `assets/logo-black.png` - the black-and-white logo used on the report
 - `review.js` - "Review before export" panel, status and obstruction overlays, export gate
 - `altview.js` - "Review roof from other angles": 3D views, dated imagery (Google Solar tiers, USDA NAIP), imported imagery, second-dataset check
 - `autotrace.js`, `autotrace2.js` - automatic roof tracing from Google's roof height model
 - `obstruction.js` - tree canopy / nearby structure layer and inference of roof hidden under canopy
 - `bench/` - synthetic and real-house accuracy benchmarks (see `bench/README.md`, `bench/REAL_RESULTS.md`)
-- `tools/dev/` - cross-platform local server and a headless address-to-PDF runner
+- `tools/dev/` - cross-platform local server, the headless address-to-PDF runner (`run-app.mjs`, also `--job` for a saved job; checks Preview, Print and Download agree) and the example-job builder (`handoff-examples.mjs`)
 - `commercial.js` - commercial (flat roof) measuring, materials and wind zones
 - `commercial_report.js` - the commercial roof report
 - `permits.js` - permit history and roof age (city / county permit records, year built)

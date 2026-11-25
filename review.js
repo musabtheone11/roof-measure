@@ -16,8 +16,8 @@ function reviewState() {
   const g = reviewPlain(); const a = RM.audit(g.facets, g.lines); const t = computeTotals();
   const unresolved = [];
   // hidden zones: possible roof under canopy that nothing seen supports. Reported as a range, never as a number.
-  for (const z of t.hiddenZones) unresolved.push({ kind: 'zone', id: z.id, label: `${z.id} hidden section${z.facetName ? ' beside ' + z.facetName : ''}`, qty: `0 to ${fmt(z.upperSqft)} sq ft`, at: z.centre,
-    missing: `Tree canopy hides this area. The ${z.pitch}/12 roof plane ${z.facetName ? 'of ' + z.facetName + ' ' : ''}could continue here for up to ${fmt(z.upperSqft)} sq ft, but nothing visible shows that it does. Not included in any total. An image without the canopy (another date, an oblique or 3D view, a drone photo) or a site measurement would resolve it.` });
+  for (const z of t.hiddenZones) unresolved.push({ kind: 'zone', id: z.id, label: z.label ? `${z.id} ${z.label}` : `${z.id} hidden section${z.facetName ? ' beside ' + z.facetName : ''}`, qty: z.upperSqft == null ? 'extent not measured' : `0 to ${fmt(z.upperSqft)} sq ft`, at: z.centre,
+    missing: z.upperSqft == null ? (z.action || 'Review zone from the source document: locate the edges and confirm the extent on site. Not included in any total.') : `Tree canopy hides this area. The ${z.pitch}/12 roof plane ${z.facetName ? 'of ' + z.facetName + ' ' : ''}could continue here for up to ${fmt(z.upperSqft)} sq ft, but nothing visible shows that it does. Not included in any total. An image without the canopy (another date, an oblique or 3D view, a drone photo) or a site measurement would resolve it.` });
   for (const x of t.facets) if (RM.statusOf(x.f) === 'unresolved') unresolved.push({ kind: 'facet', id: x.f.id, label: x.f.name, qty: `${fmt(x.m.sloped)} sq ft`, missing: x.f.missing || x.f.note || 'Marked unresolved' });
   t.edges.forEach((x, i) => { if (RM.statusOf(x.e) === 'unresolved' && !EDGE_TYPES[x.e.type].notRoof) unresolved.push({ kind: 'edge', id: x.e.id, label: `L${i + 1} ${EDGE_TYPES[x.e.type].label.toLowerCase()}`, qty: `${fmt(x.m.trueFt, 1)} ft`, missing: x.e.missing || x.e.note || 'Marked unresolved' }); });
   // items a reviewer saw in another view but could not measure there
@@ -176,7 +176,7 @@ function renderReviewNow() {
 // and the specific evidence that would settle it. Built from the same review state the totals come from.
 function reviewReportStatus(r) {
   r = r || reviewState(); const t = r.totals, tr = state.trace || {};
-  return RM.reportStatus({ failed: tr.failed, facets: state.facets.length, hiddenZones: r.unresolved.filter((u) => u.kind === 'zone'), hiddenUpperSqft: t.hiddenUpperSloped,
+  return RM.reportStatus({ failed: tr.failed, facets: state.facets.length, hiddenZones: r.unresolved.filter((u) => u.kind === 'zone'), hiddenUpperSqft: t.hiddenUpperKnown === false ? null : t.hiddenUpperSloped,
     inferredSqft: t.inferredSloped, unresolved: r.unresolved.filter((u) => u.kind !== 'zone'), verify: r.verify, geometryErrors: r.errors, reconcileOk: r.reconcile.ok,
     imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, newerRecords: tr.newerRecords, extra: typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : [] });
 }

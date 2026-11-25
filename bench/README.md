@@ -53,7 +53,10 @@ node modeltest.mjs                            # measurement and audit rules in r
 node run.mjs --n 1600 --out results/new.jsonl # synthetic houses now carry an aerial colour layer (trees are green)
 node treecmp.mjs results/now.jsonl results/new.jsonl   # area accuracy on tree-covered synthetic roofs, paired seeds
 node colourtest.mjs                           # tan, olive, red-brown and dark roofs must trace like a grey one, with and without trees
-Key=... node ../tools/dev/run-app.mjs --address "..." --out ../.devcache/runs/name   # the real UI, address to PDF
+node fixtures.mjs                             # regression fixtures D1-D8 from the regional benchmark (CI)
+node reporttest.mjs                           # report acceptance example (1,714.73 sq ft) and REVIEW REQUIRED rules (CI)
+Key=... node ../tools/dev/run-app.mjs --address "..." --out ../.devcache/runs/name   # the real UI, address to PDF (Preview, Print and Download must agree)
+Key=... node ../tools/dev/run-app.mjs --job ../examples/residential-study.json --out ../.devcache/runs/example   # a saved job through the same flow
 Key=... node ../tools/dev/run-app.mjs --address "..." --out ../.devcache/runs/name --alt   # ... plus the reviewer's second look
 python3 -I sectioncmp.py private/refs/<house>/sections.json "Before=a/roof.json" "After=b/roof.json" --out cmp.md --png cmp.png
 ```

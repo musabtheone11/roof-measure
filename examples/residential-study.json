@@ -1,0 +1,467 @@
+{
+ "app": "roof-measure",
+ "version": 3,
+ "savedAt": "2026-11-25T03:38:43.730Z",
+ "jobName": "Residential study",
+ "address": "Residential study, Main house and detached garage",
+ "location": {
+  "lat": 0,
+  "lng": 0
+ },
+ "defaultPitch": 6,
+ "waste": 10,
+ "facets": [
+  {
+   "name": "F1",
+   "pitch": 6,
+   "path": [
+    {
+     "lat": 0,
+     "lng": 0
+    },
+    {
+     "lat": 0,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00008214197114930266
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00003833291986967457
+    }
+   ],
+   "status": "measured",
+   "plane": [
+    0,
+    0.5,
+    2.743199912217603
+   ],
+   "structure": 1
+  },
+  {
+   "name": "F2",
+   "pitch": 6,
+   "path": [
+    {
+     "lat": 0,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00008214197114930266
+    }
+   ],
+   "status": "measured",
+   "plane": [
+    -0.4999999999999999,
+    0,
+    9.448799697638409
+   ],
+   "structure": 1
+  },
+  {
+   "name": "F3",
+   "pitch": 6,
+   "path": [
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00003833291986967457
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00008214197114930266
+    }
+   ],
+   "status": "measured",
+   "plane": [
+    0,
+    -0.5,
+    7.0103997756672065
+   ],
+   "structure": 1
+  },
+  {
+   "name": "F4",
+   "pitch": 6,
+   "path": [
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0
+    },
+    {
+     "lat": 0,
+     "lng": 0
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00003833291986967457
+    }
+   ],
+   "status": "measured",
+   "plane": [
+    0.5,
+    0,
+    2.743199912217603
+   ],
+   "structure": 1
+  },
+  {
+   "name": "F5",
+   "pitch": 4,
+   "path": [
+    {
+     "lat": 0.00010750417472306304,
+     "lng": 0.00011499875960902372
+    },
+    {
+     "lat": 0.00010750417472306304,
+     "lng": 0.00016976007370855884
+    },
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00016976007370855884
+    },
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00011499875960902372
+    }
+   ],
+   "status": "measured",
+   "plane": [
+    0,
+    0.33333333333333337,
+    -1.8287999414784024
+   ],
+   "structure": 2
+  },
+  {
+   "name": "F6",
+   "pitch": 4,
+   "path": [
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00011499875960902372
+    },
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00016976007370855884
+    },
+    {
+     "lat": 0.0001516084515325248,
+     "lng": 0.00016976007370855884
+    },
+    {
+     "lat": 0.0001516084515325248,
+     "lng": 0.00011499875960902372
+    }
+   ],
+   "status": "measured",
+   "plane": [
+    0,
+    -0.33333333333333315,
+    7.721599752908805
+   ],
+   "structure": 2
+  }
+ ],
+ "edges": [
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0,
+     "lng": 0
+    },
+    {
+     "lat": 0,
+     "lng": 0.00012047489101897724
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0.00012047489101897724
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0
+    },
+    {
+     "lat": 0,
+     "lng": 0
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "hip",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0,
+     "lng": 0
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00003833291986967457
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "hip",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00008214197114930266
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "hip",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0.00012047489101897724
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00008214197114930266
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "hip",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00007718248441655808,
+     "lng": 0
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00003833291986967457
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "ridge",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00003833291986967457
+    },
+    {
+     "lat": 0.00003859124220827904,
+     "lng": 0.00008214197114930266
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00010750417472306304,
+     "lng": 0.00011499875960902372
+    },
+    {
+     "lat": 0.00010750417472306304,
+     "lng": 0.00016976007370855884
+    }
+   ],
+   "status": "measured",
+   "structure": 2
+  },
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.0001516084515325248,
+     "lng": 0.00016976007370855884
+    },
+    {
+     "lat": 0.0001516084515325248,
+     "lng": 0.00011499875960902372
+    }
+   ],
+   "status": "measured",
+   "structure": 2
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00010750417472306304,
+     "lng": 0.00011499875960902372
+    },
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00011499875960902372
+    }
+   ],
+   "status": "measured",
+   "structure": 2
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00011499875960902372
+    },
+    {
+     "lat": 0.0001516084515325248,
+     "lng": 0.00011499875960902372
+    }
+   ],
+   "status": "measured",
+   "structure": 2
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00010750417472306304,
+     "lng": 0.00016976007370855884
+    },
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00016976007370855884
+    }
+   ],
+   "status": "measured",
+   "structure": 2
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00016976007370855884
+    },
+    {
+     "lat": 0.0001516084515325248,
+     "lng": 0.00016976007370855884
+    }
+   ],
+   "status": "measured",
+   "structure": 2
+  },
+  {
+   "type": "ridge",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00011499875960902372
+    },
+    {
+     "lat": 0.00012955631312779392,
+     "lng": 0.00016976007370855884
+    }
+   ],
+   "status": "measured",
+   "structure": 2
+  }
+ ],
+ "trace": null,
+ "acceptedHidden": [],
+ "evidence": [],
+ "altFusion": null,
+ "altViews": [],
+ "solar": null,
+ "otherSolar": [],
+ "source": {
+  "kind": "illustrative",
+  "title": "Residential hip roof",
+  "shortName": "Residential study",
+  "addressLine1": "Residential study",
+  "addressLine2": "Main house and detached garage",
+  "imageryLabel": "Model only",
+  "ref": {
+   "lat": 0,
+   "lng": 0,
+   "kx": 111319.458,
+   "ky": 110574.307
+  },
+  "buildingNames": {
+   "1": "Main house",
+   "2": "Detached garage"
+  },
+  "notes": [
+   "All coordinates, elevation profiles and quantities are illustrative. The order assumes three equal-coverage bundles per square and rounds up once across both buildings."
+  ]
+ }
+}
