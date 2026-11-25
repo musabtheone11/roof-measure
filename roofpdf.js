@@ -113,15 +113,12 @@ function rpModel() {
   }
   area.confirmed = 0; area.estimate = 0; area.unresolvedTraced = 0;
   for (const F of facets.filter((F) => !F.f.excluded)) {
-    const amount = F.m.sloped;
-    if (F.status === 'measured') area.confirmed += amount;
-    else if (F.status === 'inferred') { const part = F.f.inferredSqft > 0 && !F.f.edited ? Math.min(amount, F.f.inferredSqft) : amount; area.estimate += part; area.confirmed += amount - part; }
-    else area.unresolvedTraced += amount;
+    const part = rpAreaParts(F); area.confirmed += part.measured; area.estimate += part.inferred; area.unresolvedTraced += part.unresolved;
   }
   for (const B of structs) {
     const fs = facets.filter((F) => F.structure === B.index && !F.f.excluded);
-    B.confirmed = fs.filter((F) => F.status === 'measured').reduce((sum, F) => sum + F.m.sloped, 0);
-    B.estimate = fs.filter((F) => F.status === 'inferred').reduce((sum, F) => sum + F.m.sloped, 0);
+    B.confirmed = fs.reduce((sum, F) => sum + rpAreaParts(F).measured, 0);
+    B.estimate = fs.reduce((sum, F) => sum + rpAreaParts(F).inferred, 0);
   }
   if (!netAreas.ok) { for (const F of facets.filter((F) => !F.f.excluded)) { F.status = 'unresolved'; F.areaUnsupported = true; } area.confirmed = 0; area.estimate = 0; area.fullKnown = false; for (const B of structs) { B.confirmed = 0; B.estimate = 0; } M.review = true; M.statusLabel = 'REVIEW REQUIRED'; M.status.status = 'REVIEW REQUIRED'; M.status.reasons.push({ code: 'cutout-scope', text: 'Cutout geometry could not be assigned to one supported roof facet.', needs: 'Resolve excluded polygons and their host facet before using net measurements.' }); }
   M.selectedWaste = +state.waste; M.keys = rpKeys(M); return M;
@@ -185,8 +182,10 @@ function rpTableD(doc, x, y, widths, head, rows, o = {}) {
   head.forEach((h, i) => { const right = num.has(i); rpText(doc, h, right ? cur + widths[i] - 6 : cur + 6, y + 13, { size: headsz, bold: true, color: GR(0.24), align: right ? 'right' : 'left' }); cur += widths[i]; });
   let yy = y + 19;
   rows.forEach((row, j) => { cur = x; const bold = o.lastBold && j === rows.length - 1;
-    row.forEach((val, i) => { const right = num.has(i); if (val != null && val !== '') rpText(doc, val, right ? cur + widths[i] - 6 : cur + 6, yy + rowh * 0.66, { size, bold: bold || i === 0, color: GR(0.12), align: right ? 'right' : 'left' }); cur += widths[i]; });
-    yy += rowh; rpLn(doc, [x, yy], [x + total, yy], 0.42, 0.7); });
+    let actualH = rowh;
+    if (o.wrap) row.forEach((val, i) => { doc.setFont('helvetica', bold || i === 0 ? 'bold' : 'normal'); doc.setFontSize(size); actualH = Math.max(actualH, doc.splitTextToSize(String(val == null ? '' : val), widths[i] - 12).length * size * 1.3 + 10); });
+    row.forEach((val, i) => { const right = num.has(i); if (val != null && val !== '') rpText(doc, val, right ? cur + widths[i] - 6 : cur + 6, yy + (o.wrap ? size + 4 : rowh * 0.66), { size, bold: bold || i === 0, color: GR(0.12), align: right ? 'right' : 'left', ...(o.wrap ? { maxWidth: widths[i] - 12 } : {}) }); cur += widths[i]; });
+    yy += actualH; rpLn(doc, [x, yy], [x + total, yy], 0.42, 0.7); });
   return yy;
 }
 function rpNorth(doc, x, y, ang = 0) {
@@ -806,11 +805,16 @@ function rpDetailWindows(M) {
   if (M.lines.length > 110) return [[x0, y0 + my * (0.5 - ov), x0 + mx * (0.5 + ov), y1, 'north-west'], [x0 + mx * (0.5 - ov), y0 + my * (0.5 - ov), x1, y1, 'north-east'], [x0, y0, x0 + mx * (0.5 + ov), y0 + my * (0.5 + ov), 'south-west'], [x0 + mx * (0.5 - ov), y0, x1, y0 + my * (0.5 + ov), 'south-east']];
   return mx >= my * 0.78 ? [[x0, y0, x0 + mx * (0.5 + ov), y1, 'west half'], [x0 + mx * (0.5 - ov), y0, x1, y1, 'east half']] : [[x0, y0 + my * (0.5 - ov), x1, y1, 'north half'], [x0, y0, x1, y0 + my * (0.5 + ov), 'south half']];
 }
+function rpDetailReserve(V, box) {
+  const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20;
+  // Include arrow, bar, endpoint labels and their white space, not only the bar stroke.
+  return [{ x0: 38, y0: box.y + box.h - 70, x1: 96 + 2 * step * V.k + 22, y1: box.y + box.h - 18 }];
+}
 function rpSheetDetail(doc, M, win, i, m, n, total, unplaced) {
   rpHeader(doc, M, 'Plan detail', `Plan detail ${i} of ${m}`, `${M.line1}  /  ${win[4]}`, n, total);
   const box = { x: RP.L, y: 145, w: 548, h: 540 }; rpRect(doc, box.x, box.y, box.w, box.h, 0.993, 0.72);
   const inner = { x: 46, y: 160, w: 520, h: 470 }; const V = rpView(M, inner, { ftBox: win.slice(0, 4), padFt: 1 }); V.box = box;
-  const res = rpDrawPlan(doc, M, V);
+  const res = rpDrawPlan(doc, M, V, { reserve: rpDetailReserve(V, box) });
   rpNorth(doc, 60, box.y + box.h - 40); const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20; rpBar(doc, 96, box.y + box.h - 48, V.k, step);
   // keys that fit on no sheet at all are named once (on the last detail sheet), so nothing is silently absent
   const gone = unplaced && unplaced.length && i === m ? ` Not placed on any sheet (no room next to the line): ${unplaced.join(', ')}; their lengths are in the schedule.` : '';
@@ -838,7 +842,7 @@ function rpSheetEvidence(doc, M, n, total) {
   rpHeader(doc, M, 'Evidence', 'Evidence used', `${M.line1}  /  Views and sources checked`, n, total); let y = 150;
   const rows = [[M.imagery.source, M.imagery.label || 'not reported', M.kind === 'source' ? 'Source document' : 'Measurement', M.kind === 'illustrative' ? 'Illustrative geometry; no imagery reviewed' : M.alt ? 'Canopy over part of the roof; that part taken from the second image' : (M.zones.length ? 'Tree canopy over part of the roof' : 'No hidden zones recorded')]];
   for (const v of M.views) rows.push([v.label, v.dateText || v.date || 'not published', v.measurable ? 'Georeferenced; can place an edge' : v.georef ? 'Georeferenced; comparison only' : 'Viewing aid', v.result || (v.used ? 'used for the hidden part' : 'compared')]);
-  y = rpTableD(doc, RP.L, y, [170, 80, 140, 158], ['Source', 'Image date', 'Type', 'Result'], rows.map((r) => r.map((c) => String(c).slice(0, 60))), { rowh: 18, size: 8.4, headsz: 8 }) + 18;
+  y = rpTableD(doc, RP.L, y, [170, 80, 140, 158], ['Source', 'Image date', 'Type', 'Result'], rows, { rowh: 18, size: 8.4, headsz: 8, wrap: true }) + 18;
   if (M.alt && M.alt.check) { const c = M.alt.check; rpTitleBar(doc, y, 'Roof configuration check'); y += 11;
     y = rpTableD(doc, RP.L, y, [300, 110, 138], ['Check (where the first image sees the roof clearly)', 'Result', 'Needed'], [['Visible roof compared', rpNum(c.roofSqft) + ' ft²', 'at least 160 ft²'], ['Same height in both datasets', rpNum(c.heightAgreePct, 1) + '%', '80% or more'], ['Visible roof inside the second outline', rpNum(c.outlineAgreePct, 1) + '%', '85% or more'], ['Change in roof height', c.heightChangeM == null ? 'n/a' : rpNum(Math.abs(c.heightChangeM) * RM.FT, 1) + ' ft', '1.6 ft or less'], ['Horizontal offset (corrected)', rpNum(c.shiftM * RM.FT, 1) + ' ft', 'under 2 ft']], { rowh: 18, size: 8.4, headsz: 8, num: [1] }) + 18; }
   const paras = []; if (M.src && M.src.evidence) paras.push(...M.src.evidence); for (const item of rpReviewItems(M)) paras.push(item.key + ': ' + item.title + '. ' + item.action);
@@ -882,7 +886,7 @@ function rpSheetPlanFirst(doc, M, hero, n, total, ctx) {
   const partial = M.review || !M.area.fullKnown || M.area.estimate > 0.5;
   const area = partial ? M.area.confirmed : M.t.sloped;
   // Compact takeoff, without cards or a decorative panel.
-  const hasArea = M.kind === 'illustrative' || M.facets.some((F) => !F.f.excluded && F.status === 'measured');
+  const hasArea = M.kind === 'illustrative' || M.area.confirmed > 0;
   const fields = [[M.kind === 'illustrative' ? (partial ? 'Illustrative subtotal' : 'Illustrative sloped area') : partial ? 'Verified subtotal' : 'Net sloped area', hasArea ? rpNum(area, 2) + ' ft²' : ''], ['Net squares', hasArea ? rpNum(area / 100, 2) + ' SQ' : ''], ['Predominant pitch', M.facets.some((F) => F.pitchUnsupported) ? '' : rpPitch(M.t.predominant)]];
   fields.forEach(([k, v], i) => { rpCap(doc, k, RP.L + i * 184, 153, 7.7); rpText(doc, v, RP.L + i * 184, 171, { size: 14, bold: true }); });
   const measured = (type) => M.lines.filter((L) => L.type === type && L.status === 'measured').reduce((sum, L) => sum + L.m.trueFt, 0);
@@ -910,7 +914,7 @@ function rpSheetPlanFirst(doc, M, hero, n, total, ctx) {
 function rpSheetMeasurementSchedules(doc, M, S, spill, n, total) {
   rpHeader(doc, M, 'Measurement schedules', 'Measurement schedules', 'Keyed to the roof plan / net measurements', n, total);
   let y = 150;
-  const rows = M.structs.map((B) => [B.name, M.kind === 'illustrative' || M.facets.some((F) => F.structure === B.index && !F.f.excluded && F.status === 'measured') ? rpNum(B.confirmed, 2) : '', B.estimate > 0 ? rpNum(B.estimate, 2) : '', rpPitch(B.predominant)]);
+  const rows = M.structs.map((B) => [B.name, M.kind === 'illustrative' || B.confirmed > 0 ? rpNum(B.confirmed, 2) : '', B.estimate > 0 ? rpNum(B.estimate, 2) : '', rpPitch(B.predominant)]);
   y = rpTableD(doc, RP.L, y, [200, 116, 116, 116], ['Building', M.kind === 'illustrative' ? 'Illustrative ft²' : 'Verified ft²', 'Inferred ft²', 'Pitch'], rows, { rowh: 18, size: 8.5, num: [1, 2, 3] }) + 24;
   rpTitleBar(doc, y, 'Edge schedule'); y += 11;
   const emax = Math.min(18, Math.floor((620 - y) / 15));
@@ -925,6 +929,17 @@ function rpSheetMeasurementSchedules(doc, M, S, spill, n, total) {
 
 // Information categories mirror common measurement reports; the drawing/layout stays ours.
 // Pure projection from the canonical snapshot, with incomplete quantities kept separate.
+// One partition for takeoff, per-building rows and the information summary.
+// An inferred facet can contain both observed area and an estimated continuation.
+function rpAreaParts(F) {
+  const amount = F.m.sloped;
+  if (F.status === 'measured') return { measured: amount, inferred: 0, unresolved: 0 };
+  if (F.status === 'inferred') {
+    const part = F.f.inferredSqft > 0 && !F.f.edited ? Math.min(amount, F.f.inferredSqft) : amount;
+    return { measured: amount - part, inferred: part, unresolved: 0 };
+  }
+  return { measured: 0, inferred: 0, unresolved: amount };
+}
 function rpInformation(M) {
   const facets = M.facets.filter((F) => !F.f.excluded);
   const usable = facets.filter((F) => F.status !== 'unresolved' && !F.areaUnsupported && !F.f.areaUnsupported && !F.f.pitchUnknown);
@@ -935,7 +950,7 @@ function rpInformation(M) {
     if (F.f.pitchUnknown || F.pitchUnsupported) unspecifiedProjected += F.m.plan;
     if (!usable.includes(F)) continue;
     const pitch = F.m.basis === 'fitted' ? F.m.slope12 : F.f.pitch;
-    if (F.status === 'inferred') inferred += F.m.sloped; else measured += F.m.sloped;
+    const parts = rpAreaParts(F); measured += parts.measured; inferred += parts.inferred;
     net += F.m.sloped; projected += F.m.plan;
     if (F.f.twoStory) twoStory += F.m.sloped;
     if (F.f.twoLayer) twoLayer += F.m.sloped;

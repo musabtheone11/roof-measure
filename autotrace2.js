@@ -547,7 +547,18 @@ function reconstruct(label, regions, w, h, geo, dominantDeg, obstTest) {
 // split a simplified polyline into straight runs; snap run directions to the plane's contour/slope (or the building axis)
 // The raw support is retained on each run, so every adopted constraint is auditable.
 function runSupported(pts, line) {
-  return pts.every(p => Math.abs(line.n[0] * p[0] + line.n[1] * p[1] - line.c) <= AT2.runFitToleranceM);
+  if (pts.length < 2) return false;
+  const distances = pts.map(p => Math.abs(line.n[0] * p[0] + line.n[1] * p[1] - line.c));
+  if (!distances.every(d => Number.isFinite(d) && d <= AT2.runFitToleranceM)) return false;
+  // The 10 cm source grid permits a 5 cm RMS low-noise band and 2.5 cm
+  // fit penalty. An absolute pixel bound alone can erase a short real diagonal:
+  // in that band the constraint must fit nearly as well as unconstrained TLS.
+  const free = lineFromPts(pts);
+  const freeDistances = pts.map(p => Math.abs(free.n[0] * p[0] + free.n[1] * p[1] - free.c));
+  const rms = values => Math.sqrt(values.reduce((sum, d) => sum + d * d, 0) / values.length);
+  const freeRms = rms(freeDistances), constrainedRms = rms(distances);
+  return Number.isFinite(freeRms) && Number.isFinite(constrainedRms)
+    && !(freeRms <= 0.05 && constrainedRms > freeRms + 0.025);
 }
 
 function splitRuns(simp, raw, plane, dominantDeg) {

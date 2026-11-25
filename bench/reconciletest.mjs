@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { parseReportText, modelFromRun, reconcile } from '../tools/dev/pdf-reconcile.mjs';
+import { parseReportText, modelFromRun, reconcile, evidenceContextFromJob } from '../tools/dev/pdf-reconcile.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RM = createRequire(import.meta.url)('../roofmodel.js');
 let fail = 0; const ok = (name, cond, got) => { console.log((cond ? 'ok   ' : 'FAIL ') + name + (cond ? '' : '  got ' + JSON.stringify(got))); if (!cond) fail++; };
@@ -50,11 +50,12 @@ ILLUSTRATIVE SLOPED AREA           NET SQUARES
  Main house                1,377.42                                 6 / 12
  Detached garage             337.31                                 4 / 12
 `);
-ok('plan-first parser reads illustrated area and building subtotals with blank inferred cells', modern.band.net === 1714.73 && modern.buildings.length === 2 && modern.buildings[1].inferred === 0, modern);
+ok('plan-first parser reads illustrated area and building subtotals with blank inferred cells', modern.band.net === 1714.73 && modern.buildings.length === 2 && modern.buildings[1].inferred == null, modern);
 const partial = parseReportText(`REVIEW REQUIRED
 ILLUSTRATIVE SUBTOTAL           NET SQUARES
 1,026.02 ft²                    10.26 SQ
 \fMeasurement schedules
+ Building               Verified ft²             Inferred ft²        Pitch
  Main house                688.71                 219.13            6 / 12
 `);
 ok('review parser keeps supported subtotal separate from inferred building area', partial.band.confirmed === 1026.02 && partial.buildings[0].verified === 688.71 && partial.buildings[0].inferred === 219.13, partial);
@@ -80,4 +81,56 @@ const missingScope = reconcile(parseReportText(reviewText + blankAbsent), review
 ok('review summary leaves absent edge categories blank instead of asserting zero', missingScope.ok, missingScope.checks.filter(c => !c.ok));
 const inventedZeros = reconcile(parseReportText(reviewText + summaryBlock), reviewModel);
 ok('review summary rejects zeros for edge categories outside the measured scope', inventedZeros.checks.some(c => !c.ok && c.name === 'summary absent valley scope stays blank'), inventedZeros.checks.filter(c => !c.ok));
+const measuredJob = structuredClone(job); measuredJob.source = null;
+measuredJob.facets.forEach((f, i) => { f.modelId = 'F' + (i + 1); });
+measuredJob.edges.forEach((e, i) => { e.modelId = 'E' + (i + 1); });
+const unstamped = modelFromRun(totalsOf(measuredJob), measuredJob);
+ok('legacy measured flags with no provenance produce unsupported expected quantities', unstamped.allUnsupported && unstamped.facets.every(f => f.unsupported) && unstamped.edges.every(e => e.status === 'unresolved'), { unsupported: unstamped.allUnsupported });
+const legacyFigures = reconcile({ ...P, status: 'REVIEW REQUIRED' }, unstamped);
+ok('legacy raw measured figures printed without provenance are rejected even with a review label', legacyFigures.checks.some(c => !c.ok && c.name === 'unsupported takeoff subtotal and squares stay blank'));
+for (const item of [...measuredJob.facets, ...measuredJob.edges]) {
+  const kinds = measuredJob.facets.includes(item) ? ['geometry', 'pitch', 'area'] : ['geometry', 'type', 'length'];
+  item.measurementEvidence = Object.fromEntries(kinds.map(quantity => [quantity, { status: 'measured', source: 'Synthetic survey fixture', date: '2026-11-25', basis: 'Analytic polygon and assigned pitch', revision: RM.evidenceRevision(item, quantity, measuredJob) }]));
+}
+const scopePick = x => ({ modelId: x.modelId, path: x.path, structure: x.structure || 1, level: x.level || 1, omit: !!x.omit, excluded: !!x.excluded });
+measuredJob.trace = { scopeEvidence: { source: 'Synthetic fixture', date: '2026-11-25', basis: 'Known coordinate frame and selected fixture structure', selectionVerified: true, scaleVerified: true,
+  revision: RM.modelRevision({ address: measuredJob.address, location: measuredJob.location, facets: measuredJob.facets.map(scopePick), edges: measuredJob.edges.map(scopePick) }) } };
+const stamped = modelFromRun(totalsOf(measuredJob), measuredJob);
+ok('current source and scope revisions support quantities independently of the PDF', stamped.audit.ok && !stamped.allUnsupported && stamped.facets.every(f => f.status === 'measured'), stamped.audit.issues);
+measuredJob.facets[0].measurementEvidence.area.status = 'inferred';
+const estimateProof = modelFromRun(totalsOf(measuredJob), measuredJob);
+ok('valid inferred provenance remains an estimate, not an unresolved blank', estimateProof.facets[0].status === 'inferred' && !estimateProof.facets[0].unsupported && estimateProof.estimated > 0, estimateProof.facets[0]);
+const changedPitch = structuredClone(measuredJob); changedPitch.facets[0].pitch += 1;
+const staleProof = modelFromRun(totalsOf(changedPitch), changedPitch);
+ok('a changed quantity invalidates its old evidence while scope geometry can remain current', staleProof.facets[0].unsupported && staleProof.audit.issues.some(i => i.code === 'stale-evidence') && evidenceContextFromJob(changedPitch).selectionVerified, staleProof.audit.issues.map(i => i.code));
+const changedScope = structuredClone(measuredJob); changedScope.location.lat += 0.001;
+ok('moved property context invalidates legacy structure and scale stamps', !evidenceContextFromJob(changedScope).selectionVerified && modelFromRun(totalsOf(changedScope), changedScope).allUnsupported);
+const invalidScope = structuredClone(measuredJob); invalidScope.trace.scopeEvidence.date = '2026-02-30';
+ok('invalid scope dates cannot validate a saved provenance revision', !evidenceContextFromJob(invalidScope).scaleVerified);
+const blankColumns = parseReportText('REVIEW REQUIRED\n\fEdge schedule\n 01    Eave                       59    Hip\n 02    Rake                       60    Valley\n');
+ok('adjacent blank schedule keys are never parsed as roof lengths', blankColumns.edges.length === 0 && blankColumns.blankEdges.length === 4, blankColumns);
+const flatSchedule = parseReportText('ILLUSTRATIVE\n\fFacet areas & pitches\nF1   House       Flat       100.00\nEdge schedule\n01   Parapet wall       20.00\n');
+ok('flat pitch and parapet-wall schedule values are parsed without invented dimensions', flatSchedule.facets[0]?.pitch === 'Flat' && flatSchedule.facets[0]?.area === 100 && flatSchedule.edges[0]?.type === 'parapet' && flatSchedule.edges[0]?.ft === 20, flatSchedule);
+const falseZero = reconcile({ ...P, status: 'REVIEW REQUIRED', band: { confirmed: 0, squares: 0 } }, unstamped);
+ok('zero is rejected where no quantity has supporting provenance', falseZero.checks.some(c => !c.ok && c.name === 'unsupported takeoff subtotal and squares stay blank'));
+const legacyReference = structuredClone(measuredJob);
+delete legacyReference.edges[0].modelId;
+legacyReference.edges[0].ref = 'D1'; legacyReference.edges[0].name = 'Decorative alias';
+legacyReference.edges[0].measurementEvidence.geometry.status = 'unresolved';
+legacyReference.trace.scopeEvidence.revision = RM.modelRevision({ address: legacyReference.address, location: legacyReference.location, facets: legacyReference.facets.map(scopePick), edges: legacyReference.edges.map(scopePick) });
+const referenced = modelFromRun(totalsOf(legacyReference), legacyReference);
+ok('legacy reference IDs retain their evidence failures despite decorative item names', referenced.edges[0].status === 'unresolved' && referenced.audit.issues.some(i => i.id === 'D1'), referenced.audit.issues.map(i => i.id));
+const pitchOnly = parseReportText('REVIEW REQUIRED\n\fFacet areas & pitches\nF1   House       6 / 12\n');
+const unknownArea = structuredClone(measuredJob); unknownArea.facets[0].measurementEvidence.area.status = 'unresolved';
+const areaModel = modelFromRun(totalsOf(unknownArea), unknownArea);
+const areaCheck = reconcile(pitchOnly, areaModel);
+ok('a supported pitch remains verifiable when its facet area is unresolved', areaCheck.checks.some(c => c.ok && c.name === 'facet F1 unsupported -> blank') && areaCheck.checks.some(c => c.ok && c.name === 'facet F1 independently supported pitch'));
+unknownArea.facets[0].measurementEvidence.pitch.status = 'unresolved';
+const pitchCheck = reconcile(pitchOnly, modelFromRun(totalsOf(unknownArea), unknownArea));
+ok('an unsupported pitch cannot be printed beside a correctly blank area', pitchCheck.checks.some(c => !c.ok && c.name === 'facet F1 unsupported pitch -> blank'));
+const buildingHeader = 'Building'.padEnd(36) + 'Verified ft²'.padStart(12) + 'Inferred ft²'.padStart(16) + 'Pitch'.padStart(12);
+const knownOnly = 'House 2'.padEnd(36) + '100.00'.padStart(12) + ''.padStart(28);
+const estimateOnly = 'Garage 3'.padEnd(36) + ''.padStart(12) + '25.00'.padStart(16) + ''.padStart(12);
+const independentCells = parseReportText('REVIEW REQUIRED\n\fMeasurement schedules\n' + buildingHeader + '\n' + knownOnly + '\n' + estimateOnly + '\nEdge schedule\n');
+ok('building areas, estimates and pitch can each be independently blank', independentCells.buildings[0]?.verified === 100 && independentCells.buildings[0]?.inferred == null && independentCells.buildings[0]?.pitch == null && independentCells.buildings[1]?.verified == null && independentCells.buildings[1]?.inferred === 25, independentCells.buildings);
 process.exit(fail ? 1 : 0);

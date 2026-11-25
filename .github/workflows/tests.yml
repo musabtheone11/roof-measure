@@ -64,4 +64,6 @@ jobs:
           node spatial-test.mjs
           node evidence-notes-test.mjs
           node batch-update-test.mjs
+          node layer-cache-test.mjs
+          node map-label-test.mjs
         working-directory: bench

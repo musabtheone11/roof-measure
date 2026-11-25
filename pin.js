@@ -34,7 +34,7 @@ async function lockHouse(latLng, opts = {}) {
   if (!latLng) return;
   const request = ++pin.requestId; const epoch = typeof locationGeneration === 'function' ? locationGeneration() : 0;
   pin.busy = true; pinStopPicking();
-  const loc = { lat: typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat, lng: typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng };
+  const loc = { lat: typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat, lng: typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng, selectedByPin: true };
   toast('Locking in this house...');
   try {
     const addr = await reverseAddress(loc);

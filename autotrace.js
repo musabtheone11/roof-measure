@@ -17,17 +17,88 @@ async function solarDataLayers(lat, lng, radius, quality) {
   if (!r.ok) { let m = 'HTTP ' + r.status; try { const j = await r.json(); m = (j.error && j.error.message) || m; } catch (_) { /* ignore */ } throw new Error('Data layers: ' + m); }
   return r.json();
 }
-async function loadTiff(url, cacheName) {
+// Cache provenance is part of the source, not a date copied from buildingInsights.
+// Request snapshots invalidate when the selected record changes; immutable raster
+// names are bound to the actual flight and asset IDs, and bytes are hash checked.
+function rmLayerRequestIdentity(main, radius, lat, lng, quality) {
+  return JSON.stringify({ version: 2, building: main && main.name || null, recordDate: main && main.imageryDate || null, recordQuality: main && main.imageryQuality || null, latitude: lat, longitude: lng, radiusMeters: radius, quality: quality || 'best', pixelSizeMeters: 0.1 });
+}
+async function rmCacheDigest(value) {
+  if (typeof crypto === 'undefined' || !crypto.subtle) throw new Error('Verified raster cache requires SHA-256 support');
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash), x => x.toString(16).padStart(2, '0')).join('');
+}
+function rmLayerSourceRecord(layers) {
+  const d = layers && layers.imageryDate, q = layers && layers.imageryQuality;
+  if (!d || !Number.isInteger(d.year) || !Number.isInteger(d.month) || !Number.isInteger(d.day) || !['HIGH', 'MEDIUM', 'LOW'].includes(q)) throw new Error('Raster flight metadata is incomplete');
+  const check = new Date(Date.UTC(d.year, d.month - 1, d.day));
+  if (check.getUTCFullYear() !== d.year || check.getUTCMonth() + 1 !== d.month || check.getUTCDate() !== d.day) throw new Error('Raster flight date is invalid');
+  const asset = (url) => { const u = new URL(url); const id = u.searchParams.get('id'); if (!id) throw new Error('Raster asset identity is missing'); return u.origin + u.pathname + '?id=' + encodeURIComponent(id); };
+  return { imageryDate: { year: d.year, month: d.month, day: d.day }, imageryQuality: q, assets: { mask: asset(layers.maskUrl), dsm: asset(layers.dsmUrl), rgb: layers.rgbUrl ? asset(layers.rgbUrl) : null } };
+}
+async function rmLayerCacheNames(source) {
+  const identity = JSON.stringify(source), hash = await rmCacheDigest(identity), stem = '_cache_v2_' + hash;
+  return { identity, mask: stem + '_mask.tif', dsm: stem + '_dsm.tif', rgb: source.assets.rgb ? stem + '_rgb.tif' : null };
+}
+async function rmReadLayerCache(requestIdentity) {
+  if (location.hostname !== 'localhost') return null;
+  try {
+    const index = '_cache_v2_request_' + await rmCacheDigest(requestIdentity) + '.json';
+    const r = await fetch('/reports/' + index); if (!r.ok) return null; const meta = await r.json();
+    if (meta.version !== 2 || meta.requestIdentity !== requestIdentity || !meta.source || !meta.digests) return null;
+    // Reconstruct and validate the source fields rather than trusting filenames
+    // supplied by stale metadata. No API credentials are retained in this record.
+    const source = rmLayerSourceRecord({ ...meta.source, maskUrl: meta.source.assets && meta.source.assets.mask, dsmUrl: meta.source.assets && meta.source.assets.dsm, rgbUrl: meta.source.assets && meta.source.assets.rgb });
+    if (JSON.stringify(source) !== JSON.stringify(meta.source)) return null;
+    const names = await rmLayerCacheNames(source);
+    const read = async (kind) => {
+      if (!names[kind]) return null;
+      if (!/^[0-9a-f]{64}$/.test(meta.digests[kind] || '')) throw new Error('Raster digest is missing');
+      return loadTiff(null, names[kind], { diskOnly: true, expectedDigest: meta.digests[kind] });
+    };
+    const [maskT, dsmT, rgbT] = await Promise.all([read('mask'), read('dsm'), read('rgb')]);
+    return { requestIdentity, sourceIdentity: names.identity, layers: { imageryDate: source.imageryDate, imageryQuality: source.imageryQuality, fromDiskCache: true }, maskT, dsmT, rgbT };
+  } catch (_) { return null; } // an unverifiable cache is a miss, never a new flight
+}
+async function rmLoadLayerSet(main, lat, lng, radius, quality) {
+  const requestIdentity = rmLayerRequestIdentity(main, radius, lat, lng, quality);
+  const disk = await rmReadLayerCache(requestIdentity); if (disk) return disk;
+  const layers = await solarDataLayers(lat, lng, radius, quality);
+  if (!layers.maskUrl || !layers.dsmUrl) throw new Error('Data layers did not include a mask and DSM');
+  let source = null, names = null;
+  if (location.hostname === 'localhost') { try { source = rmLayerSourceRecord(layers); names = await rmLayerCacheNames(source); } catch (_) { /* unknown provenance: fetch without disk reuse */ } }
+  // Fresh source metadata cannot reuse bytes from legacy building/radius names,
+  // or even a content-addressed file without its verified digest record.
+  const [maskT, dsmT, rgbT] = await Promise.all([
+    loadTiff(layers.maskUrl, names && names.mask, { fresh: true }),
+    loadTiff(layers.dsmUrl, names && names.dsm, { fresh: true }),
+    layers.rgbUrl ? loadTiff(layers.rgbUrl, names && names.rgb, { fresh: true }).catch(() => null) : null,
+  ]);
+  if (names && source && (!source.assets.rgb || rgbT)) {
+    try {
+      const meta = { version: 2, requestIdentity, source, digests: { mask: maskT.cacheDigest, dsm: dsmT.cacheDigest, rgb: rgbT && rgbT.cacheDigest } };
+      const index = '_cache_v2_request_' + await rmCacheDigest(requestIdentity) + '.json';
+      await fetch('/save?name=' + encodeURIComponent(index), { method: 'POST', body: JSON.stringify(meta) });
+    } catch (_) { /* downloaded layers remain usable; cache does not establish evidence */ }
+  }
+  return { requestIdentity, sourceIdentity: names && names.identity, layers, maskT, dsmT, rgbT };
+}
+
+async function loadTiff(url, cacheName, opts = {}) {
   let buf = null;
   // local development only: keep downloaded rasters on disk so reloading the page does not re-buy the same data
   const devCache = cacheName && location.hostname === 'localhost';
-  if (devCache) { try { const c = await fetch('/reports/' + encodeURIComponent(cacheName)); if (c.ok) buf = await c.arrayBuffer(); } catch (_) { /* not cached */ } }
+  if (devCache && !opts.fresh) { try { const c = await fetch('/reports/' + encodeURIComponent(cacheName)); if (c.ok) buf = await c.arrayBuffer(); } catch (_) { /* not cached */ } }
+  if (buf && opts.expectedDigest && await rmCacheDigest(buf) !== opts.expectedDigest) throw new Error('Cached raster bytes do not match source metadata');
   if (!buf) {
+    if (opts.diskOnly || !url) throw new Error('Verified raster cache is unavailable');
     const r = await fetch(url + '&key=' + encodeURIComponent(state.key));
     if (!r.ok) throw new Error('GeoTIFF download failed (' + r.status + ')');
     buf = await r.arrayBuffer();
     if (devCache) { try { await fetch('/save?name=' + encodeURIComponent(cacheName), { method: 'POST', body: buf }); } catch (_) { /* best effort */ } }
   }
+  const cacheDigest = devCache ? await rmCacheDigest(buf) : null;
   const tiff = await GeoTIFF.fromArrayBuffer(buf);
   const img = await tiff.getImage();
   const ras = await img.readRasters(); const data = ras[0];
@@ -55,7 +126,7 @@ async function loadTiff(url, cacheName) {
     convert = (p) => { const q = proj4(def, 'EPSG:4326', p); return { lng: q[0], lat: q[1] }; };
   }
   const toLL = (x, y) => convert(project(x + pointOffset, y + pointOffset));
-  return { data, bands: ras.length >= 3 ? [ras[0], ras[1], ras[2]] : null, w, h, toLL, rx, ry, epsg };
+  return { data, bands: ras.length >= 3 ? [ras[0], ras[1], ras[2]] : null, w, h, toLL, rx, ry, epsg, cacheDigest };
 
 }
 
@@ -494,21 +565,10 @@ async function traceBuildingV1(resp, tif, mask, comp, geo, opts) {
 // The other Solar dataset is fetched for the same centre and radius, put on the current grid, checked against the roof the
 // current dataset can see, and - only when the reviewer approved it - used for the pixels the current dataset has under canopy.
 async function altLoadLayers(quality, lat, lng, radius) {
-  const cache = (window.__altCache = window.__altCache || {}); const key = [quality, lat.toFixed(6), lng.toFixed(6), radius].join('|');
-  if (cache[key]) return cache[key];
-  const safe = 'alt_' + quality + '_' + String((state.solar && state.solar.name) || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius;
-  const nm = (k) => '_cache_' + safe + '_' + k; const local = location.hostname === 'localhost';
-  let layers = null, mT = null, dT = null, rT = null;
-  if (local) { try { const meta = await fetch('/reports/' + nm('meta.json')); if (meta.ok) { layers = await meta.json(); mT = await loadTiff('unused', nm('mask.tif')); dT = await loadTiff('unused', nm('dsm.tif')); rT = await loadTiff('unused', nm('rgb.tif')); } } catch (_) { mT = null; } }
-  if (!mT || !dT) {
-    const full = await solarDataLayers(lat, lng, radius, quality);
-    if (!full.maskUrl || !full.dsmUrl) throw new Error('That dataset has no mask and height model');
-    [mT, dT] = await Promise.all([loadTiff(full.maskUrl, nm('mask.tif')), loadTiff(full.dsmUrl, nm('dsm.tif'))]);
-    try { rT = full.rgbUrl ? await loadTiff(full.rgbUrl, nm('rgb.tif')) : null; } catch (_) { rT = null; }
-    layers = { imageryDate: full.imageryDate, imageryQuality: full.imageryQuality };
-    if (local) { try { await fetch('/save?name=' + encodeURIComponent(nm('meta.json')), { method: 'POST', body: JSON.stringify(layers) }); } catch (_) { /* best effort */ } }
-  }
-  return (cache[key] = { layers, maskT: mT, dsmT: dT, rgbT: rT && rT.bands ? rT : null });
+  const main = state.solar || null;
+  const key = rmLayerRequestIdentity(main, radius, lat, lng, quality), cache = (window.__altCache = window.__altCache || {});
+  if (cache[key] && cache[key].requestIdentity === key) return cache[key];
+  return (cache[key] = await rmLoadLayerSet(main, lat, lng, radius, quality));
 }
 // nearest-pixel copy of another raster set onto the current grid (the two Solar datasets normally share one grid already)
 function altResample(A, cur, w, h) {
@@ -648,6 +708,7 @@ function rmNoBuilding(layers, main) {
 async function autoTraceRoof(opts = {}) {
   if (!state.solar) throw new Error('Get roof data first');
   const main = state.solar;
+  if (typeof assertSolarSelection === 'function') assertSolarSelection(main, state.location);
   const locationEpoch = state.locationEpoch || 0;
   const traceRequest = window.__rmTraceRequest = (window.__rmTraceRequest || 0) + 1;
   const assertCurrent = () => { if ((state.locationEpoch || 0) !== locationEpoch || state.solar !== main || window.__rmTraceRequest !== traceRequest) throw new Error('The selected location changed while tracing. Get roof data for the current pin and trace again.'); };
@@ -664,28 +725,11 @@ async function autoTraceRoof(opts = {}) {
   const halfDiag = Math.hypot((bb.ne.longitude - bb.sw.longitude) * kx, (bb.ne.latitude - bb.sw.latitude) * ky) / 2;
   const radius = Math.min(100, Math.max(15, Math.ceil(halfDiag + 12)));
   if (!opts.quiet) toast('Downloading roof height model...');
-  // cache the downloaded rasters per building in this session: re-tracing (or re-printing) the same roof costs nothing extra
-  const cacheKey = main.name + '|' + radius;
+  // Cache the selected record snapshot in this session; a changed record cannot inherit another flight.
+  const cacheKey = rmLayerRequestIdentity(main, radius, cLat, cLng, null);
   const cache = (window.__layerCache = window.__layerCache || {});
   let cached = cache[cacheKey];
-  if (!cached) {
-    const safe = String(main.name || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius;
-    const mName = '_cache_' + safe + '_mask.tif', dName = '_cache_' + safe + '_dsm.tif';
-    let mT = null, dT = null, layers = null;
-    if (location.hostname === 'localhost') {
-      try { const ok = (await fetch('/reports/' + mName)).ok && (await fetch('/reports/' + dName)).ok && (await fetch('/reports/_cache_' + safe + '_rgb.tif')).ok; if (ok) { mT = await loadTiff('unused', mName); dT = await loadTiff('unused', dName); layers = { imageryDate: main.imageryDate, fromDiskCache: true }; } } catch (_) { mT = null; }
-    }
-    if (!mT) {
-      layers = await solarDataLayers(cLat, cLng, radius);
-      if (!layers.maskUrl || !layers.dsmUrl) throw new Error('Data layers did not include a mask and DSM');
-      [mT, dT] = await Promise.all([loadTiff(layers.maskUrl, mName), loadTiff(layers.dsmUrl, dName)]);
-    }
-    // aerial colour layer of the same flight (same grid as the height model): vegetation test + the report's aerial view
-    let rT = null; const rName = '_cache_' + safe + '_rgb.tif';
-    try { rT = layers.rgbUrl ? await loadTiff(layers.rgbUrl, rName) : (location.hostname === 'localhost' && (await fetch('/reports/' + rName)).ok ? await loadTiff('unused', rName) : null); } catch (_) { rT = null; }
-    cached = cache[cacheKey] = { layers, maskT: mT, dsmT: dT, rgbT: rT };
-  }
-  if (cached.rgbT === undefined && cached.layers && cached.layers.rgbUrl) { try { cached.rgbT = await loadTiff(cached.layers.rgbUrl, '_cache_' + String(main.name || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius + '_rgb.tif'); } catch (_) { cached.rgbT = null; } }
+  if (!cached || cached.requestIdentity !== cacheKey) cached = cache[cacheKey] = await rmLoadLayerSet(main, cLat, cLng, radius, null);
   let { layers, maskT, dsmT } = cached; let rgbT = cached.rgbT && cached.rgbT.bands && cached.rgbT.w === dsmT.w && cached.rgbT.h === dsmT.h ? cached.rgbT : null;
   // Google's building record can come from a newer flight than the best (high quality) layers. When the selected building
   // has no outline in those layers (built after that flight), trace from the flight the record itself comes from. It is

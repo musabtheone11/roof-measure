@@ -26,7 +26,7 @@ export function runOne(ctx, seed) {
     obstFt: res.edges.filter((e) => e.type === 'obstruction').reduce((a, e) => { const L = e.line; let d = 0; for (let i = 1; i < L.length; i++) d += Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]); return a + d * 3.28084; }, 0) };
   // paired: the same trace scored with exact math (fitted slope, plane slope factors) -> x_ fields
   const ex = compare(gt, summarizeEngine(res, 6, true)); const x = { x_areaErrPct: ex.areaErrPct }; for (const t of ['rake', 'hip', 'valley', 'step', 'eave', 'ridge']) x['x_en_' + t] = ex['en_' + t];
-  let spatial; try { spatial = spatialScore(gt.facets, res.facets); } catch { spatial = { spatialNotScored: true }; }
+  let spatial; try { spatial = spatialScore(gt.facets, res.facets, { seed }); } catch { spatial = { spatialNotScored: true }; }
   return { ...spatial, seed, wings: wings.length, levels: new Set(wings.map((w) => w.eaveZ)).size, meta: sc.meta, ms: Date.now() - t0, ...tagged, ...x, ...compare(gt, en) };
 }
 

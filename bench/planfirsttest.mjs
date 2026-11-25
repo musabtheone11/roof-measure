@@ -14,3 +14,8 @@ assert.match(source, /rpStraightRun\(L.xy\) &&/);
 assert.match(source, /rpSheetPlanFirst\(doc, M, hero, n, total, ctx\)/);
 assert.match(source, /rpView\(M, box, \{ rotDeg: 0, padFt: 4 \}\)/);
 console.log('ok PDF plan first, north up, straight-run dimensions only');
+
+vm.runInContext(source.slice(source.indexOf('function rpDetailReserve('), source.indexOf('function rpSheetDetail(')), ctx);
+const reserved = ctx.rpDetailReserve({k: 3.6}, {y: 145,h: 540})[0];
+assert.ok(reserved.x0 <= 94 && reserved.x1 >= 96 && reserved.y0 <= 642 && reserved.y1 >= 652);
+assert.match(source, /wrap: true/);
