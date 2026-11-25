@@ -28,7 +28,7 @@ export function parseReportText(text) {
   for (const m of p1.matchAll(/(Valleys|Step flashing|Wall flashing|Transitions|Parapet)\s+([\d,]+\.\d{2}) ft/g)) out.other[m[1]] = num(m[2]);
   // schedules on the later sheets (several tables can share a line in -layout output)
   for (const l of lines.slice(p1l.length)) {
-    for (const m of l.matchAll(/\b(F\d+)\s{2,}([A-Za-z][A-Za-z ,+\-]*?)\s{2,}(\d+(?:\.\d)? \/ 12)\s+([\d,]+(?:\.\d{2})?)(?=\s|$)/g)) out.facets.push({ id: m[1], pitch: m[3], area: num(m[4]) });
+    for (const m of l.matchAll(/\b(F\d+)\s{2,}([A-Za-z][A-Za-z ,+\-]*?)\s{2,}(\d+(?:\.\d)? \/ 12)\*?\s+([\d,]+(?:\.\d{2})?)(?=\s|$)/g)) out.facets.push({ id: m[1], pitch: m[3], assigned: /\/ 12\*/.test(m[0]), area: num(m[4]) });
     for (const m of l.matchAll(/\b(F\d+)\s{2,}([A-Za-z][A-Za-z ,+\-]*?)\s{2,}([\d,]+\.\d{2})\s{2,}(\d+(?:\.\d)? \/ 12)/g)) out.facets.push({ id: m[1], pitch: m[4], area: num(m[3]) });
     for (const m of l.matchAll(/\b(F\d+(?:–\d+)?)\s{2,}([A-Za-z][A-Za-z ,+\-]*?)\s*(?:\s{2,}|$)/g)) if (!/\d \/ 12/.test(l.slice(m.index, m.index + m[0].length + 40))) out.blankFacets.push(m[1]);
     for (const m of l.matchAll(/\b(\d{2,3})\s{2,}(Eave|Rake|Hip|Ridge|Valley|Step flashing|Wall flashing|Transition|Parapet|Unspecified)(?:\s{2,}([\d,]+(?:\.\d{1,2})?)( est\.)?)?(?=\s{2,}|\s*$)/g)) { if (m[3] != null) out.edges.push({ key: m[1], type: TYPES[m[2]], ft: num(m[3]), est: !!m[4] }); else out.blankEdges.push(m[1]); }
@@ -40,7 +40,7 @@ export function parseReportText(text) {
 // ---- the model: the app's own numbers (totals.json from the runner) plus the saved job (source document values)
 export function modelFromRun(totals, roof) {
   const src = roof && roof.source && roof.source.kind === 'source' ? roof.source : null;
-  const facets = (totals.facets || []).filter((f) => !f.excluded).map((f, i) => ({ id: f.name || 'F' + (i + 1), sloped: f.sloped, status: f.status || 'measured', structure: f.structure || 1, reported: roof && roof.facets && roof.facets[i] ? roof.facets[i].reportedSqft : null, unsupported: !!(roof && roof.facets && roof.facets[i] && (roof.facets[i].areaUnsupported || roof.facets[i].pitchUnknown)) }));
+  const facets = (totals.facets || []).filter((f) => !f.excluded).map((f, i) => ({ id: f.name || 'F' + (i + 1), sloped: f.sloped, status: f.status || 'measured', structure: f.structure || 1, pitchText: f.basis === 'fitted' && f.slope12 != null ? String(Math.round(f.slope12 * 10) / 10) + ' / 12' : f.pitch != null ? String(f.pitch) + ' / 12' : null, reported: roof && roof.facets && roof.facets[i] ? roof.facets[i].reportedSqft : null, unsupported: !!(roof && roof.facets && roof.facets[i] && (roof.facets[i].areaUnsupported || roof.facets[i].pitchUnknown)) }));
   const edges = (totals.edges || []).filter((e) => e.type && e.type !== 'obstruction').map((e, i) => ({ type: e.type, trueFt: e.trueFt, status: e.status || 'measured', displayedFt: roof && roof.edges && roof.edges[i] ? roof.edges[i].displayedFt : null, ref: roof && roof.edges && roof.edges[i] ? roof.edges[i].ref : null }));
   // the model's own rule (computeTotals): a plane partly under canopy splits into its measured part and its estimated part;
   // a plane whose whole area is an estimate counts as estimate; an unresolved plane is in no total
@@ -65,7 +65,8 @@ export function reconcile(P, M) {
     for (const S of M.structures) if (M.structures.length > 1) { const row = P.takeoff.find((r) => r.name !== 'Total' && eq2(r.net, r2(S.sloped))); chk(`building ${S.index} own row (${r2(S.sloped)} ft²)`, !!row, r2(S.sloped), row ? row.net : 'no row'); }
     // facet schedule: areas at 2 decimals; unsupported planes blank
     const byId = new Map(M.facets.map((f) => [f.id, f]));
-    for (const pf of P.facets) { const f = byId.get(pf.id); if (!f) { chk(`facet ${pf.id} exists in the model`, false, 'a model facet', pf.id); continue; } chk(`facet ${pf.id} area`, f.status !== 'unresolved' && !f.unsupported && eq2(pf.area, r2(f.sloped)), f.status === 'unresolved' || f.unsupported ? 'blank' : r2(f.sloped), pf.area); }
+    chk('facet schedule present', P.facets.length + P.blankFacets.length >= Math.min(M.facets.length, 1), M.facets.length + ' facets', P.facets.length + ' rows'); chk('edge schedule present', P.edges.length + P.blankEdges.length >= Math.min(M.edges.length, 1), M.edges.length + ' lines', P.edges.length + ' rows');
+    for (const pf of P.facets) { const f = byId.get(pf.id); if (!f) { chk(`facet ${pf.id} exists in the model`, false, 'a model facet', pf.id); continue; } chk(`facet ${pf.id} area`, f.status !== 'unresolved' && !f.unsupported && eq2(pf.area, r2(f.sloped)), f.status === 'unresolved' || f.unsupported ? 'blank' : r2(f.sloped), pf.area); if (f.pitchText) chk(`facet ${pf.id} pitch`, pf.pitch === f.pitchText, f.pitchText, pf.pitch); }
     for (const f of M.facets) { const printed = P.facets.find((q) => q.id === f.id); if (f.status === 'unresolved' || f.unsupported) chk(`facet ${f.id} unsupported -> blank`, !printed, 'blank', printed ? printed.area : 'blank'); else if (!printed) chk(`facet ${f.id} printed`, false, r2(f.sloped), 'missing'); }
     if (P.facets.length) { const sum = M.facets.filter((f) => f.status !== 'unresolved' && !f.unsupported).reduce((a, f) => a + f.sloped, 0); chk('facet areas sum to the net area (unrounded model)', Math.abs(sum - M.net) < 0.01, r2(M.net), r2(sum)); }
     // edge schedule: multiset of (type, ft) at 2 decimals; unresolved lines blank; estimates marked

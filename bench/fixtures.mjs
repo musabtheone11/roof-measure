@@ -171,4 +171,27 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
   out(Math.abs(cmp.areaDiffPct) < 0.01 && v.areaMatches, 'D12 the two outlines have the same area', `${cmp.refArea} vs ${cmp.runArea}`);
   out(!v.ok && cmp.missingPct > 5 && cmp.extraPct > 5, 'D12 equal area does not pass: missing and extra outline reported', `missing ${cmp.missingPct.toFixed(1)}%, extra ${cmp.extraPct.toFixed(1)}%, IoU ${cmp.iou.toFixed(2)}; ${v.reasons.join('; ')}`);
 }
+
+// D13 (brief: "preserve real diagonals, offsets and additions; remove small kinks only within a documented tolerance"): a house
+// with a genuine 30-degree wing, a 0.6 m eave offset where a second wing steps out, and a 0.2 m notch cut into one eave. The
+// traced outline must keep the diagonal and the offset and must not keep the notch.
+{
+  const th = 0.2, c = Math.cos(th), sn = Math.sin(th); const loc = (x, y) => [x * c - y * sn, x * sn + y * c];
+  const house = W({ L: 18, W: 10 }); const [wx, wy] = loc(9 + 1.5, 0); const wing = W({ cx: wx, cy: wy, th: th + Math.PI / 6, L: 8, W: 6, kind: 'gable', s: 0.5, sEnd: 0.5, eaveZ: 3 });
+  const [ox, oy] = loc(-5, -0.6); const stepWing = W({ cx: ox, cy: oy, th, L: 8, W: 10, kind: 'hip', eaveZ: 3 });
+  const sc = render([house, wing, stepWing], rng(61), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false }); const { w, h, px } = sc;
+  // the notch: 0.2 m deep, 0.6 m wide, into the south eave of the east part (local x = 5)
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const E = sc.E0 + (x + 0.5) * px, N = sc.N0 - (y + 0.5) * px; const lx = E * c + N * sn, ly = -E * sn + N * c; if (Math.abs(lx - 5) < 0.3 && ly < -4.8 && ly > -5.3) { const i = y * w + x; sc.mask[i] = 0; sc.dsm[i] = 0; } }
+  const P = property(sc); const r = await runApp(P, ROOT, { quiet: true, hook: altHook(P) });
+  const polys = r.facets.filter((f) => !f.excluded).map((f) => [f.path.map(toM)]); const outline = pc.union(...polys); const ring = outline.map((poly) => poly[0]).sort((a, b) => b.length - a.length)[0] || [];
+  const edges = ring.map((p, i) => { const q = ring[(i + 1) % ring.length]; const dx = q[0] - p[0], dy = q[1] - p[1]; let ang = Math.atan2(dy, dx) - th; while (ang <= -Math.PI / 2) ang += Math.PI; while (ang > Math.PI / 2) ang -= Math.PI; return { len: Math.hypot(dx, dy), deg: ang * 180 / Math.PI, mid: [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] }; });
+  const diag = edges.filter((e) => e.len >= 2.5 && Math.abs(Math.abs(e.deg) - 30) < 6 || e.len >= 2.5 && Math.abs(Math.abs(e.deg) - 60) < 6);
+  const steps = edges.filter((e) => e.len > 0.4 && e.len < 1.0 && Math.abs(e.deg) > 40);   // the connector between the two offset eave runs (square = 90)
+  const [nx, ny] = loc(5, -5); const nearNotch = ring.filter((p) => Math.hypot(p[0] - nx, p[1] - ny) < 0.7);
+  out(diag.length >= 2, 'D13 the genuine 30-degree wing keeps its diagonal edges', `${diag.length} diagonal edges (${diag.map((e) => e.deg.toFixed(0) + 'deg/' + e.len.toFixed(1) + 'm').join(', ')})`);
+  const offsetKept = steps.some((e) => Math.abs(e.len * Math.sin(e.deg * Math.PI / 180)) > 0.45);
+  out(offsetKept, 'D13 the 0.6 m eave offset survives (connector between two offset eave runs)', `${steps.length} connector edges (${steps.map((e) => e.len.toFixed(2) + 'm @' + e.deg.toFixed(0) + 'deg').join(', ')}); all edges: ${edges.map((e) => e.len.toFixed(1) + '@' + e.deg.toFixed(0)).join(' ')}`);
+  if (offsetKept && !steps.some((e) => Math.abs(Math.abs(e.deg) - 90) < 6)) console.log('note D13: the offset connector is not drawn square (known limitation: the connector is its own boundary chain)');
+  out(nearNotch.length === 0, 'D13 the 0.2 m notch is straightened (no vertex within 0.7 m of it)', `${nearNotch.length} vertices near the notch`);
+}
 process.exit(fail ? 1 : 0);

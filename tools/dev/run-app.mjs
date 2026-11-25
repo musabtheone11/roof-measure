@@ -52,7 +52,7 @@ try {
     const st = typeof reviewReportStatus === 'function' ? reviewReportStatus() : null;
     return { roof: serialize(), totals: { slopedSqft: t.sloped, planSqft: t.plan, facetCount: t.facetCount, predominant: t.predominant, pitchGroups: t.pitchGroups, byType, structures: t.structures.map((g) => ({ index: g.index, sloped: g.sloped, facets: g.facetCount, predominant: g.predominant })), recWaste: t.recWaste,
       status: st ? st.status : null, statusReasons: st ? st.reasons.map((r) => r.code) : null, areaByStatus: t.areaByStatus || null,
-      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded, structure: x.f.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.f) : null, inferredSqft: x.f.inferredSqft || 0, edited: !!x.f.edited })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch , structure: x.e.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.e) : null})) },
+      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded, structure: x.f.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.f) : null, inferredSqft: x.f.inferredSqft || 0, edited: !!x.f.edited, basis: x.m.basis, slope12: x.m.slope12 })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch , structure: x.e.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.e) : null})) },
       solar: s ? { total: s.total, ground: s.ground, segs: s.segs.length, predominant: s.predominant, imageryDate: s.imageryDate, quality: s.quality } : null, audit };
   });
     fs.writeFileSync(path.join(out, `roof${sfx}.json`), JSON.stringify(data.roof));
@@ -94,6 +94,8 @@ try {
     const ov = L.textOverlaps || { count: 0, first: [] }; console.log(`     text overlaps: ${ov.count}` + (ov.count ? ' ' + JSON.stringify(ov.first) : ''));
     if (!L.scaleCheck.ok || L.keys.unaccounted.length || ov.count) { const why = JSON.stringify({ scale: L.scaleCheck.ok ? 'ok' : L.scaleCheck, unaccounted: L.keys.unaccounted, textOverlaps: ov.first }); if (process.argv.includes('--strict')) throw new Error('layout self-check failed: ' + why); console.log('WARN report: layout self-check: ' + why); }
   }
+  // the report preview stays open after the download (as it does for a person); close it before the next panel is used
+  await page.evaluate(() => { const c = document.getElementById('rpClose'); if (c) c.click(); const p = document.getElementById('reportPreview'); if (p) p.hidden = true; });
   // --alt: the reviewer's second look, through the same controls a person uses (Review roof from other angles)
   if (process.argv.includes('--alt')) {
     const panel = page.locator('#avPanel'); const busy = () => page.waitForFunction(() => !window.rmAltView.state.busy, null, { timeout: 240000 });

@@ -13,7 +13,7 @@ let fail = 0; const ok = (name, cond, got) => { console.log((cond ? 'ok   ' : 'F
 
 // the model the way computeTotals() builds it, from the saved job alone
 function totalsOf(job) {
-  const facets = job.facets.map((f) => { const m = RM.facetMeasure(f); return { name: f.name, pitch: f.pitch, plan: m.plan, sloped: m.sloped, excluded: !!f.excluded, structure: f.structure || 1, status: RM.statusOf(f), inferredSqft: f.inferredSqft || 0, edited: !!f.edited }; });
+  const facets = job.facets.map((f) => { const m = RM.facetMeasure(f); return { name: f.name, pitch: f.pitch, plan: m.plan, sloped: m.sloped, excluded: !!f.excluded, structure: f.structure || 1, status: RM.statusOf(f), inferredSqft: f.inferredSqft || 0, edited: !!f.edited, basis: m.basis, slope12: m.slope12 }; });
   const pitchOf = (s) => (job.facets.find((f) => (f.structure || 1) === s) || {}).pitch;
   const edges = job.edges.map((e) => { const m = RM.lineMeasure(e, pitchOf(e.structure || 1), job.defaultPitch); return { type: e.type, planFt: m.planFt, trueFt: m.trueFt, factor: m.factor, pitch: m.pitch, structure: e.structure || 1, status: RM.statusOf(e) }; });
   const byType = {}; for (const e of edges) { byType[e.type] = byType[e.type] || { planFt: 0, trueFt: 0, count: 0 }; byType[e.type].planFt += e.planFt; byType[e.type].trueFt += e.trueFt; byType[e.type].count++; }

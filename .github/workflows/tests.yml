@@ -39,3 +39,6 @@ jobs:
       - name: Independent PDF reconciliation (consistent, altered, stale, dropped line)
         run: node reconciletest.mjs
         working-directory: bench
+      - name: Mixed-pitch, multi-level takeoff (hand-derived expectations)
+        run: node takeofftest.mjs
+        working-directory: bench

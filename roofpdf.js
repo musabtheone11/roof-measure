@@ -587,7 +587,8 @@ function rpSchedules(M) {
     edgeRows = M.lines.map((L) => [L.key, EDGE_TYPES[L.type].label, L.status === 'unresolved' ? '' : srcFt ? (L.displayedFt == null ? '' : rpNum(L.displayedFt, Number.isInteger(L.displayedFt) ? 0 : 2)) : rpNum(L.m.trueFt, 2) + (L.status === 'inferred' ? ' est.' : '')]); }
   const bySt = (i) => M.structs.find((S) => S.index === i);
   const facetRows = M.facets.filter((F) => !F.f.excluded).map((F) => { const S = bySt(F.structure); const rep = F.f.reportedSqft; const noArea = F.status === 'unresolved' || F.f.areaUnsupported || F.f.pitchUnknown;
-    return [F.id, F.f.label || (S ? S.short : ''), F.f.pitchUnknown ? '' : rpPitch(F.f.reportedPitch != null ? F.f.reportedPitch : (F.m.basis === 'fitted' ? Math.round(F.m.slope12 * 10) / 10 : F.f.pitch)), noArea ? '' : rep != null ? rpNum(rep, Number.isInteger(rep) ? 0 : 2) : rpNum(F.m.sloped, 2)]; });
+    const assigned = M.kind === 'measured' && F.m.basis !== 'fitted' && F.f.reportedPitch == null && !F.f.pitchUnknown;   // a pitch set by hand or by default, not fitted from the height model
+    return [F.id, F.f.label || (S ? S.short : ''), F.f.pitchUnknown ? '' : rpPitch(F.f.reportedPitch != null ? F.f.reportedPitch : (F.m.basis === 'fitted' ? Math.round(F.m.slope12 * 10) / 10 : F.f.pitch)) + (assigned ? '*' : ''), noArea ? '' : rep != null ? rpNum(rep, Number.isInteger(rep) ? 0 : 2) : rpNum(F.m.sloped, 2)]; });
   const est = M.src && M.src.estimate; const facetHead = est ? ['Facet', 'Roof plane', 'Net ft²', 'Pitch¹'] : ['Facet', 'Building', 'Pitch', 'Net ft²']; if (est) for (const r of facetRows) { const p = r[2]; r[2] = r[3]; r[3] = p; }
   if (est) { const merged = []; for (const r of facetRows) { const last = merged[merged.length - 1]; if (last && last[1] === r[1] && !r[2] && !r[3] && !last[2] && !last[3]) { last[0] = last[0].split('–')[0] + '–' + r[0].replace(/^F/, ''); last.n = (last.n || 1) + 1; } else merged.push(r); } facetRows.length = 0; facetRows.push(...merged); }
   const facetNum = est ? [2, 3] : [2, 3];
@@ -709,7 +710,7 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
   else {
     const note = M.kind === 'source' ? ((M.src.notes && M.src.notes[1]) || `${M.src.document || 'Source report'}. Edge entries reproduce the displayed dimensions.`)
       : M.kind === 'illustrative' ? 'Plan dimensions are horizontal. Rakes and hips use their true sloped lengths. Facet areas include slope. Each schedule rounds for display after the model calculates its totals.'
-      : 'Plan dimensions are horizontal. Rakes, hips and valleys use their true sloped lengths from the fitted plane. Facet areas include slope. Each schedule rounds for display after the totals are calculated.'
+      : 'Plan dimensions are horizontal. Rakes, hips and valleys use their true sloped lengths from the fitted plane. Facet areas include slope. Each schedule rounds for display after the totals are calculated.' + (S.facetRows.some((r) => /\*$/.test(r[2])) ? ' * Pitch assigned by hand or by default, not fitted from the height model.' : '')
         + (res.noKeys ? ` Edge keys are placed on the plan detail sheets${ctx.detail ? ` (${ctx.detail})` : ''}.` : res.missed.length > 8 ? ` ${res.missed.length} keys are placed on the detail sheets${ctx.detail ? ` (${ctx.detail})` : ''}.` : res.missed.length ? ` Keys ${res.missed.join(', ')} are placed on the detail sheet${res.missed.length > 1 ? 's' : ''}.` : '')
         + (ctx.spill.edges ? ' The schedule continues on the next sheet.' : '');
     const fy = Math.min(RP.FOOT - 30, Math.max(y + 16, 704));
