@@ -48,3 +48,11 @@ jobs:
       - name: Vision-review fusion (corner moved back on evidence, decoy refused, canopy corner never moved, missed shed opened)
         run: node visiontest.mjs
         working-directory: bench
+      - name: Evidence provenance, geometry support, plan layout and stale exports
+        run: |
+          node evidence-gate-test.mjs
+          node evidence-ui-test.mjs
+          node geometrytest.mjs
+          node planfirsttest.mjs
+          node stale-report-test.mjs
+        working-directory: bench

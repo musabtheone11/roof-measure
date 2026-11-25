@@ -42,4 +42,20 @@ ok('a report printed before an edit no longer reconciles with the edited model',
 const fewer = JSON.parse(JSON.stringify(job)); fewer.edges.pop();
 const miss = reconcile(P, modelFromRun(totalsOf(fewer), fewer));
 ok('a schedule line without a model line is caught', !miss.ok && miss.checks.some((c) => !c.ok && c.name === 'edge schedule matches the model lines'), miss.checks.filter((c) => !c.ok).map((c) => c.name));
+const modern = parseReportText(`ILLUSTRATIVE
+ILLUSTRATIVE SLOPED AREA           NET SQUARES
+1,714.73 ft²                     17.15 SQ
+\fMeasurement schedules
+ Building               Illustrative ft²       Inferred ft²        Pitch
+ Main house                1,377.42                                 6 / 12
+ Detached garage             337.31                                 4 / 12
+`);
+ok('plan-first parser reads illustrated area and building subtotals with blank inferred cells', modern.band.net === 1714.73 && modern.buildings.length === 2 && modern.buildings[1].inferred === 0, modern);
+const partial = parseReportText(`REVIEW REQUIRED
+ILLUSTRATIVE SUBTOTAL           NET SQUARES
+1,026.02 ft²                    10.26 SQ
+\fMeasurement schedules
+ Main house                688.71                 219.13            6 / 12
+`);
+ok('review parser keeps supported subtotal separate from inferred building area', partial.band.confirmed === 1026.02 && partial.buildings[0].verified === 688.71 && partial.buildings[0].inferred === 219.13, partial);
 process.exit(fail ? 1 : 0);

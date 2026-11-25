@@ -210,7 +210,7 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
 
 // D15 (brief: "preserve real diagonals"; external geometry review: convex corner cuts are squared without height evidence below a
 // documented length): a house with a genuine 45-degree corner cut of 3 m legs (4.2 m chamfer) and a small cut of 1.2 m legs (1.7 m).
-// The long cut must survive as a diagonal edge; the short one is squared off (documented tolerance AT2.fpChamferFreeM = 2.2 m).
+// Both cuts must retain diagonal support. Shortness alone must not turn a real chamfer into a square corner.
 {
   const th = 0.2, c = Math.cos(th), sn = Math.sin(th);
   const house = W({ L: 18, W: 10 });
@@ -224,6 +224,6 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
   const longCut = edges.filter((e) => diag45(e) && e.mid[0] + e.mid[1] > 9.5).reduce((s, e) => s + e.len, 0);
   const shortCut = edges.filter((e) => diag45(e) && -e.mid[0] - e.mid[1] > 11.5).reduce((s, e) => s + e.len, 0);
   out(longCut > 3.4 && longCut < 5.0, 'D15 a genuine 4.2 m corner cut (3 m legs) survives as a diagonal edge', `${longCut.toFixed(2)} m of 45-degree edge at that corner; all edges: ${edges.map((e) => e.len.toFixed(1) + '@' + e.deg.toFixed(0)).join(' ')}`);
-  out(shortCut < 0.5, 'D15 a 1.7 m corner cut (1.2 m legs) is squared off: documented tolerance fpChamferFreeM = 2.2 m (a real corner cut shorter than that is drawn square)', `${shortCut.toFixed(2)} m of 45-degree edge at that corner`);
+  out(shortCut > 0.5 && shortCut < 2.5, 'D15 a genuine short corner cut retains a diagonal instead of being squared solely by its length', `${shortCut.toFixed(2)} m of 45-degree edge at that corner`);
 }
 process.exit(fail ? 1 : 0);

@@ -16,3 +16,8 @@ bench/private/
 node_modules/
 __pycache__/
 *.pyc
+
+# Runtime credentials stay local
+.env
+.env.*
+!.env.example

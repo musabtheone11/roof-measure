@@ -181,6 +181,70 @@ var RM = (function () {
     return { checks, ok: checks.every((c) => c.ok) };
   }
 
+  // Content revision, independent of camera state, report timestamps and object key order. Keep the
+  // canonical payload (rather than a short collision-prone hash): equal-area outlines must differ.
+  function modelRevision(model) {
+    const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().filter((k) => !['savedAt', 'camera', 'orbit', 'view', 'zoom'].includes(k)).map((k) => [k, canonical(v[k])])) : v;
+    return JSON.stringify(canonical(model));
+  }
+
+  // Bind each evidence record to the inputs of that quantity. Evidence metadata itself is
+  // excluded so attaching a record never invalidates its own revision.
+  function evidenceRevision(item, quantity, model) {
+    const geometry = { path: item.path, structure: item.structure || 1, level: item.level || 1 };
+    const pitch = { pitch: item.pitch, slope: item.slope, plane: item.plane };
+    if (quantity === 'geometry') return modelRevision(geometry);
+    if (quantity === 'pitch') return modelRevision({ ...geometry, ...pitch });
+    if (quantity === 'type') return modelRevision({ ...geometry, type: item.type });
+    // A sloped line may inherit an adjoining facet pitch or the job default. Bind
+    // these dependencies too, conservatively including every candidate facet.
+    const dependencies = quantity === 'length' && item.pitch == null && (SLOPE_KIND[item.type] || 'flat') !== 'flat'
+      ? { defaultPitch: model && model.defaultPitch, facets: (model && model.facets || []).map(f => ({ path: f.path, pitch: f.pitch, slope: f.slope, plane: f.plane, omit: !!f.omit, excluded: !!f.excluded })) } : null;
+    return modelRevision({ ...geometry, ...pitch, type: item.type, factor: item.factor, autoType: item.autoType, excluded: !!item.excluded, dependencies });
+  }
+
+  // Independent evidence for geometry, classification, pitch and length. A measured area does
+  // not establish an outline, and a visible outline does not establish a pitch. Legacy jobs can
+  // still export, but absent provenance is explicitly unresolved instead of implicitly measured.
+  function auditEvidence(model, context) {
+    const c = context || {}, issues = [], quantities = [];
+    const add = (code, id, quantity, text) => issues.push({ code, id, quantity, text,
+      needs: 'Record a dated georeferenced source or field measurement, its measurement basis, and the affected ' + id + ' quantity.' });
+    const dateOK = (v) => {
+      const value = typeof v === 'string' ? v : v && `${v.year}-${String(v.month).padStart(2, '0')}-${String(v.day).padStart(2, '0')}`;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+      const parsed = new Date(value + 'T00:00:00Z');
+      return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    };
+    const stated = (v) => typeof v === 'string' && v.trim().length > 0;
+    const visit = (item, id, kinds) => {
+      for (const kind of kinds) {
+        if ((kind === 'pitch' && item.pitchUnknown) || (kind === 'area' && (item.pitchUnknown || item.areaUnsupported)))
+          add('unsupported-quantity', id, kind, id + ' ' + kind + ' is explicitly unsupported.');
+        const e = item.measurementEvidence && item.measurementEvidence[kind] || {};
+        const status = STATUS.includes(e.status) ? e.status : 'unresolved';
+        const q = { id, quantity: kind, source: e.source || null, date: e.date || null, basis: e.basis || null, status };
+        quantities.push(q);
+        const provenance = stated(q.source) && dateOK(q.date) && stated(q.basis);
+        if (status === 'inferred' && provenance) add('inferred-quantity', id, kind, id + ' ' + kind + ' is an evidence-backed estimate, requiring review.');
+        else if (status !== 'measured' || !provenance)
+          add('quantity-evidence', id, kind, id + ' ' + kind + ' has ' + (status === 'measured' ? 'incomplete provenance' : status + ' evidence') + '.');
+        if ((e.revision || e.modelRevision) !== evidenceRevision(item, kind, model))
+          add('stale-evidence', id, kind, id + ' ' + kind + ' evidence does not match its current measurement inputs.');
+        if ((kind === 'geometry' || kind === 'type') && /(?:canopy|shadow)\s*(?:boundary|edge|outline|line)/i.test(String(q.basis || '')))
+          add('non-roof-boundary', id, kind, id + ' uses canopy or shadow as a roof boundary.');
+      }
+    };
+    (model.facets || []).filter((f) => !f.omit && !f.excluded).forEach((f, i) => visit(f, f.modelId || f.id || f.name || 'F' + (i + 1), ['geometry', 'pitch', 'area']));
+    (model.edges || model.lines || []).filter((e) => !e.omit && e.type !== 'obstruction').forEach((e, i) => visit(e, e.modelId || e.id || e.ref || 'L' + (i + 1), ['geometry', 'type', 'length']));
+    if (c.selectionVerified !== true) add('selection-evidence', 'roof', 'selection', 'The selected structure has not been verified against the source.');
+    if (c.scaleVerified !== true) add('scale-evidence', 'roof', 'scale', 'The source scale has not been verified.');
+    if (c.reportRevision != null && c.reportRevision !== modelRevision(model))
+      add('stale-report', 'roof', 'revision', 'The report describes an earlier roof model revision.');
+    return { ok: issues.length === 0, issues, quantities, revision: modelRevision(model) };
+  }
+
   // hatch lines for a polygon (unresolved zones): segments of parallel lines at `angleDeg`, `spacing` apart, clipped to the ring
   function hatch(ring, spacing, angleDeg) {
     const a = (angleDeg == null ? 45 : angleDeg) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a); const out = [];
@@ -216,9 +280,11 @@ var RM = (function () {
       add('selection', `The address point is ${ac.distM > 0 ? Math.round(ac.distM * 3.28084) + ' ft from' : 'on'} the building measured` + (ac.precision && ac.precision !== 'ROOFTOP' ? ` and the address was located only approximately (${String(ac.precision).toLowerCase().replace(/_/g, ' ')})` : '') + (ac.partial ? ' (partial address match)' : '') + ': it may be a neighbouring building.', 'Confirm on the map that this is the customer\'s building (lot lines or a site visit).');
     const grown = (f.newerRecords || []).filter((q) => q.ratio >= 1.25).sort((p, q) => q.ratio - p.ratio)[0];
     if (f.facets && grown) add('imagery-change', `A newer Google image of this building (${fd(grown.date)}) shows about ${Math.round((grown.ratio - 1) * 100)}% more roof than the image traced: the building may have been extended or rebuilt since, or more of it was under trees.`, 'Compare the dated imagery (Review roof from other angles) and trace from the newer image, or measure on site.');
+    if (f.unclassifiedFt > 2) add('unclassified-boundary', `${n0(f.unclassifiedFt)} ft of required boundary is unclassified.`, 'Classify each supported boundary; leave hidden boundaries unresolved.');
+    if (f.evidenceAudit && !f.evidenceAudit.ok) for (const x of f.evidenceAudit.issues) add(x.code, x.text, x.needs);
     for (const x of f.extra || []) why.push(x);
     return { status: why.length ? 'REVIEW REQUIRED' : 'COMPLETE', reasons: why };
   }
-  return { reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
+  return { evidenceRevision, modelRevision, auditEvidence, reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = RM;

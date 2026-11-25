@@ -258,11 +258,23 @@ const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wg
 const RPT = { url: null, blob: null, name: '', hash: '', sig: '', rec: null };
 window.__rmLastReport = null;
 async function sha256Hex(blob) { try { const d = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()); return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join(''); } catch (_) { return ''; } }
+function reportSignature(opts = {}) {
+  const wantEst = !!opts.both || (typeof xm !== 'undefined' && !!xm.appendToReport && state.facets.length > 0);
+  return JSON.stringify({ j: { ...serialize(), savedAt: null }, est: wantEst, mat: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked), co: company, w: state.waste });
+}
+function assertReportCurrent(sig, opts = {}) {
+  if (sig !== reportSignature(opts)) throw new Error('The roof changed while this report was being prepared. Generate a new report.');
+}
+function currentPreview() {
+  if (!RPT.rec) return false;
+  try { assertReportCurrent(RPT.sig, RPT.rec.opts); return true; }
+  catch (e) { toast(e.message, true); return false; }
+}
 async function buildReportPDF(opts = {}) {
   if (typeof rpBuild !== 'function') throw new Error('The report module did not load');
   const wantEst = !!opts.both || (typeof xm !== 'undefined' && !!xm.appendToReport && state.facets.length > 0);
   // the same job state gives the same file: preview, print and download share one build (and the bytes are deterministic anyway)
-  const sig = JSON.stringify({ j: { ...serialize(), savedAt: null }, est: wantEst, mat: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked), co: company, w: state.waste });
+  const sig = reportSignature(opts);
   if (RPT.rec && RPT.sig === sig) return RPT.rec;
   if (wantEst && typeof xmEnsureRoof === 'function' && !await xmEnsureRoof()) return null;
   if (typeof permitEnsure === 'function') { try { await permitEnsure(); } catch (_) { /* optional */ } }
@@ -275,8 +287,11 @@ async function buildReportPDF(opts = {}) {
     const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;background:#fff;z-index:-1'; host.innerHTML = `<style>${REPORT_CSS} .rp-page, .xm-page { margin: 0 !important; box-shadow: none !important; }</style><div class="rp">${xmBuildHTML().html}</div>`; document.body.appendChild(host);
     try { for (const pg of host.querySelectorAll('.rp-page, .xm-page')) { const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false }); doc.addPage('letter', 'portrait'); doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, 612, 792, undefined, 'MEDIUM'); extraPages++; } } finally { host.remove(); }
   }
+  assertReportCurrent(sig, opts);
   const blob = doc.output('blob'); const name = fileBase() + (extraPages ? '_Roof_Report_and_Estimate.pdf' : '_Roof_Report.pdf');
-  RPT.sig = sig; RPT.rec = { blob, name, pages: pages + extraPages, hash: await sha256Hex(blob), layout: layout || null }; return RPT.rec;
+  const hash = await sha256Hex(blob);
+  assertReportCurrent(sig, opts);
+  RPT.sig = sig; RPT.rec = { blob, name, pages: pages + extraPages, hash, layout: layout || null, opts: { ...opts } }; return RPT.rec;
 }
 // the preview panel (an iframe with the browser's PDF viewer) with Print and Save buttons that use the same bytes
 function showReportPreview(rec) {
@@ -287,6 +302,7 @@ function showReportPreview(rec) {
   $('#reportPreviewName').textContent = `${rec.name}  -  ${rec.pages} US Letter sheet${rec.pages === 1 ? '' : 's'}; print at 100% (Actual size)`;
 }
 function printReportFrame() {
+  if (!currentPreview()) return;
   const frame = $('#reportFrame'); let done = false;
   const viaTab = () => { if (done) return; done = true; try { window.open(RPT.url, '_blank'); } catch (_) { /* blocked */ } toast('The report opened in a new tab: press Ctrl+P (Cmd+P) and print at 100%.'); window.__rmLastReport = Object.assign(window.__rmLastReport || {}, { printed: 'tab' }); };
   try { if (!frame || !frame.contentWindow) throw new Error('no frame'); frame.contentWindow.focus(); frame.contentWindow.print(); done = true; window.__rmLastReport = Object.assign(window.__rmLastReport || {}, { printed: 'frame' }); }
@@ -299,7 +315,7 @@ async function reportAction(action) {
   showReportPreview(rec);
   window.__rmLastReport = { name: rec.name, pages: rec.pages, hash: rec.hash, layout: rec.layout || null, action, previewed: true, printed: null, downloaded: false };
   if (action === 'print') { await new Promise((r) => setTimeout(r, 900)); printReportFrame(); }
-  if (action === 'download' || action === 'both') { const saved = await deliverFile(rec.blob, rec.name); window.__rmLastReport.downloaded = true; toast(`Ready: ${rec.name} (${rec.pages} sheets)${saved ? '; copy saved in the reports folder' : ''}`); }
+  if (action === 'download' || action === 'both') { if (!currentPreview()) return null; const saved = await deliverFile(rec.blob, rec.name); window.__rmLastReport.downloaded = true; toast(`Ready: ${rec.name} (${rec.pages} sheets)${saved ? '; copy saved in the reports folder' : ''}`); }
   else if (action === 'preview') toast(`Preview ready: ${rec.pages} sheets. Print and Save use this same file.`);
   return rec;
 }
@@ -350,6 +366,8 @@ async function pagesToPDF(pages) {
 // Save a file on the computer that has the portal open (browser download). On the local server a copy also goes
 // into the reports folder, but the download always happens too.
 async function deliverFile(blob, name) {
+  const roofSig = RPT.rec && blob === RPT.rec.blob ? RPT.sig : null;
+  const roofOpts = roofSig ? RPT.rec.opts : null;
   let saved = false;
   if (location.hostname === "localhost") {
     try { const r = await fetch("/save?name=" + encodeURIComponent(name), { method: "POST", body: blob }).then((x) => x.json()); saved = !!r.saved; } catch (_) { /* download anyway */ }
@@ -358,6 +376,7 @@ async function deliverFile(blob, name) {
   // download it (lands in the browser's download folder and shows in its downloads list) and, for a PDF, also open it
   // in a new tab so it is on screen straight away
   const go = () => {
+    if (roofSig) { try { assertReportCurrent(roofSig, roofOpts); } catch (e) { toast(e.message, true); return; } }
     const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     if (blob.type === "application/pdf") { try { window.open(url, "_blank"); } catch (_) { /* pop-up blocked: the download still happened */ } }
   };
@@ -441,7 +460,7 @@ async function downloadPDF(what = "report") {
   // the estimate-only PDF keeps its own layout (rendered pages); it passes the same review gate
   if ($('#btnXmPDF')) $('#btnXmPDF').onclick = run(async () => { try { if (!gateOk()) return; await downloadPDF('estimate'); } catch (e) { console.error(e); toast('PDF failed: ' + e.message, true); } }, '#btnXmPDF');
   // preview panel controls
-  const pf = () => { if (!RPT.url) return; printReportFrame(); }; const ps = async () => { if (!RPT.blob) return; await deliverFile(RPT.blob, RPT.name); window.__rmLastReport = Object.assign(window.__rmLastReport || {}, { downloaded: true }); };
+  const pf = () => { if (!RPT.url || !currentPreview()) return; printReportFrame(); }; const ps = async () => { if (!RPT.blob || !currentPreview()) return; await deliverFile(RPT.blob, RPT.name); window.__rmLastReport = Object.assign(window.__rmLastReport || {}, { downloaded: true }); };
   if ($('#rpPrint')) $('#rpPrint').onclick = pf; if ($('#rpSave')) $('#rpSave').onclick = ps; if ($('#rpClose')) $('#rpClose').onclick = () => { $('#reportPreview').hidden = true; };
   for (const k of Object.keys(COMPANY_DEFAULT)) {
     const el = $('#co_' + k); if (!el) continue;

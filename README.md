@@ -10,16 +10,19 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
    - **Lines**: ridge, hip, valley, eave, rake, step flashing, headwall. Hips, valleys and rakes are converted from plan length to actual length using the pitch.
    - Corner snapping, live length readout while drawing, drag-to-edit corners, right-click a corner to delete it.
 3. **Totals**: roof square feet, squares, squares with waste, linear footage per line type.
-4. **Report in Roofr's format** (same pages, tables, wording and brand bundle counts), without a logo.
+4. **Plan-first report** with an original grayscale Diversity Contracting layout, vector plan and keyed measurement schedules.
 5. **Save / export**: save roofs in the browser, export CSV or JSON, import JSON.
 
 ## The report
 
 **Preview report**, **Print report** and **Download report** (panel 6) all use one generated PDF: the preview shows it inside the app, Print sends that same file to the print dialog, Download saves it. US Letter, grayscale, vector (selectable text), with the Diversity Contracting logo. The sheets are built from the selected job's own address, geometry and quantities:
 
-1. **Roof overview & takeoff**: compact header (logo, property address, imagery date, report status: COMPLETE, REVIEW REQUIRED, SOURCE TAKEOFF or ILLUSTRATIVE); the grayscale axonometric roof sketch as the focal point (heights from the measured height model when there is one, walls to the ground) with a smaller aerial beside it; net sloped area, squares, pitch and edge totals; the main house and each detached building on its own row; waste and order quantities separate from the net area; items for field review; measurement basis.
-2. **Scaled measurement plan**: a vector plan at an architectural scale (1/4" to 1/64" = 1'-0", else 1" = N'), north arrow, scale bar, overall dimensions, keyed edge and facet schedules. Offsets and diagonals are kept. The plan, the sketch and the schedules come from the same geometry and facet IDs; a job imported from a source document keeps that document's references (D1, D2 ...).
-3. **Plan detail** sheets when keys would otherwise overlap (on dense roofs the overview plan then carries facet IDs and dimensions only), **Schedules (continued)** when a schedule outgrows its sheet, **Evidence used** for measured jobs (views and sources checked and what each settled), and optional **Material order quantities**.
+1. **Roof Measurement Report**: slim logo/address/date/status header, compact supported takeoff, and a dominant scaled north-up vector plan with feet-and-inches dimensions, scale bar, north arrow, and keyed callouts. An aerial reference is optional and small. The active report does not include a 3D sketch.
+2. **Measurement schedules**: separate building subtotals, edge and facet schedules keyed to the plan, and concise source/review notes. Detail and continuation sheets are added only when required for readable keys or schedules. Order quantities are withheld for incomplete scope.
+
+Preview, Print and Download use the same signature-cached PDF. A model edit during generation rejects the result; saved preview actions and delayed downloads also check the signature. Direct vector PDF generation checks the model revision across asynchronous image loading.
+
+Jobs now save as version 4 with persistent `modelId` values and optional per-quantity `measurementEvidence`. `RM.auditEvidence` requires dated source, basis, measured status and an `RM.evidenceRevision(item, quantity)` binding for facet geometry/pitch/area and edge geometry/type/length. The review panel records each quantity separately and captures dated structure/scale confirmation in `trace.scopeEvidence`, bound to the current scope geometry. Changing that scope invalidates the confirmation. Missing/stale evidence triggers REVIEW REQUIRED; unsupported real-job quantities print blank. Legacy job flags alone do not establish provenance. Illustrative fixtures remain explicitly illustrative. See [validation and coverage](docs/PLAN_FIRST_VALIDATION.md).
 
 Incomplete measurements are explicit: measured edges solid, evidence-backed continuations dashed, unresolved lines stippled, hidden or unresolved zones hatched. Unsupported dimensions, pitches and areas stay blank (never zero). A REVIEW REQUIRED report says what has been checked, how it was checked, and what still needs field review; a partial sketch is drawn when elevations are missing; every synthetic model is labelled illustrative.
 
@@ -200,3 +203,11 @@ Check pitch with the **Street View** and **Google Earth 3D** links in the Proper
 - `autocomplete.js` - address suggestions while typing (Google Places, with Esri as a fallback)
 - `styles.css` - screen and print styles
 - `serve.ps1` / `Start Roof Measure (local server).bat` - optional local server
+
+### Local API verification
+
+`node tools/dev/check-apis.mjs` reads `GOOGLE_MAPS_KEY` and `APINEX_API_KEY` from the process environment. It checks Google Geocoding/Solar and makes the authenticated APInex `GET /v1/models` request. It prints statuses and discovered model IDs, never credentials. APInex is local tooling only; no secret is shipped in public JavaScript. A missing key is recorded as not run. Do not place credentials in tracked files.
+
+For report UI checks without a key, `node tools/dev/run-app.mjs --offline --job <illustrative-job.json> --out <directory>` uses a test-only geometry adapter. This verifies PDF delivery/layout, not Google imagery, geocoding, orbit rendering or numerical accuracy on real properties.
+
+On Node 24 behind an environment HTTP proxy, use `node --use-env-proxy tools/dev/check-apis.mjs`.

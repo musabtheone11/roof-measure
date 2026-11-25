@@ -594,7 +594,7 @@ function facetStyle(f, selected) {
 }
 function addFacet(path, pitch, name, flags = {}) {
   const id = nextId++;
-  const f = { id, name: name || `F${state.facets.length + 1}`, pitch, twoStory: !!flags.twoStory, twoLayer: !!flags.twoLayer, excluded: !!flags.excluded, azimuth: flags.azimuth == null ? null : flags.azimuth,
+  const f = { id, modelId: flags.modelId || 'F' + id, measurementEvidence: flags.measurementEvidence || null, name: name || `F${state.facets.length + 1}`, pitch, twoStory: !!flags.twoStory, twoLayer: !!flags.twoLayer, excluded: !!flags.excluded, azimuth: flags.azimuth == null ? null : flags.azimuth,
     status: ['measured', 'inferred', 'unresolved'].includes(flags.status) ? flags.status : 'measured', level: flags.level || (flags.twoStory ? 2 : 1), slope: flags.slope == null ? null : +flags.slope, rms: flags.rms == null ? null : +flags.rms, auto: !!flags.auto, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null,
     rangeSqft: flags.rangeSqft || null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', rawPath: flags.rawPath || null, inferredSqft: flags.inferredSqft || 0, omit: !!flags.omit, edited: !!flags.edited, plane: flags.plane || null, repaired: flags.repaired || 0, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, evidenceKind: flags.evidenceKind || null, altSqft: flags.altSqft || 0,
     // source takeoffs: the document's own figures for this plane and its name in the report; pitchUnknown = no supported slope (area prints blank)
@@ -617,7 +617,7 @@ function edgeStyle(e, selected) {
 }
 function addEdge(type, path, pitch, name, flags = {}) {
   const id = nextId++;
-  const e = { id, type, pitch: pitch == null ? null : pitch, name: name || '', status: flags.status || 'measured', factor: flags.factor == null ? null : flags.factor, basis: flags.basis || null, autoType: flags.autoType || null,
+  const e = { id, modelId: flags.modelId || 'E' + id, measurementEvidence: flags.measurementEvidence || null, type, pitch: pitch == null ? null : pitch, name: name || '', status: flags.status || 'measured', factor: flags.factor == null ? null : flags.factor, basis: flags.basis || null, autoType: flags.autoType || null,
     obscuredFt: +flags.obscuredFt || 0, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', paired: flags.paired || null, omit: !!flags.omit, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, altFt: flags.altFt || 0,
     // source takeoffs: the document's reference key (D1 ...), its displayed length and its name
     ref: flags.ref || null, displayedFt: flags.displayedFt == null ? null : +flags.displayedFt, label: flags.label || null };
@@ -823,11 +823,11 @@ function setDefaultPitch(p) { state.defaultPitch = p; $('#defaultPitch').value =
 // ------------------------------------------------------------------ serialize / save
 function serialize() {
   return {
-    app: 'roof-measure', version: 3, savedAt: new Date().toISOString(),
+    app: 'roof-measure', version: 4, savedAt: new Date().toISOString(),
     jobName: state.jobName, address: state.address, location: state.location, defaultPitch: state.defaultPitch, waste: state.waste, mat: state.mat,
-    facets: state.facets.map((f) => ({ name: f.name, pitch: f.pitch, twoStory: f.twoStory, twoLayer: f.twoLayer, excluded: f.excluded, azimuth: f.azimuth, path: pathToLiteral(f.shape),
+    facets: state.facets.map((f) => ({ modelId: f.modelId, measurementEvidence: f.measurementEvidence, name: f.name, pitch: f.pitch, twoStory: f.twoStory, twoLayer: f.twoLayer, excluded: f.excluded, azimuth: f.azimuth, path: pathToLiteral(f.shape),
       status: RM.statusOf(f), level: f.level || 1, slope: f.slope, rms: f.rms, auto: f.auto, structure: f.structure, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, note: f.note, rawPath: f.rawPath, inferredSqft: f.inferredSqft, omit: f.omit, edited: f.edited, plane: f.plane, repaired: f.repaired, verify: f.verify, confirmedBy: f.confirmedBy, evidenceKind: f.evidenceKind, altSqft: f.altSqft, label: f.label, reportedSqft: f.reportedSqft, reportedPitch: f.reportedPitch, pitchUnknown: f.pitchUnknown, areaUnsupported: f.areaUnsupported })),
-    edges: state.edges.map((e) => ({ type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit, verify: e.verify, confirmedBy: e.confirmedBy, altFt: e.altFt, ref: e.ref, displayedFt: e.displayedFt, label: e.label })),
+    edges: state.edges.map((e) => ({ modelId: e.modelId, measurementEvidence: e.measurementEvidence, type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit, verify: e.verify, confirmedBy: e.confirmedBy, altFt: e.altFt, ref: e.ref, displayedFt: e.displayedFt, label: e.label })),
     trace: state.trace, source: state.source,
     acceptedHidden: state.acceptedHidden, evidence: state.evidence, altFusion: state.altFusion, altViews: state.altViews,
     solar: state.solar, otherSolar: state.otherSolar,

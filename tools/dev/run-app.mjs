@@ -1,6 +1,7 @@
 // Headless address-to-PDF run through the real UI (same buttons a person clicks).
 //   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090] [--alt] [--estimate [--xm "deck=membrane,lossType="] [--est-name estimate]]
 //   Key=<google key> node tools/dev/run-app.mjs --job <saved job .json> --out .devcache/runs/name      (a saved / exported job, loaded the way Import JSON loads it)
+//   --offline --job <illustrative.json>: test-only shape adapter; no Maps, imagery or API validation
 //   --strict fails the run on a layout self-check finding (acceptance runs); without it the finding is a WARN line (benchmark runs)
 //   --alt also runs the reviewer's second look (3D views, dated imagery, configuration check, carry) and writes report-alt.pdf
 // Every run exercises the report flow a person uses: Preview report, Print report, Download report. The three must carry
@@ -14,26 +15,30 @@ import { start } from './serve.mjs';
 
 const { chromium } = createRequire(import.meta.url)('playwright');   // the globally installed Playwright (matches the installed browser)
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
-const key = process.env.Key || process.env.GOOGLE_MAPS_KEY; if (!key) { console.error('Set Key or GOOGLE_MAPS_KEY'); process.exit(2); }
+const offline = process.argv.includes('--offline');
+if (offline && !arg('job', null)) throw new Error('--offline requires a saved illustrative --job');
+const key = offline ? '' : process.env.Key || process.env.GOOGLE_MAPS_KEY || ''; if (!key && !offline) { console.error('Set Key or GOOGLE_MAPS_KEY'); process.exit(2); }
 const address = arg('address', ''), out = path.resolve(arg('out', '.devcache/runs/run')), port = +arg('port', 8090), root = arg('root', null);
 const pdfWhat = arg('pdf', 'btnReportPDF');
 fs.mkdirSync(out, { recursive: true });
 const srv = await start(port, root ? { root } : {});
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const ctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, acceptDownloads: true });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined), args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const ctx = await browser.newContext({ ignoreHTTPSErrors: offline, viewport: { width: 1500, height: 1000 }, acceptDownloads: true });
+if (offline) { const { installOfflineMap } = await import('./offline-map.mjs'); await ctx.addInitScript(installOfflineMap); }
 await ctx.addInitScript((k) => { try { localStorage.setItem('rm.key', k); } catch (_) { /* ignore */ } }, key);
 const page = await ctx.newPage();
-const log = []; const scrub = (s) => String(s).split(key).join('<key>');
+const log = []; const scrub = (s) => key ? String(s).split(key).join('<key>') : String(s);
 const dialogs = []; page.on('dialog', async (d) => { dialogs.push(d.message()); log.push('[dialog] ' + d.message().replace(/\n/g, ' / ')); await d.accept(); });
 page.on('console', (m) => log.push(`[${m.type()}] ${scrub(m.text())}`)); page.on('pageerror', (e) => log.push('[pageerror] ' + scrub(e.stack || e.message)));
 const step = async (name, fn) => { const t = Date.now(); try { const r = await fn(); console.log(`ok   ${name} (${((Date.now() - t) / 1000).toFixed(1)}s)`); return r; } catch (e) { console.log(`FAIL ${name}: ${scrub(e.message).split('\n')[0]}`); throw e; } };
 let code = 0;
 try {
-  await step('load app + map', async () => { await page.goto(`http://localhost:${port}/`); await page.waitForFunction(() => typeof map !== 'undefined' && map && typeof geocoder !== 'undefined' && geocoder, null, { timeout: 60000 }); });
+  await step('load app + map', async () => { await page.goto(`http://localhost:${port}/`); if (offline) await page.evaluate(() => { initMap(); document.getElementById('nokey').hidden = true; }); await page.waitForFunction(() => typeof map !== 'undefined' && map && typeof geocoder !== 'undefined' && geocoder, null, { timeout: 60000 }); });
   const jobFile = arg('job', null);
   if (jobFile) {
     // a saved job (Export JSON format) goes through the app's own restore(), the same path as "Import JSON"
     const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
+    if (offline && job.source?.kind !== 'illustrative') throw new Error('--offline accepts illustrative jobs only');
     await step('load saved job', async () => { await page.evaluate((d) => { restore(d); }, job); await page.waitForFunction((n) => state.facets.length === n, job.facets.length, { timeout: 30000 }); });
   } else
   await step('address', async () => { await page.fill('#address', address); await page.click('#btnGo'); await page.waitForFunction(() => state.location, null, { timeout: 30000 }); });
