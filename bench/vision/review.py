@@ -17,7 +17,7 @@ from prompts import ROLES
 ap = argparse.ArgumentParser()
 ap.add_argument('--crops', required=True); ap.add_argument('--out', required=True)
 ap.add_argument('--roles', default='outline,planes,obstruction,challenge'); ap.add_argument('--models', default=None)
-ap.add_argument('--rpm', type=int, default=24); ap.add_argument('--max-tokens', type=int, default=4000); ap.add_argument('--timeout', type=int, default=240)
+ap.add_argument('--rpm', type=int, default=24); ap.add_argument('--workers', type=int, default=3); ap.add_argument('--max-tokens', type=int, default=4000); ap.add_argument('--timeout', type=int, default=240)
 ap.add_argument('--local', action='store_true'); ap.add_argument('--dry', action='store_true')
 a = ap.parse_args()
 M = json.load(open(os.path.join(a.crops, 'manifest.json'))); views = {v['id']: v for v in M['views']}
@@ -25,7 +25,7 @@ os.makedirs(a.out, exist_ok=True)
 DEFAULT_MODELS = {   # free models for the broad passes; the paid challenge models are added for disputed cases by the caller
   'outline': ['free/gemini-3.1-pro', 'free/qwen-3.8-max', 'free/kimi-k3'],
   'planes': ['free/gemini-4-hydrogen', 'free/mimo-v2.6-pro', 'free/hy4'],
-  'obstruction': ['free/gemini-3.8-flash', 'free/minimax-m3', 'free/glm-5.3-flash'],
+  'obstruction': ['free/gemini-3.8-flash', 'free/minimax-m3'],
   'challenge': ['free/claude-opus-4.6', 'free/claude-sonnet-4.6', 'free/mimo-v2.6-flash'],
 }
 models = json.loads(a.models) if a.models else DEFAULT_MODELS
@@ -87,11 +87,17 @@ else:
     jobs = [(role, m) for role in roles for m in models.get(role, [])]
     if a.dry: print('would send', [(r, m) for r, m in jobs]); sys.exit(0)
     built = {role: build(role) for role in roles}
-    # one request at a time with a fixed spacing (the free vision models fail under parallel image requests)
-    gap = 60.0 / a.rpm
-    for role, m in jobs:
-        t0 = time.time(); call(role, m, built[role][1]); el = time.time() - t0
-        if el < gap: time.sleep(gap - el)
+    # a few requests in flight at a time, started a few seconds apart (twelve parallel image requests made the free models fail)
+    import queue; q = queue.Queue(); [q.put(j) for j in jobs]
+    def worker():
+        while True:
+            try: role, m = q.get_nowait()
+            except queue.Empty: return
+            call(role, m, built[role][1]); q.task_done()
+    ws = []
+    for w in range(a.workers):
+        t = threading.Thread(target=worker); t.start(); ws.append(t); time.sleep(4)
+    for t in ws: t.join()
 
 # ---- collect (external results now, local answers if present) into observations.json
 obs = []
