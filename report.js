@@ -266,7 +266,7 @@ async function buildReportPDF(opts = {}) {
   if (RPT.rec && RPT.sig === sig) return RPT.rec;
   if (wantEst && typeof xmEnsureRoof === 'function' && !await xmEnsureRoof()) return null;
   if (typeof permitEnsure === 'function') { try { await permitEnsure(); } catch (_) { /* optional */ } }
-  const { doc, pages } = await rpBuild({ materials: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked) });
+  const { doc, pages, layout } = await rpBuild({ materials: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked) });
   // deterministic bytes: the file carries the report date, not the second it was built
   try { const d = new Date(); d.setHours(0, 0, 0, 0); doc.setCreationDate(d); doc.setFileId('00000000000000000000000000000000'); } catch (_) { /* older jsPDF */ }
   let extraPages = 0;
@@ -276,7 +276,7 @@ async function buildReportPDF(opts = {}) {
     try { for (const pg of host.querySelectorAll('.rp-page, .xm-page')) { const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false }); doc.addPage('letter', 'portrait'); doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, 612, 792, undefined, 'MEDIUM'); extraPages++; } } finally { host.remove(); }
   }
   const blob = doc.output('blob'); const name = fileBase() + (extraPages ? '_Roof_Report_and_Estimate.pdf' : '_Roof_Report.pdf');
-  RPT.sig = sig; RPT.rec = { blob, name, pages: pages + extraPages, hash: await sha256Hex(blob) }; return RPT.rec;
+  RPT.sig = sig; RPT.rec = { blob, name, pages: pages + extraPages, hash: await sha256Hex(blob), layout: layout || null }; return RPT.rec;
 }
 // the preview panel (an iframe with the browser's PDF viewer) with Print and Save buttons that use the same bytes
 function showReportPreview(rec) {
@@ -297,7 +297,7 @@ async function reportAction(action) {
   toast('Building report...');
   const rec = await buildReportPDF({ both: action === 'both' }); if (!rec) return null;
   showReportPreview(rec);
-  window.__rmLastReport = { name: rec.name, pages: rec.pages, hash: rec.hash, action, previewed: true, printed: null, downloaded: false };
+  window.__rmLastReport = { name: rec.name, pages: rec.pages, hash: rec.hash, layout: rec.layout || null, action, previewed: true, printed: null, downloaded: false };
   if (action === 'print') { await new Promise((r) => setTimeout(r, 900)); printReportFrame(); }
   if (action === 'download' || action === 'both') { const saved = await deliverFile(rec.blob, rec.name); window.__rmLastReport.downloaded = true; toast(`Ready: ${rec.name} (${rec.pages} sheets)${saved ? '; copy saved in the reports folder' : ''}`); }
   else if (action === 'preview') toast(`Preview ready: ${rec.pages} sheets. Print and Save use this same file.`);

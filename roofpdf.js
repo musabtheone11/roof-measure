@@ -275,7 +275,7 @@ function rpDrawPlan(doc, M, V, o = {}) {
     const cands = [rpLabelPoint(Z.xy).p]; for (const fy of [0.5, 0.3, 0.7, 0.15, 0.85]) for (const fx of [0.5, 0.3, 0.7, 0.15, 0.85]) cands.push([x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy]);
     for (const q of cands) { if (!rpInside(q, Z.xy)) continue; const c = P(q); const b = tagBox(c[0], c[1], Z.id, 8.7); if (!fits(b) || hit(b)) continue; rpTag(doc, c[0], c[1], Z.id, 8.7); placed.push(b); break; } }
   // overall dimensions before the keys, so the keys move out of their way (dimension lines have one place to be)
-  if (o.dims) rpDrawDims(doc, M, V, placed);
+  const dims = o.dims ? rpDrawDims(doc, M, V, placed) : 0;
   const missed = [], outside = [], placedKeys = [];
   // one tag per source reference (D1 ...) when the job carries them, else per line key
   const refMode = M.lines.some((L) => L.ref); const groups = new Map(); for (const L of M.lines) { if (refMode && !L.ref) continue; const g = L.ref || L.tag || L.key; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(L); }
@@ -296,7 +296,7 @@ function rpDrawPlan(doc, M, V, o = {}) {
     if (!done) missed.push(label);
   }
   if (V.ftBox) rpUnclip(doc);
-  return { missed, outside, placed, placedKeys, keys: groups.size };
+  return { missed, outside, placed, placedKeys, keys: groups.size, dims };
 }
 // facet outline with a gap wherever it runs along an obstruction boundary
 function rpRingGap(doc, ring, obLines, P) {
@@ -309,19 +309,41 @@ function rpRingGap(doc, ring, obLines, P) {
 }
 // overall dimensions for a simple roof: each outline run of 10 ft or more gets a dimension line outside the roof
 function rpDrawDims(doc, M, V, placed) {
-  const outline = M.lines.filter((L) => ['eave', 'rake'].includes(L.type) && !L.e.paired && L.status === 'measured' && L.m.planFt >= 10);
-  if (M.lines.length > 16 || !outline.length) return; const done = new Set();
-  for (const L of outline) { const dk = [L.structure, Math.round(L.m.planFt * 10), Math.round(Math.abs(Math.atan2(L.xy[L.xy.length - 1][1] - L.xy[0][1], L.xy[L.xy.length - 1][0] - L.xy[0][0]) * 180 / Math.PI) % 180)].join('|'); if (done.has(dk)) continue; done.add(dk); const a = V.P(L.xy[0]), b = V.P(L.xy[L.xy.length - 1]); const F = M.facets.find((q) => L.facets.includes(q.id)); if (!F) continue;
-    const c = V.P(rpLabelPoint(F.xy).p); const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1; const n = [-dy / len, dx / len]; const side = (c[0] - a[0]) * n[0] + (c[1] - a[1]) * n[1] > 0 ? -1 : 1;   // away from the facet
+  let count = 0; const done = new Set(); const axis = {};   // per structure: has a horizontal / vertical dimension yet
+  const inside = (b) => !V.limit || (b.x0 >= V.limit.x0 && b.x1 <= V.limit.x1 && b.y0 >= V.limit.y0 && b.y1 <= V.limit.y1);
+  const tryDim = (a, b, side, ft, structure, dk) => {
+    if (dk && done.has(dk)) return false; const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1; const n = [-dy / len, dx / len], w = [dx / len, dy / len];
     // the label runs along the line, so its footprint is long along the line and shallow across it
-    const txt = rpDimTxt(L.m.planFt); const hw = rpWidth(doc, txt, 8.7, true) / 2 + 3, hh = 5.5; const w = [dx / len, dy / len];
+    const txt = rpDimTxt(ft); const hw = rpWidth(doc, txt, 8.7, true) / 2 + 3, hh = 5.5;
     const off = 17 * side; const mid = [(a[0] + b[0]) / 2 + n[0] * off, (a[1] + b[1]) / 2 + n[1] * off]; const ex = Math.abs(w[0]) * hw + Math.abs(n[0]) * hh, ey = Math.abs(w[1]) * hw + Math.abs(n[1]) * hh;
     const bx = { x0: mid[0] - ex, y0: mid[1] - ey, x1: mid[0] + ex, y1: mid[1] + ey };
-    if (placed.some((q) => !(bx.x1 < q.x0 || bx.x0 > q.x1 || bx.y1 < q.y0 || bx.y0 > q.y1))) continue;
-    rpDim(doc, a, b, off, txt); placed.push(bx);
     // the strip between the roof edge and the dimension line is kept clear of key tags too
-    const s = Math.sign(off), corners = [a, b, [a[0] + n[0] * (off + 3 * s), a[1] + n[1] * (off + 3 * s)], [b[0] + n[0] * (off + 3 * s), b[1] + n[1] * (off + 3 * s)]];
-    placed.push({ x0: Math.min(...corners.map((p) => p[0])), y0: Math.min(...corners.map((p) => p[1])), x1: Math.max(...corners.map((p) => p[0])), y1: Math.max(...corners.map((p) => p[1])) }); }
+    const sg = Math.sign(off), corners = [a, b, [a[0] + n[0] * (off + 3 * sg), a[1] + n[1] * (off + 3 * sg)], [b[0] + n[0] * (off + 3 * sg), b[1] + n[1] * (off + 3 * sg)]];
+    const strip = { x0: Math.min(...corners.map((p) => p[0])), y0: Math.min(...corners.map((p) => p[1])), x1: Math.max(...corners.map((p) => p[0])), y1: Math.max(...corners.map((p) => p[1])) };
+    if (!inside(bx) || !inside(strip)) return false;
+    if (placed.some((q) => !(bx.x1 < q.x0 || bx.x0 > q.x1 || bx.y1 < q.y0 || bx.y0 > q.y1))) return false;
+    rpDim(doc, a, b, off, txt); placed.push(bx, strip); if (dk) done.add(dk); count++;
+    (axis[structure] = axis[structure] || {})[Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v'] = true; return true;
+  };
+  // outline runs of 10 ft or more on a simple roof (a busy plan carries its lengths in the keyed schedule)
+  if (M.lines.length <= 16) {
+    const outline = M.lines.filter((L) => ['eave', 'rake'].includes(L.type) && !L.e.paired && L.status === 'measured' && L.m.planFt >= 10);
+    for (const L of outline) { const dk = [L.structure, Math.round(L.m.planFt * 10), Math.round(Math.abs(Math.atan2(L.xy[L.xy.length - 1][1] - L.xy[0][1], L.xy[L.xy.length - 1][0] - L.xy[0][0]) * 180 / Math.PI) % 180)].join('|'); if (done.has(dk)) continue; const a = V.P(L.xy[0]), b = V.P(L.xy[L.xy.length - 1]); const F = M.facets.find((q) => L.facets.includes(q.id)); if (!F) continue;
+      const c = V.P(rpLabelPoint(F.xy).p); const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1; const n = [-dy / len, dx / len]; const side = (c[0] - a[0]) * n[0] + (c[1] - a[1]) * n[1] > 0 ? -1 : 1;   // away from the facet
+      tryDim(a, b, side, L.m.planFt, L.structure, dk); }
+  }
+  // overall width and depth of each building whose outline is axis-aligned in this view and whose facets were all measured
+  // (a sketch from a source document keeps that document's references; an estimated or unresolved plane gets no overall figure)
+  if (!(M.src && M.src.kind === 'source')) for (const S of M.structs) {
+    const Fs = M.facets.filter((F) => F.structure === S.index && !F.f.excluded); if (!Fs.length || Fs.some((F) => F.status !== 'measured')) continue;
+    const pts = Fs.flatMap((F) => F.xy.map(V.P)); const x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0])), y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
+    let best = null; for (const L of M.lines) { if (L.structure !== S.index || !['eave', 'rake', 'ridge'].includes(L.type)) continue; const a = V.P(L.xy[0]), b = V.P(L.xy[L.xy.length - 1]); const len = Math.hypot(b[0] - a[0], b[1] - a[1]); if (!best || len > best.len) best = { len, ang: Math.abs(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI) % 180 }; }
+    if (!best || !(best.ang < 3 || best.ang > 177 || Math.abs(best.ang - 90) < 3)) continue;
+    const ax = axis[S.index] || {}; const wFt = (x1 - x0) / V.k, dFt = (y1 - y0) / V.k;
+    if (!ax.h && wFt >= 6 && !tryDim([x0, y1], [x1, y1], 1, wFt, S.index, null)) tryDim([x1, y0], [x0, y0], 1, wFt, S.index, null);
+    if (!ax.v && dFt >= 6 && !tryDim([x1, y1], [x1, y0], 1, dFt, S.index, null)) tryDim([x0, y0], [x0, y1], 1, dFt, S.index, null);
+  }
+  return count;
 }
 
 // ------------------------------------------------------------------ the axonometric sketch
@@ -592,12 +614,18 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
   const rot = M.src && !M.src.rotateToAxis ? 0 : rpChooseRotation(M, inner); const V = rpView(M, inner, { rotDeg: rot, padFt: mode === 'simple' ? 3 : 2 });
   // a dry run on a throwaway document decides whether the keys fit this plan; when most would collide, the overview plan
   // carries facet IDs and dimensions only and every key goes to the detail sheets (same fonts, so the same placement)
+  V.limit = { x0: box.x + 5, y0: box.y + 24, x1: mode === 'refs' ? box.x + box.w - 5 : mode === 'busy' ? 359 : 372, y1: box.y + box.h - (mode === 'refs' ? 30 : 5) };   // dimensions stay inside the drawing area
   const dry = rpDrawPlan(rpDoc(), M, V, { dims: true }); const noKeys = dry.keys > 0 && dry.missed.length > 0.35 * dry.keys;
   const res = rpDrawPlan(doc, M, V, { noKeys, dims: true }); res.noKeys = noKeys;
   const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20; const rotNote = rot ? ` The plan is turned ${Math.round(Math.abs(rot))}° to the roof's long axis; the arrow is true north.` : '';
+  const barIn = (2 * step * V.k / 72).toFixed(2).replace(/\.?0+$/, '');
+  // layout self-check, reported to the caller: the longest straight measured piece must draw at exactly k points per foot
+  let chk = null; for (const L of M.lines) for (let i = 1; i < L.xy.length; i++) { const ft = Math.hypot(L.xy[i][0] - L.xy[i - 1][0], L.xy[i][1] - L.xy[i - 1][1]); if (!chk || ft > chk.segmentFt) { const a = V.P(L.xy[i - 1]), b = V.P(L.xy[i]); chk = { key: L.tag || L.key, segmentFt: ft, segmentPt: Math.hypot(b[0] - a[0], b[1] - a[1]) }; } }
+  if (chk) { chk.expectedPt = chk.segmentFt * V.k; chk.ok = Math.abs(chk.segmentPt - chk.expectedPt) < 1e-6 * Math.max(1, chk.expectedPt); }
+  ctx.layout = { scale: V.label, perIn: V.perIn, ptPerFt: V.k, rotationDeg: rot, bar: { ft: 2 * step, pt: 2 * step * V.k, inches: +barIn }, dims: res.dims, keysOnOverview: !noKeys, keys: { total: res.keys, placed: res.placedKeys.slice(), missed: res.missed.slice() }, scaleCheck: chk };
   if (mode === 'simple') {
     rpLn(doc, [380, 158], [380, box.y + box.h - 12], 0.5, 0.72); let py = 206; rpNorth(doc, 408, py, rot); rpBar(doc, 444, py - 9, V.k, step); py += 26;
-    rpCap(doc, 'Drawing scale', 393, py); py += 16; rpText(doc, V.label, 393, py, { size: 12, bold: true }); py += 17; py = rpText(doc, 'Print at 100% on US Letter.' + rotNote, 393, py, { size: 8.4, color: GR(0.32), maxWidth: 178 }) + 8;
+    rpCap(doc, 'Drawing scale', 393, py); py += 16; rpText(doc, V.label, 393, py, { size: 12, bold: true }); py += 17; py = rpText(doc, 'Print at 100% on US Letter; the scale bar measures ' + barIn + ' in.' + rotNote, 393, py, { size: 8.4, color: GR(0.32), maxWidth: 178 }) + 8;
     rpCap(doc, 'Line & facet key', 393, py); py += 20; py = rpLegendKey(doc, M, 393, py);
     if (py + 10 < box.y + box.h) rpText(doc, 'Repeated equal edges share one key. Counts appear below.', 393, py + 4, { size: 8.3, color: GR(0.3), maxWidth: 175 });
   } else if (mode === 'busy') {
@@ -605,14 +633,14 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
     if (facetsInPanel && nF) { rpCap(doc, 'Facet schedule', 379, py - 12); py = rpTableD(doc, 377, py, [40, 60, 48, 55], S.facetHead, S.facetRows, { rowh: 15, size: 8.4, headsz: 7.8, num: S.facetNum }) + 18; }
     rpCap(doc, 'Plan legend', 379, py); py += 17; py = rpLegendKey(doc, M, 379, py) + 6;
     rpCap(doc, M.src && M.src.scaleNote ? 'Approximate scale' : 'Drawing scale', 379, py); py += 16; rpText(doc, V.label + ' at 100%', 379, py, { size: 10, bold: true }); py += 15;
-    py = rpText(doc, (M.src && M.src.scaleNote ? M.src.scaleNote + ' ' : 'Print at 100% on US Letter.') + rotNote, 379, py, { size: 7.9, color: GR(0.3), maxWidth: 190 });
+    py = rpText(doc, (M.src && M.src.scaleNote ? M.src.scaleNote + ' ' : 'Print at 100% on US Letter. ') + 'Scale bar ' + barIn + ' in.' + rotNote, 379, py, { size: 7.9, color: GR(0.3), maxWidth: 190 });
     // north arrow and scale bar in a corner of the drawing the roof leaves free (bottom-left first, as on the reference sheet)
     const pts = [...M.facets, ...M.zones].flatMap((g) => g.xy.map(V.P)); const free = (x0, y0, x1, y1) => !pts.some((q) => q[0] > x0 && q[0] < x1 && q[1] > y0 && q[1] < y1) && !res.placed.some((b) => !(b.x1 < x0 || b.x0 > x1 || b.y1 < y0 || b.y0 > y1));
     const corner = free(44, box.y + box.h - 90, 150, box.y + box.h) ? 'bl' : free(260, box.y + box.h - 90, 366, box.y + box.h) ? 'br' : free(44, box.y + 28, 150, box.y + 112) ? 'tl' : 'tr';
     const nx = corner === 'bl' || corner === 'tl' ? 65 : 290, ny = corner === 'bl' || corner === 'br' ? box.y + box.h - 66 : box.y + 58;   // top corners sit below the caption
     rpNorth(doc, nx, ny, rot); rpBar(doc, nx - 5, ny + 28, V.k, step);
   } else {
-    rpNorth(doc, box.x + box.w - 44, box.y + 60, rot); rpBar(doc, box.x + box.w - 150, box.y + box.h - 74, V.k, step); rpText(doc, V.label + ' at 100%', box.x + box.w - 150 + V.k * step, box.y + box.h - 44, { size: 8.5, bold: true, color: GR(0.25), align: 'center' });
+    rpNorth(doc, box.x + box.w - 44, box.y + 60, rot); rpBar(doc, box.x + box.w - 150, box.y + box.h - 74, V.k, step); rpText(doc, V.label + ' at 100%', box.x + box.w - 150 + V.k * step, box.y + box.h - 44, { size: 8.5, bold: true, color: GR(0.25), align: 'center' }); rpText(doc, 'scale bar ' + barIn + ' in', box.x + box.w - 150 + V.k * step, box.y + box.h - 32, { size: 7.8, color: GR(0.35), align: 'center' });
     rpText(doc, 'Solid = visible edge     Dashed = documented continuation     Hatched = unresolved review zone', 44, box.y + box.h - 14, { size: 8.7, bold: true });
   }
   // schedules below the plan
@@ -660,7 +688,8 @@ function rpSheetDetail(doc, M, win, i, m, n, total, unplaced) {
   rpNorth(doc, 60, box.y + box.h - 40); const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20; rpBar(doc, 96, box.y + box.h - 48, V.k, step);
   // keys that fit on no sheet at all are named once (on the last detail sheet), so nothing is silently absent
   const gone = unplaced && unplaced.length && i === m ? ` Not placed on any sheet (no room next to the line): ${unplaced.join(', ')}; their lengths are in the schedule.` : '';
-  rpText(doc, `${V.label} at 100% on US Letter. Keys match the schedule on the measurement plan sheet.` + gone, RP.L, box.y + box.h + 22, { size: 8.5, color: GR(0.23), maxWidth: 548 });
+  const barIn = (2 * step * V.k / 72).toFixed(2).replace(/\.?0+$/, '');
+  rpText(doc, `${V.label} at 100% on US Letter (scale bar ${barIn} in). Keys match the schedule on the measurement plan sheet.` + gone, RP.L, box.y + box.h + 22, { size: 8.5, color: GR(0.23), maxWidth: 548 });
   return res;
 }
 // continuation sheets take whatever table shape the plan sheet used (keyed, grouped or per-line), as many columns as fit
@@ -723,7 +752,11 @@ async function rpBuild(opts = {}) {
   if (hasEvidence) { doc.addPage('letter', 'portrait'); n++; rpSheetEvidence(doc, M, n, total); }
   if (opts.materials) { doc.addPage('letter', 'portrait'); n++; rpSheetMaterials(doc, M, n, total); }
   doc.setProperties({ title: `${M.line1} - roof measurement`, author: 'Diversity Contracting | Roof Measure', subject: 'US Letter roof overview, takeoff and scaled measurement plan', creator: 'Roof Measure' });
-  return { doc, M, pages: doc.getNumberOfPages() };
+  // layout self-check for the caller: every key is on the plan, on a detail sheet, or named as unplaced; the scale is exact
+  const Lk = ctx.layout || null; let layout = null;
+  if (Lk) { const accounted = new Set([...Lk.keys.placed, ...hadRoom, ...unplaced]); const unaccounted = [...Lk.keys.placed, ...Lk.keys.missed].filter((k) => !accounted.has(k));
+    layout = { ...Lk, keys: { total: Lk.keys.total, overview: Lk.keys.placed.length, detail: hadRoom.size, unplaced, unaccounted }, sheets: { total, detail: wins.length, schedules: extraSched, evidence: hasEvidence, materials: !!opts.materials } }; }
+  return { doc, M, pages: doc.getNumberOfPages(), layout };
 }
 // no roof could be measured from the imagery: a one-sheet REVIEW REQUIRED report with what was found and what is needed
 function rpBuildNoRoof() {
