@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { render, rng } from './synth.mjs';
 import { runApp, ROOT as ROOT0 } from './appcore.mjs';
 import pc from 'polygon-clipping';
-import { compareOutlines, outlineVerdict } from './shapecheck.mjs';
+import { compareOutlines, outlineVerdict, classifyMismatch } from './shapecheck.mjs';
 const ROOT = process.env.ENGINE || ROOT0;   // ENGINE=<app dir> runs the fixtures against another version (e.g. the baseline, to see them fail)
 const RM = createRequire(import.meta.url)('../roofmodel.js');
 
@@ -170,6 +170,19 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
   const cmp = compareOutlines([ref], [wrong]); const v = outlineVerdict(cmp);
   out(Math.abs(cmp.areaDiffPct) < 0.01 && v.areaMatches, 'D12 the two outlines have the same area', `${cmp.refArea} vs ${cmp.runArea}`);
   out(!v.ok && cmp.missingPct > 5 && cmp.extraPct > 5, 'D12 equal area does not pass: missing and extra outline reported', `missing ${cmp.missingPct.toFixed(1)}%, extra ${cmp.extraPct.toFixed(1)}%, IoU ${cmp.iou.toFixed(2)}; ${v.reasons.join('; ')}`);
+}
+
+// D14 (brief: "shifted 3D overlay"; test idea from an external geospatial review): the same outline drawn in the wrong place must be
+// told apart from a wrong outline. Moving the run onto the reference's centroid makes a shifted copy fit (IoU 1.0) while the
+// equal-area rectangle of D12 still does not (IoU 0.74), so a shift is reported as a shift and never excused as a shape match.
+{
+  const ref = [[0, 0], [40, 0], [40, 20], [30, 20], [30, 30], [0, 30]]; const mv = (r, dx, dy) => r.map((p) => [p[0] + dx, p[1] + dy]);
+  const same = classifyMismatch([ref], [ref]), shifted = classifyMismatch([ref], [mv(ref, 3, -2)]), far = classifyMismatch([ref], [mv(ref, 20, 0)]);
+  const wrong = classifyMismatch([ref], [[[0, 0], [44, 0], [44, 25], [0, 25]]]), wrongMoved = classifyMismatch([ref], [mv([[0, 0], [44, 0], [44, 25], [0, 25]], 10, 10)]);
+  out(same.kind === 'match' && same.shift < 1e-9, 'D14 the same outline is a match', same.kind);
+  out(shifted.kind === 'shifted' && Math.abs(shifted.shift - Math.hypot(3, 2)) < 1e-6 && shifted.after.iou > 0.999, 'D14 a copy moved 3.6 ft is reported as shifted by 3.6 ft (not as a wrong shape, not as a match)', [shifted.kind, shifted.shift, shifted.before.iou]);
+  out(far.kind === 'shifted' && far.before.iou < 0.3, 'D14 a copy moved 20 ft (no overlap worth the name) is still recognised as the same shape, shifted', [far.kind, far.before.iou]);
+  out(wrong.kind === 'wrong-shape' && wrongMoved.kind === 'wrong-shape', 'D14 the equal-area rectangle is a wrong shape wherever it is drawn', [wrong.kind, wrong.after.iou, wrongMoved.kind]);
 }
 
 // D13 (brief: "preserve real diagonals, offsets and additions; remove small kinks only within a documented tolerance"): a house
