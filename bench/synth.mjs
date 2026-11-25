@@ -242,13 +242,14 @@ export function render(wings, r, opt = {}) {
   for (let k = 0; k < nCh && roofPx.length; k++) { const i = r.pick(roofPx); const x = i % w, y = (i - x) / w; bump(x, y, r.int(4, 8), r.int(4, 9), 0, dsm[i] + r.range(0.8, 1.5)); clutter.push('chimney'); }
   for (let k = 0; k < nV && roofPx.length; k++) { const i = r.pick(roofPx); const x = i % w, y = (i - x) / w; bump(x, y, 2, 2, r.range(0.15, 0.35)); }
   // tree canopy over part of the roof
+  const treePx = new Uint8Array(w * h);
   const nT = opt.trees ?? (r() < 0.35 ? r.int(1, 2) : 0);
   const edgePx = []; for (let y = 1; y < h - 1; y += 3) for (let x = 1; x < w - 1; x += 3) { const i = y * w + x; if (mask[i] && (!mask[i - 1] || !mask[i + 1] || !mask[i - w] || !mask[i + w])) edgePx.push(i); }
   for (let k = 0; k < nT && edgePx.length; k++) {
     const i = r.pick(edgePx); const cx = i % w, cy = (i - cx) / w; const rad = r.range(15, 40); const top = 3 + r.range(3, 8); const dropMask = r() < 0.5;
     for (let y = Math.max(0, Math.floor(cy - rad)); y < Math.min(h, cy + rad); y++) for (let x = Math.max(0, Math.floor(cx - rad)); x < Math.min(w, cx + rad); x++) {
       const d = Math.hypot(x - cx, y - cy) / rad; if (d > 1) continue; const j = y * w + x;
-      dsm[j] = Math.max(dsm[j], top - d * d * 2.5 + r.gauss() * 0.25); if (dropMask) mask[j] = 0;
+      dsm[j] = Math.max(dsm[j], top - d * d * 2.5 + r.gauss() * 0.25); if (dropMask) mask[j] = 0; treePx[j] = 1;
     }
     clutter.push(dropMask ? 'tree-cut' : 'tree');
   }
@@ -261,5 +262,16 @@ export function render(wings, r, opt = {}) {
   // mask edge raggedness: erode/dilate by a pixel in random spots
   const m2 = new Uint8Array(mask);
   for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; const edge = mask[i - 1] !== mask[i] || mask[i + 1] !== mask[i] || mask[i - w] !== mask[i] || mask[i + w] !== mask[i]; if (edge && r() < 0.25) m2[i] = 1 - mask[i]; }
-  return { w, h, px, dsm: out, mask: m2, E0, N0, meta: { noise, blur, clutter, hard } };
+  // aerial colour layer like Google's (same grid): grey shingles, green canopy and lawn, grey paving. Uses a hash, not the
+  // scene RNG, so adding it did not change any house, tree or noise value of earlier benchmark runs.
+  const hsh = (i, k) => { let v = Math.imul(i + 1, 2654435761) ^ Math.imul(k + 7, 40503); v ^= v >>> 15; v = Math.imul(v, 2246822519); v ^= v >>> 13; return (v >>> 0) / 4294967296; };
+  const R = new Uint8Array(w * h), G = new Uint8Array(w * h), B = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const n = (hsh(i, 1) - 0.5) * 24; let c;
+    if (treePx[i]) c = [40 + hsh(i, 2) * 30, 78 + hsh(i, 3) * 40, 34 + hsh(i, 4) * 24];
+    else if (mask[i]) { const rc = opt.roofColor || [118, 116, 124]; c = [rc[0] + n, rc[1] + n, rc[2] + n]; }   // opt.roofColor: warm roofs (tan, olive, weathered wood) for colourtest.mjs
+    else c = hsh(Math.floor((i % w) / 40) + 977 * Math.floor(i / w / 40), 5) < 0.6 ? [70 + n, 112 + n, 58 + n] : [150 + n, 148 + n, 144 + n];
+    R[i] = Math.max(0, Math.min(255, c[0])); G[i] = Math.max(0, Math.min(255, c[1])); B[i] = Math.max(0, Math.min(255, c[2]));
+  }
+  return { w, h, px, dsm: out, mask: m2, rgb: [R, G, B], E0, N0, meta: { noise, blur, clutter, hard } };
 }

@@ -116,6 +116,7 @@ function roofrDiagram(scope, mode, W, H, allShades) {
     const segKey = (A, B) => { const i = snapPts.indexOf(A), j = snapPts.indexOf(B); return i < j ? i + '-' + j : j + '-' + i; };
     const owner = new Map();
     scope.edges.forEach(({ e, m }, ei) => {
+      if (EDGE_TYPES[e.type].notRoof) return;                 // obstruction boundary: a gap in the outline
       const dashed = !!EDGE_TYPES[e.type].dashed;
       for (let i = 1; i < m.path.length; i++) {
         const A = P(m.path[i - 1]), B = P(m.path[i]); if (A === B) continue;
@@ -125,7 +126,7 @@ function roofrDiagram(scope, mode, W, H, allShades) {
     });
     const owns = (ei, a, b) => { const A = P(a), B = P(b); if (A === B) return false; const o = owner.get(segKey(A, B)); return !!o && o.ei === ei; };
     scope.edges.forEach(({ e, m }, ei) => {
-      const t = EDGE_TYPES[e.type];
+      const t = EDGE_TYPES[e.type]; if (t.notRoof) return;
       let run = [];
       const flush = () => { if (run.length > 1) s += `<polyline points="${run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="${t.color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="4" ${t.dashed ? 'stroke-dasharray="3 3"' : ''}/>`; run = []; };
       for (let i = 1; i < m.path.length; i++) {
@@ -157,7 +158,7 @@ function roofrDiagram(scope, mode, W, H, allShades) {
       s += label(a, b, segFt(a, b), '#888');
     }
   } else {
-    for (const { e, m } of scope.edges) s += `<polyline points="${ptsStr(m.path)}" fill="none" stroke="#4a9bd9" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4"/>`;
+    for (const { e, m } of scope.edges) if (!EDGE_TYPES[e.type].notRoof) s += `<polyline points="${ptsStr(m.path)}" fill="none" stroke="#4a9bd9" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4"/>`;
     for (const x of scope.facets) {
       const c = P(centroid(x.m.path));
       if (mode === 'areas') {
@@ -267,13 +268,14 @@ function diagramPage(R, n) {
 }
 function lengthPage(R, n) {
   const bt = R.t.byType;
-  const legend = `<div class="legend">${Object.entries(EDGE_TYPES).map(([k, v]) => `<span class="${v.dashed ? 'dashed' : ''}" style="--c:${v.color}">${v.plural}: ${ftInR(bt[k].true)}</span>`).join('')}</div>`;
+  const legend = `<div class="legend">${Object.entries(EDGE_TYPES).filter(([, v]) => !v.notRoof).map(([k, v]) => `<span class="${v.dashed ? 'dashed' : ''}" style="--c:${v.color}">${v.plural}: ${ftInR(bt[k].true)}</span>`).join('')}</div>`;
   return page(`${head(R, 'Length measurement report')}${legend}<div class="diagram">${roofrDiagram(R.t, 'lengths', 700, 640)}</div>
     <div class="note">Measurements in diagram are rounded up for display. Some edge lengths may be hidden from diagram to avoid overcrowding.</div>`, n);
 }
 function areaPage(R, n) {
   const t = R.t;
   return page(`${head(R, 'Area measurement report')}
+    ${t.unresolvedItems || t.inferredSloped > 0.5 ? `<div style="margin:6px 0;padding:6px 8px;border:1.5px solid #c0392b;color:#8a1c12;font-weight:600;font-size:11px">${t.unresolvedItems ? 'NOT FULLY MEASURED. ' : ''}Confirmed ${sqftUp(t.confirmedSloped)} sqft${t.inferredSloped > 0.5 ? '; estimated under tree canopy ' + sqftUp(t.inferredSloped) + ' sqft' : ''}${t.areaByStatus.unresolved > 0.5 ? '; marked unresolved ' + sqftUp(t.areaByStatus.unresolved) + ' sqft' : ''}${t.hiddenZones && t.hiddenZones.length ? '; hidden zones of 0 to ' + sqftUp(t.hiddenUpperSloped) + ' sqft are in no total' : ''}. The PDF report shows where and on what evidence.</div>` : ''}
     <div class="stats"><div>Total roof area: ${sqftUp(t.sloped)} sqft</div><div>Predominant pitch: ${t.predominant == null ? '-' : t.predominant === 0 ? 'Flat' : pitchLabel(t.predominant)}</div>
     <div>Pitched roof area: ${sqftUp(t.pitched)} sqft</div><div>Predominant pitch area: ${sqftUp(t.predArea)} sqft</div>
     <div>Flat roof area: ${sqftUp(t.flat)} sqft</div><div>Unspecified pitch area: 0 sqft</div>
@@ -349,8 +351,9 @@ function heightsPage(R, info, n) {
       </table></div>
       <div><div class="sec">Access &amp; safety</div><table class="kv">
         ${row('Ladder to reach the gutter', ladder ? `${ladder} ft extension ladder` : 'Over 40 ft: lift or roof access required')}
-        ${row('Tallest trees / structures near the roof', trees > 1 ? `${fmt(trees)} ft` : 'None found')}
-        ${row('Trees above the ridge', trees > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No')}
+        ${(() => { const ob = state.trace && state.trace.obstruction; if (!ob) return row('Tallest object near the roof (trees and structures not separated: no trace)', trees > 1 ? `${fmt(trees)} ft` : 'None found') + row('Above the ridge', trees > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No');
+          const tt = Math.max(ob.tallestOverlapTreeFt || 0, ob.tallestNearTreeFt || 0);
+          return row('Tallest tree near the roof', tt > 1 ? `${fmt(tt)} ft` : 'None found') + row('Tallest other structure nearby', ob.tallestStructureFt ? `${fmt(ob.tallestStructureFt)} ft` : 'None found') + row('Tree canopy over the roof', ob.inferredPlanSqft > 1 ? `${fmt(ob.inferredPlanSqft)} sq ft (${fmt(ob.footprintObscuredPct, 1)}% of the footprint)` : 'None') + row('Trees above the ridge', tt > ridge + 1 ? 'Yes: check for overhang, debris and limb damage' : 'No'); })()}
         ${row('Steep-roof equipment', R.t && R.t.predominant >= 8 ? 'Yes: predominant pitch ' + pitchLabel(R.t.predominant) : 'Not expected')}
       </table></div>
     </div>
@@ -551,10 +554,18 @@ async function downloadPDF(what = "report") {
     try { await autoTraceRoof(); } catch (e) { toast('Auto-trace failed (' + e.message + '). Trace the roof by hand to get the diagram pages.', true); }
     return true;
   };
-  const run = (fn, btn) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace()) await fn(); } finally { b.disabled = false; } };
-  $('#btnReport').onclick = run(printReport, '#btnReport');
-  $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML');
-  const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => { try { await downloadPDF(what); } catch (e) { toast('PDF failed: ' + e.message, true); } }, id); };
+  const gateOk = () => { if (typeof reviewGate !== 'function' || reviewGate()) return true; toast('Export cancelled: see "5. Review before export"'); const p = $('#panelReview'); if (p) { p.open = true; p.scrollIntoView({ block: 'start' }); } return false; };
+  window.rmExportGate = gateOk;
+  const run = (fn, btn, gate) => async () => { const b = $(btn); b.disabled = true; try { if (await ensureTrace() && (!gate || gateOk())) await fn(); } finally { b.disabled = false; } };
+  $('#btnReport').onclick = run(printReport, '#btnReport', true);
+  $('#btnReportHTML').onclick = run(downloadReport, '#btnReportHTML', true);
+  // roof report PDFs are drawn as vectors with selectable text (roofpdf.js); the estimate-only PDF keeps its own layout.
+  // Every export first passes the review gate, so incomplete totals are acknowledged, never exported silently.
+  const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => {
+    try {
+      if (!gateOk()) return;                                   // the estimate is priced from the same totals, so it asks too
+      if (what !== 'estimate' && typeof rpDownload === 'function' && state.facets.length) await rpDownload(what); else await downloadPDF(what);
+    } catch (e) { console.error(e); toast('PDF failed: ' + e.message, true); } }, id); };
   pdfBtn('#btnReportPDF', 'report');
   pdfBtn('#btnReportBoth', 'both');
   pdfBtn('#btnXmPDF', 'estimate');

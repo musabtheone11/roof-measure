@@ -187,8 +187,17 @@
     </details>
 
     <!-- EXPORT -->
+    <details class="panel" id="panelReview" open>
+      <summary>5. Review before export</summary>
+      <div class="body">
+        <p class="muted" style="margin:0 0 8px">Compare the roofline with the photo. Click any facet or line to correct its corners, type, pitch, level or status; every total updates as you edit. The original auto-trace stays stored for audit.</p>
+        <button id="btnAltView" class="primary" style="width:100%;margin:0 0 8px" title="3D view from overhead, north, east, south and west with free orbit; dated aerial images; import of your own imagery">Review roof from other angles</button>
+        <div id="reviewOut" class="out"><span class="muted">Trace a roof to see checks here.</span></div>
+      </div>
+    </details>
+
     <details class="panel" id="panelExport">
-      <summary>5. Report, save &amp; export</summary>
+      <summary>6. Report, save &amp; export</summary>
       <div class="body">
         <div class="grid2">
           <label>Customer / job name <input id="jobName" type="text" placeholder="Smith residence"></label>
@@ -196,17 +205,21 @@
         </div>
         <div class="row wrap" style="margin-top:8px">
           <span class="muted">Estimate path:</span>
-          <button id="btnPathInsurance" title="Insurance claim: the Xactimate-format estimate in panel 6">Insurance claim</button>
+          <button id="btnPathInsurance" title="Insurance claim: the Xactimate-format estimate in panel 7">Insurance claim</button>
           <button id="btnPathCash" title="Cash job: opens the Diversity estimate builder with this roof's measurements filled in">Cash</button>
         </div>
         <div class="row wrap" style="margin-top:8px">
-          <button id="btnReportPDF" class="primary" title="Saves the full Roofr-style report as a PDF file">Download PDF report</button>
+          <button id="btnReportPDF" class="primary" title="Vector PDF with selectable text: summary, aerial overlay, length / area / pitch diagrams, facet and line schedules">Download PDF report</button>
           <button id="btnReportBoth" class="primary" title="One PDF: the roof report followed by the insurance estimate">Report + estimate PDF</button>
           <button id="btnReport">Print</button>
           <button id="btnReportHTML" title="Self-contained report file you can email or open later">Download report</button>
           <button id="btnCSV">Export CSV</button>
           <button id="btnJSON">Export JSON</button>
           <label class="filebtn">Import JSON<input id="fileJSON" type="file" accept="application/json" hidden></label>
+        </div>
+        <div class="row wrap" style="margin-top:6px;gap:14px">
+          <label class="chk"><input type="checkbox" id="chkPdf3d"> Add 3D view page</label>
+          <label class="chk"><input type="checkbox" id="chkPdfMaterials" checked> Add material order page</label>
         </div>
         <details class="help">
           <summary>Company details shown on the report</summary>
@@ -281,7 +294,7 @@
 
     <!-- INSURANCE ESTIMATE (Xactimate format) -->
     <details class="panel" id="panelXm">
-      <summary>6. Insurance estimate (Xactimate format)</summary>
+      <summary>7. Insurance estimate (Xactimate format)</summary>
       <div class="body">
         <div id="xmOut" class="out"></div>
         <div class="grid2">
@@ -386,9 +399,24 @@
       <button id="btnFinish" class="tool" title="Finish shape (Enter)">Finish</button>
       <button id="btnUndo" class="tool" title="Undo last point (Backspace)">Undo pt</button>
       <button id="btnDelete" class="tool danger" title="Delete selected (Del)">Delete</button>
+      <span class="sep"></span>
+      <button id="btnAltViewTb" class="tool" title="Review roof from other angles: 3D views, dated imagery, import">Other angles</button>
     </div>
     <div id="hint"></div>
     <div id="crosshair" aria-hidden="true"></div>
+    <!-- Review roof from other angles: 3D views, dated imagery, imported imagery (altview.js) -->
+    <div id="avPanel" class="av" hidden>
+      <div class="av-head">
+        <strong>Review roof from other angles</strong>
+        <span class="av-tabs"><button data-av="3d" class="small">3D view</button><button data-av="dated" class="small">Dated imagery</button><button data-av="import" class="small">Import imagery</button></span>
+        <button id="avClose" class="small ghost">Close</button>
+      </div>
+      <div id="avBadge" class="av-badge"></div>
+      <div class="av-body">
+        <div id="avStage"><div id="av3d" hidden></div><div id="av2d" hidden><canvas id="avCanvas"></canvas></div><div id="avPhoto" hidden></div><div id="avVeil" hidden></div></div>
+        <div id="avSide"></div>
+      </div>
+    </div>
     <div id="nokey" class="overlay">
       <div class="card">
         <h2>Roof Measure</h2>
@@ -403,10 +431,15 @@
 <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
 <script src="leadscore.js"></script>
+<script src="roofmodel.js"></script>
 <script src="app.js"></script>
 <script src="autotrace.js"></script>
 <script src="autotrace2.js"></script>
+<script src="obstruction.js"></script>
 <script src="report.js"></script>
+<script src="review.js"></script>
+<script src="altview.js"></script>
+<script src="roofpdf.js"></script>
 <script src="permits.js"></script>
 <script src="pin.js"></script>
 <script src="autocomplete.js"></script>

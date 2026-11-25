@@ -447,7 +447,8 @@ function xmPriceEditor() {
     ['xm_offridge6', 'offridge6'], ['xm_rain', 'rain'], ['xm_satellite', 'satellite'], ['xm_gutterLF', 'gutterLF'], ['xm_haul', 'haul'], ['xm_dumpster', 'dumpster'], ['xm_permitAmt', 'permitAmt']].forEach(([id, k]) => bind(id, k, 'num'));
   [['xm_iws', 'iws'], ['xm_renail', 'renail'], ['xm_sealant', 'sealant'], ['xm_starter', 'starter'], ['xm_ridgeVent', 'ridgeVent'], ['xm_mastic', 'mastic'], ['xm_steep', 'steep'], ['xm_high', 'high'],
     ['xm_notes', 'notes'], ['xm_op', 'op'], ['xm_permit', 'permit'], ['xm_bold', 'bold'], ['xm_append', 'appendToReport']].forEach(([id, k]) => bind(id, k, 'chk'));
-  const run = (fn, btn) => async () => { const b = $(btn); b.disabled = true; try { await fn(); } finally { b.disabled = false; } };
+  // the estimate is priced from the roof totals, so it passes the same review gate as the roof report
+  const run = (fn, btn) => async () => { const b = $(btn); b.disabled = true; try { if (state.facets.length && typeof window.rmExportGate === 'function' && !window.rmExportGate()) return; await fn(); } finally { b.disabled = false; } };
   $('#btnXmPrint').onclick = run(xmPrint, '#btnXmPrint');
   $('#btnXmDownload').onclick = run(xmDownload, '#btnXmDownload');
   const logo = $('#co_logo');

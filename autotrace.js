@@ -10,8 +10,9 @@
 var AT = { v2: true, tolM: 0.75, minRegionM2: 3, dpEpsPx: 5, regularize: true, dropBlobM2: 10, maxOtherStructures: 3, minOtherM2: 4, maxOtherM2: 95, maxOtherDistM: 28 };
 
 // ------------------------------------------------------------------ data access
-async function solarDataLayers(lat, lng, radius) {
-  const url = `https://solar.googleapis.com/v1/dataLayers:get?location.latitude=${lat}&location.longitude=${lng}&radiusMeters=${radius}&view=IMAGERY_LAYERS&requiredQuality=LOW&pixelSizeMeters=0.1&key=${encodeURIComponent(state.key)}`;
+async function solarDataLayers(lat, lng, radius, quality) {
+  // quality given: that exact dataset (Google keeps one per quality tier, often flown in different years); otherwise the best one
+  const url = `https://solar.googleapis.com/v1/dataLayers:get?location.latitude=${lat}&location.longitude=${lng}&radiusMeters=${radius}&view=IMAGERY_LAYERS&requiredQuality=${quality ? quality + '&exactQualityRequired=true' : 'LOW'}&pixelSizeMeters=0.1&key=${encodeURIComponent(state.key)}`;
   const r = await fetch(url);
   if (!r.ok) { let m = 'HTTP ' + r.status; try { const j = await r.json(); m = (j.error && j.error.message) || m; } catch (_) { /* ignore */ } throw new Error('Data layers: ' + m); }
   return r.json();
@@ -29,7 +30,7 @@ async function loadTiff(url, cacheName) {
   }
   const tiff = await GeoTIFF.fromArrayBuffer(buf);
   const img = await tiff.getImage();
-  const data = (await img.readRasters())[0];
+  const ras = await img.readRasters(); const data = ras[0];
   const w = img.getWidth(), h = img.getHeight();
   const [ox, oy] = img.getOrigin(); const [rx, ry] = img.getResolution();
   const keys = img.getGeoKeys ? (img.getGeoKeys() || {}) : {};
@@ -45,7 +46,7 @@ async function loadTiff(url, cacheName) {
     if (!def) throw new Error('Unsupported GeoTIFF projection EPSG:' + epsg);
     toLL = (x, y) => { const p = proj4(def, 'EPSG:4326', [ox + x * rx, oy + y * sy]); return { lng: p[0], lat: p[1] }; };
   }
-  return { data, w, h, toLL, rx, ry, epsg };
+  return { data, bands: ras.length >= 3 ? [ras[0], ras[1], ras[2]] : null, w, h, toLL, rx, ry, epsg };
 }
 
 // ------------------------------------------------------------------ raster helpers
@@ -391,12 +392,129 @@ async function traceBuildingV1(resp, tif, mask, comp, geo, opts) {
   return { facets, edges, unassignedPct: total ? Math.round(unassigned / total * 1000) / 10 : 0, planes: planes.length, datum: Math.round(datum * 100) / 100 };
 }
 
+// ------------------------------------------------------------------ a second dated dataset of the same building (altview.js)
+// The other Solar dataset is fetched for the same centre and radius, put on the current grid, checked against the roof the
+// current dataset can see, and - only when the reviewer approved it - used for the pixels the current dataset has under canopy.
+async function altLoadLayers(quality, lat, lng, radius) {
+  const cache = (window.__altCache = window.__altCache || {}); const key = [quality, lat.toFixed(6), lng.toFixed(6), radius].join('|');
+  if (cache[key]) return cache[key];
+  const safe = 'alt_' + quality + '_' + String((state.solar && state.solar.name) || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius;
+  const nm = (k) => '_cache_' + safe + '_' + k; const local = location.hostname === 'localhost';
+  let layers = null, mT = null, dT = null, rT = null;
+  if (local) { try { const meta = await fetch('/reports/' + nm('meta.json')); if (meta.ok) { layers = await meta.json(); mT = await loadTiff('unused', nm('mask.tif')); dT = await loadTiff('unused', nm('dsm.tif')); rT = await loadTiff('unused', nm('rgb.tif')); } } catch (_) { mT = null; } }
+  if (!mT || !dT) {
+    const full = await solarDataLayers(lat, lng, radius, quality);
+    if (!full.maskUrl || !full.dsmUrl) throw new Error('That dataset has no mask and height model');
+    [mT, dT] = await Promise.all([loadTiff(full.maskUrl, nm('mask.tif')), loadTiff(full.dsmUrl, nm('dsm.tif'))]);
+    try { rT = full.rgbUrl ? await loadTiff(full.rgbUrl, nm('rgb.tif')) : null; } catch (_) { rT = null; }
+    layers = { imageryDate: full.imageryDate, imageryQuality: full.imageryQuality };
+    if (local) { try { await fetch('/save?name=' + encodeURIComponent(nm('meta.json')), { method: 'POST', body: JSON.stringify(layers) }); } catch (_) { /* best effort */ } }
+  }
+  return (cache[key] = { layers, maskT: mT, dsmT: dT, rgbT: rT && rT.bands ? rT : null });
+}
+// nearest-pixel copy of another raster set onto the current grid (the two Solar datasets normally share one grid already)
+function altResample(A, cur, w, h) {
+  const src = A.dsmT; const o = src.toLL(0, 0), ex = src.toLL(src.w, 0), ey = src.toLL(0, src.h);
+  const ax = (ex.lng - o.lng) / src.w, ay = (ex.lat - o.lat) / src.w, bx = (ey.lng - o.lng) / src.h, by = (ey.lat - o.lat) / src.h, det = ax * by - bx * ay;
+  const dsm = new Float32Array(w * h).fill(-9999), mask = new Uint8Array(w * h), valid = new Uint8Array(w * h);
+  const rgbOk = A.rgbT && A.rgbT.w === src.w && A.rgbT.h === src.h; const rgb = rgbOk ? [new Uint8Array(w * h), new Uint8Array(w * h), new Uint8Array(w * h)] : null;
+  const mOk = A.maskT.w === src.w && A.maskT.h === src.h;
+  // corners of the current grid in the source grid; rows and columns are then interpolated (both grids are affine in lat/lng here)
+  const toSrc = (x, y) => { const v = cur.toLL(x, y); const dl = v.lng - o.lng, da = v.lat - o.lat; return [(dl * by - bx * da) / det, (ax * da - ay * dl) / det]; };
+  const p00 = toSrc(0.5, 0.5), p10 = toSrc(w - 0.5, 0.5), p01 = toSrc(0.5, h - 0.5);
+  const ux = (p10[0] - p00[0]) / (w - 1), uy = (p10[1] - p00[1]) / (w - 1), vx = (p01[0] - p00[0]) / (h - 1), vy = (p01[1] - p00[1]) / (h - 1);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const sx = Math.floor(p00[0] + ux * x + vx * y), sy = Math.floor(p00[1] + uy * x + vy * y); if (sx < 0 || sy < 0 || sx >= src.w || sy >= src.h) continue;
+    const j = sy * src.w + sx, i = y * w + x; const z = src.data[j]; if (!(z > -1000)) continue;
+    dsm[i] = z; valid[i] = 1; if (mOk) mask[i] = A.maskT.data[j] > 0 ? 1 : 0; if (rgb) { rgb[0][i] = A.rgbT.bands[0][j]; rgb[1][i] = A.rgbT.bands[1][j]; rgb[2][i] = A.rgbT.bands[2][j]; }
+  }
+  return { dsm, mask, rgb, valid };
+}
+function altDilate(m, w, h, r) {
+  const t = new Uint8Array(w * h), o = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) { let run = -1e9; for (let x = 0; x < w; x++) { if (m[y * w + x]) run = x; if (x - run <= r) t[y * w + x] = 1; } run = 1e9; for (let x = w - 1; x >= 0; x--) { if (m[y * w + x]) run = x; if (run - x <= r) t[y * w + x] = 1; } }
+  for (let x = 0; x < w; x++) { let run = -1e9; for (let y = 0; y < h; y++) { if (t[y * w + x]) run = y; if (y - run <= r) o[y * w + x] = 1; } run = 1e9; for (let y = h - 1; y >= 0; y--) { if (t[y * w + x]) run = y; if (run - y <= r) o[y * w + x] = 1; } }
+  return o;
+}
+// Does the other dataset show the same roof? Compared where the current dataset sees roof: heights after removing the
+// datum offset and tilt between the two models, the outline, the roof height above the ground beside it, and three
+// "patch" tests that catch a part added, changed or removed between the two flights (a global share would average a
+// rear extension away).
+function altCheck(dsm, al, roofMask, treeMask, curMask, w, h, geo) {
+  const N = w * h, px = Math.sqrt(geo.pxM2); const near = altDilate(roofMask, w, h, Math.round(4 / px)), treeD = altDilate(treeMask, w, h, Math.round(1.2 / px));
+  const R = 6, MG = R + 2; const roof = [], gnd = [];
+  for (let y = MG; y < h - MG; y++) for (let x = MG; x < w - MG; x++) { const i = y * w + x; if (!al.valid[i] || !(dsm[i] > -1000) || treeD[i]) continue; if (roofMask[i]) roof.push(i); else if (near[i] && !curMask[i] && !al.mask[i]) gnd.push(i); }
+  const out = { ok: false, roofSqft: roof.length * geo.pxM2 * 10.7639104, reasons: [] };
+  if (roof.length * geo.pxM2 < 15) { out.reasons.push('Too little clearly visible roof to compare the two datasets.'); return out; }
+  const med = (a) => { const s = Float32Array.from(a).sort(); return s.length ? s[s.length >> 1] : 0; };
+  const sub = (a, n) => { const st = Math.max(1, Math.floor(a.length / n)); const o = []; for (let k = 0; k < a.length; k += st) o.push(a[k]); return o; };
+  const rs = sub(roof, 5000), gs = sub(gnd, 2500), hasG = gnd.length >= 200; const xc = w / 2, yc = h / 2;
+  // heights are compared away from the roof's edges (0.8 m in): a softer dataset blurs every eave and ridge by design
+  const inv = new Uint8Array(N); for (let i = 0; i < N; i++) inv[i] = roofMask[i] && !treeD[i] ? 0 : 1;
+  let inner = []; for (const rr of [Math.round(0.8 / px), Math.round(0.4 / px)]) { const edge = altDilate(inv, w, h, rr); inner = roof.filter((i) => !edge[i]); if (inner.length * geo.pxM2 >= 10) break; }
+  if (inner.length * geo.pxM2 < 5) inner = roof;
+  const tiltAt = (T, i) => T[0] * ((i % w) - xc) + T[1] * (Math.floor(i / w) - yc);
+  // shift search with the tilt taken out (a tilted pair with no displacement otherwise reads as a shift)
+  const search = (T) => { const cost = (dx, dy) => { const sh = dy * w + dx; const d = []; for (const i of rs) { const v = dsm[i] - al.dsm[i + sh] - tiltAt(T, i); if (v > -500 && v < 500) d.push(v); } if (d.length < rs.length * 0.7) return null; const off = med(d); let c = 0, n = 0; for (const v of d) { c += Math.min(Math.abs(v - off), 0.8); n++; } for (const i of gs) { const v = dsm[i] - al.dsm[i + sh] - tiltAt(T, i); if (v > -500 && v < 500) { c += Math.min(Math.abs(v - off), 0.8); n++; } } return { c: c / n, off }; };
+    const zero = cost(0, 0); let b = { dx: 0, dy: 0, ...(zero || { c: 9, off: 0 }) };
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { if (!dx && !dy) continue; const q = cost(dx, dy); if (q && q.c < b.c) b = { dx, dy, ...q }; }
+    if (zero && b.c > zero.c * 0.93) b = { dx: 0, dy: 0, ...zero };              // only shift when it clearly helps
+    return b; };
+  // offset (roof) | offset (ground) + tilt in x and y. Separate roof and ground offsets: a roof raised or lowered shows up as their difference
+  const fit = (sh) => { const diff = (i) => { const v = dsm[i] - al.dsm[i + sh]; return v > -500 && v < 500 ? v : null; };
+    const S = sub(inner, 5000).map((i) => [i, 0]).concat(hasG ? gs.map((i) => [i, 1]) : []);
+    let P = [med(inner.map(diff).filter((v) => v != null)), 0, 0, 0]; P[1] = hasG ? med(gnd.map(diff).filter((v) => v != null)) : P[0];
+    for (let pass = 0; pass < 5; pass++) { const thr = [0.9, 0.6, 0.45, 0.35, 0.35][pass]; const A = [0, 1, 2, 3].map(() => new Float64Array(5));
+      for (const [i, g] of S) { const v = diff(i); if (v == null) continue; const x = (i % w) - xc, y = Math.floor(i / w) - yc; if (Math.abs(v - (P[g] + P[2] * x + P[3] * y)) > thr) continue; const row = [g ? 0 : 1, g ? 1 : 0, x, y], wt = g ? 0.5 : 1; for (let a = 0; a < 4; a++) { for (let b = 0; b < 4; b++) A[a][b] += wt * row[a] * row[b]; A[a][4] += wt * row[a] * v; } }
+      if (!hasG) { A[1][0] -= 1e7; A[1][1] += 1e7; }                             // no usable ground: tie the ground offset to the roof offset
+      for (let a = 0; a < 4; a++) A[a][a] += 1e-6;
+      for (let c = 0; c < 4; c++) { let piv = c; for (let r = c + 1; r < 4; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r; [A[c], A[piv]] = [A[piv], A[c]]; if (Math.abs(A[c][c]) < 1e-12) continue; for (let r = 0; r < 4; r++) { if (r === c) continue; const f = A[r][c] / A[c][c]; for (let k = c; k < 5; k++) A[r][k] -= f * A[c][k]; } }
+      const Q = [0, 1, 2, 3].map((c) => (Math.abs(A[c][c]) < 1e-12 ? P[c] : A[c][4] / A[c][c])); if (Q.every(Number.isFinite)) P = Q; }
+    return P; };
+  let best = search([0, 0]), P = fit(best.dy * w + best.dx);
+  for (let round = 0; round < 3; round++) { const nb = search([P[2], P[3]]); if (nb.dx === best.dx && nb.dy === best.dy) break; best = nb; P = fit(best.dy * w + best.dx); }
+  const sh = best.dy * w + best.dx; const diff = (i) => { const v = dsm[i] - al.dsm[i + sh]; return v > -500 && v < 500 ? v : null; };
+  const offAt = (i) => P[0] + tiltAt([P[2], P[3]], i);
+  let agree = 0, se = 0, sn = 0, dn = 0; for (const i of inner) { const v = diff(i); if (v == null) continue; dn++; const r = Math.abs(v - offAt(i)); if (r <= 0.3) agree++; if (r <= 0.6) { se += r * r; sn++; } }
+  let onMask = 0; for (const i of roof) if (al.mask[i + sh]) onMask++;
+  const tilt10 = Math.hypot(P[2], P[3]) / px * 10;                                // metres of tilt per 10 m
+  // patch tests: the largest connected piece of roof that exists in one dataset and not in the other, or stands at a different height
+  const big = (m) => { let bestN = 0; const seen = new Uint8Array(N); for (let s0 = 0; s0 < N; s0++) { if (!m[s0] || seen[s0]) continue; let n = 0; const st = [s0]; seen[s0] = 1; while (st.length) { const i = st.pop(); n++; const x = i % w; for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) if (j >= 0 && j < N && m[j] && !seen[j]) { seen[j] = 1; st.push(j); } } if (n > bestN) bestN = n; } return bestN * geo.pxM2; };
+  const am = new Uint8Array(N), altc = new Float32Array(N).fill(NaN); for (let y = MG; y < h - MG; y++) for (let x = MG; x < w - MG; x++) { const i = y * w + x, j = i + sh; if (!al.valid[j]) continue; am[i] = al.mask[j]; altc[i] = al.dsm[j] + offAt(i); }
+  const r06 = Math.round(0.6 / px), amD = altDilate(am, w, h, r06), curD = altDilate(curMask, w, h, r06), near10 = altDilate(roofMask, w, h, Math.round(10 / px));
+  const added = new Uint8Array(N), changed = new Uint8Array(N), removed = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { if (!(altc[i] === altc[i]) || !(dsm[i] > -1000)) continue; const d = dsm[i] - altc[i];
+    if (roofMask[i] && !amD[i] && d > 1) added[i] = 1;                                        // roof now, open ground then
+    if (roofMask[i] && !treeD[i] && am[i] && Math.abs(d) > 1) changed[i] = 1;                 // roof in both, at a different height
+    if (am[i] && !treeD[i] && !treeMask[i] && !curD[i] && near10[i] && d < -1) removed[i] = 1; }   // roof then, open ground now
+  const erode = (m, r) => { const q = new Uint8Array(N); for (let i = 0; i < N; i++) q[i] = m[i] ? 0 : 1; const dq = altDilate(q, w, h, r); const o = new Uint8Array(N); for (let i = 0; i < N; i++) o[i] = m[i] && !dq[i] ? 1 : 0; return o; };
+  const patch = { addedM2: big(added), changedM2: big(erode(changed, Math.round(0.5 / px))), removedM2: big(removed) };
+  Object.assign(out, { shiftPx: [best.dx, best.dy], shiftM: Math.hypot(best.dx, best.dy) * px, offsetM: P[0], tilt: [P[2], P[3]], tiltPer10m: tilt10, centre: [xc, yc], interiorSqft: inner.length * geo.pxM2 * 10.7639104, heightAgreePct: dn ? agree / dn * 100 : 0, rmsM: sn ? Math.sqrt(se / sn) : null, outlineAgreePct: onMask / roof.length * 100, heightChangeM: hasG ? P[0] - P[1] : null, patchSqft: { added: patch.addedM2 * 10.7639104, changed: patch.changedM2 * 10.7639104, removed: patch.removedM2 * 10.7639104 }, aligned: Math.max(Math.abs(best.dx), Math.abs(best.dy)) < R });
+  if (!out.aligned) out.reasons.push(`The two datasets could not be lined up: they sit ${(R * px * 3.28084).toFixed(0)} ft or more apart.`);
+  if (tilt10 > 1.2) out.reasons.push(`The two height models are tilted against each other by ${tilt10.toFixed(1)} m in 10 m: too much to carry heights across.`);
+  if (out.heightAgreePct < 80) out.reasons.push(`Only ${out.heightAgreePct.toFixed(0)}% of the visible roof (away from its edges) has the same height in both datasets (80% needed).`);
+  if (out.outlineAgreePct < 85) out.reasons.push(`Only ${out.outlineAgreePct.toFixed(0)}% of the visible roof lies inside the other dataset's building outline (85% needed).`);
+  if (out.heightChangeM != null && Math.abs(out.heightChangeM) > 0.5) out.reasons.push(`The roof stands ${Math.abs(out.heightChangeM).toFixed(1)} m ${out.heightChangeM > 0 ? 'higher' : 'lower'} above the ground in the current dataset: the building may have changed.`);
+  if (patch.addedM2 >= 1.5) out.reasons.push(`${Math.round(patch.addedM2 * 10.7639104)} sq ft of roof seen in the trace image is open ground in the other dataset: part of the roof was added or the other dataset is older than it.`);
+  if (patch.changedM2 >= 1.5) out.reasons.push(`${Math.round(patch.changedM2 * 10.7639104)} sq ft of roof stands at a different height in the two datasets: that part was rebuilt.`);
+  if (patch.removedM2 >= 1.5) out.reasons.push(`${Math.round(patch.removedM2 * 10.7639104)} sq ft of building in the other dataset is open ground in the trace image: part of the building was removed.`);
+  out.ok = !out.reasons.length;
+  return out;
+}
+
 async function autoTraceRoof(opts = {}) {
   if (!state.solar) throw new Error('Get roof data first');
   const main = state.solar;
-  const bb = main.boundingBox;
+  // a second dated dataset: opts.altProbe only checks it; state.altFusion (set after the reviewer approved it) uses it
+  const opts0 = opts;
+  // an approval belongs to one building: it never follows the user to the next address
+  if (state.altFusion && state.altFusion.building && state.altFusion.building !== main.name) state.altFusion = null;
+  const altReq = opts.altProbe || (!opts.noAlt && state.altFusion) || null;
+  let bb = main.boundingBox;
+  if (altReq && altReq.bbox) bb = { sw: { latitude: Math.min(bb.sw.latitude, altReq.bbox.sw.latitude), longitude: Math.min(bb.sw.longitude, altReq.bbox.sw.longitude) }, ne: { latitude: Math.max(bb.ne.latitude, altReq.bbox.ne.latitude), longitude: Math.max(bb.ne.longitude, altReq.bbox.ne.longitude) } };
   const cLat = main.center.latitude, cLng = main.center.longitude;
-  const kx = 111320 * Math.cos(cLat * Math.PI / 180), ky = 110540;
+  // metres per degree on the WGS84 ellipsoid at this latitude (roofmodel.js); the old round numbers were 0.3% off north-south
+  const { kx, ky } = typeof RM !== 'undefined' ? RM.scale(cLat) : { kx: 111320 * Math.cos(cLat * Math.PI / 180), ky: 110540 };
   const halfDiag = Math.hypot((bb.ne.longitude - bb.sw.longitude) * kx, (bb.ne.latitude - bb.sw.latitude) * ky) / 2;
   const radius = Math.min(100, Math.max(15, Math.ceil(halfDiag + 12)));
   if (!opts.quiet) toast('Downloading roof height model...');
@@ -409,19 +527,26 @@ async function autoTraceRoof(opts = {}) {
     const mName = '_cache_' + safe + '_mask.tif', dName = '_cache_' + safe + '_dsm.tif';
     let mT = null, dT = null, layers = null;
     if (location.hostname === 'localhost') {
-      try { const ok = (await fetch('/reports/' + mName)).ok && (await fetch('/reports/' + dName)).ok; if (ok) { mT = await loadTiff('unused', mName); dT = await loadTiff('unused', dName); layers = { imageryDate: main.imageryDate, fromDiskCache: true }; } } catch (_) { mT = null; }
+      try { const ok = (await fetch('/reports/' + mName)).ok && (await fetch('/reports/' + dName)).ok && (await fetch('/reports/_cache_' + safe + '_rgb.tif')).ok; if (ok) { mT = await loadTiff('unused', mName); dT = await loadTiff('unused', dName); layers = { imageryDate: main.imageryDate, fromDiskCache: true }; } } catch (_) { mT = null; }
     }
     if (!mT) {
       layers = await solarDataLayers(cLat, cLng, radius);
       if (!layers.maskUrl || !layers.dsmUrl) throw new Error('Data layers did not include a mask and DSM');
       [mT, dT] = await Promise.all([loadTiff(layers.maskUrl, mName), loadTiff(layers.dsmUrl, dName)]);
     }
-    cached = cache[cacheKey] = { layers, maskT: mT, dsmT: dT };
+    // aerial colour layer of the same flight (same grid as the height model): vegetation test + the report's aerial view
+    let rT = null; const rName = '_cache_' + safe + '_rgb.tif';
+    try { rT = layers.rgbUrl ? await loadTiff(layers.rgbUrl, rName) : (location.hostname === 'localhost' && (await fetch('/reports/' + rName)).ok ? await loadTiff('unused', rName) : null); } catch (_) { rT = null; }
+    cached = cache[cacheKey] = { layers, maskT: mT, dsmT: dT, rgbT: rT };
   }
-  const { layers, maskT, dsmT } = cached;
+  if (cached.rgbT === undefined && cached.layers && cached.layers.rgbUrl) { try { cached.rgbT = await loadTiff(cached.layers.rgbUrl, '_cache_' + String(main.name || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius + '_rgb.tif'); } catch (_) { cached.rgbT = null; } }
+  const { layers, maskT, dsmT } = cached; const rgbT = cached.rgbT && cached.rgbT.bands && cached.rgbT.w === dsmT.w && cached.rgbT.h === dsmT.h ? cached.rgbT : null;
+  // hidden zones a reviewer confirmed from another source are passed to the tracer as points in its metre frame
+  opts = { ...opts, rgb: rgbT ? rgbT.bands : null, acceptHidden: (state.acceptedHidden || []).map((p) => [(p.lng - cLng) * kx, (p.lat - cLat) * ky]) };
   if (maskT.w !== dsmT.w || maskT.h !== dsmT.h) throw new Error('Mask and DSM sizes differ');
   const w = maskT.w, h = maskT.h;
-  const mask = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) mask[i] = maskT.data[i] > 0 ? 1 : 0;
+  let mask = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) mask[i] = maskT.data[i] > 0 ? 1 : 0;
+  let dsmUse = dsmT, altInfo = null;
   // metres frame relative to the building centre
   const ref = { lat: cLat, lng: cLng, kx, ky };
   const Ecol = new Float64Array(w + 1), Nrow = new Float64Array(h + 1);
@@ -433,6 +558,7 @@ async function autoTraceRoof(opts = {}) {
     center: (i) => { const x = i % w, y = (i - x) / w; return { e: (Ecol[x] + Ecol[x + 1]) / 2, n: (Nrow[y] + Nrow[y + 1]) / 2 }; },
     X: (E) => (E - Ecol[0]) / (Ecol[w] - Ecol[0]) * w, Y: (N) => (N - Nrow[0]) / (Nrow[h] - Nrow[0]) * h,
   };
+  const pick = (mask) => {
   // keep only mask pixels inside the building's own bounding box (padded); attached neighbours and row houses otherwise merge in
   const padM = 2.5;
   const bE0 = (bb.sw.longitude - cLng) * kx - padM, bE1 = (bb.ne.longitude - cLng) * kx + padM, bN0 = (bb.sw.latitude - cLat) * ky - padM, bN1 = (bb.ne.latitude - cLat) * ky + padM;
@@ -462,8 +588,32 @@ async function autoTraceRoof(opts = {}) {
   // everything else in the mask (minus the main building) is a candidate outbuilding
   const rest = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) rest[i] = mask[i] && !mainComp.member[i] ? 1 : 0;
   const comps = allComponents(rest, w, h);
+  return { mainComp, comps }; };
+  if (altReq) {
+    // pass 1, current dataset alone: where it sees canopy and where it sees roof it can measure
+    const first = pick(mask); const r1 = await traceBuilding(main, dsmT, mask, first.mainComp, geo, { ...opts, wantTree: true, alt: null });
+    if (!r1.treeMask) throw new Error('The current trace has no canopy layer to compare against');
+    const A = await altLoadLayers(altReq.quality, cLat, cLng, radius); const al = altResample(A, maskT, w, h);
+    const chk = altCheck(dsmT.data, al, r1.roofMask, r1.treeMask, mask, w, h, geo);
+    const d = A.layers.imageryDate; const date = d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : null;
+    const srcName = 'Google Solar API, ' + String(A.layers.imageryQuality || altReq.quality).toLowerCase() + ' quality';
+    altInfo = { quality: A.layers.imageryQuality || altReq.quality, date, source: srcName, label: srcName + (date ? ', flown ' + date : ''), check: chk, used: false, soft: String(A.layers.imageryQuality || altReq.quality).toUpperCase() !== 'HIGH' };
+    if (opts.altProbe) return { alt: altInfo, hiddenZones: (r1.obstruction && r1.obstruction.hiddenZones) || [] };
+    if (chk.ok && altReq.approved) {
+      // carry the other dataset in only where the current one has canopy (plus its blurred rim); everything else stays as flown
+      const sh = chk.shiftPx[1] * w + chk.shiftPx[0]; const zone = altDilate(r1.treeMask, w, h, Math.round(1.2 / Math.sqrt(geo.pxM2))); const mg = Math.max(Math.abs(chk.shiftPx[0]), Math.abs(chk.shiftPx[1])) + 1;
+      // what the other dataset supplies = copied pixels the trace image did not itself measure as roof (under canopy, or
+      // roof only the other dataset's mask shows). Copied rim pixels that were measured roof already stay as measured.
+      const unseen = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) unseen[i] = r1.roofMask[i] ? 0 : 1;
+      const d2 = Float32Array.from(dsmT.data), m2 = Uint8Array.from(mask), used = new Uint8Array(w * h); const rb = opts.rgb && al.rgb ? opts.rgb.map((b) => Uint8Array.from(b)) : opts.rgb; let n = 0;
+      for (let y = mg; y < h - mg; y++) for (let x = mg; x < w - mg; x++) { const i = y * w + x; if (!zone[i]) continue; const j = i + sh; if (!al.valid[j]) continue; d2[i] = al.dsm[j] + chk.offsetM + chk.tilt[0] * (x - chk.centre[0]) + chk.tilt[1] * (y - chk.centre[1]); m2[i] = al.mask[j]; used[i] = 1; n++; if (rb && al.rgb) { rb[0][i] = al.rgb[0][j]; rb[1][i] = al.rgb[1][j]; rb[2][i] = al.rgb[2][j]; } }
+      dsmUse = { ...dsmT, data: d2 }; mask = m2; opts = { ...opts, rgb: rb, alt: { used, hidden: unseen, label: altInfo.source, text: altInfo.label, soft: altInfo.soft } };
+      altInfo.used = n > 0; altInfo.approved = altReq.approved; altInfo.cacheKey = [altReq.quality, cLat.toFixed(6), cLng.toFixed(6), radius].join('|');
+    }
+  }
+  const { mainComp, comps } = pick(mask);
   const results = [];
-  const mainRes = await traceBuilding(main, dsmT, mask, mainComp, geo, opts);
+  const mainRes = await traceBuilding(main, dsmUse, mask, mainComp, geo, opts);
   results.push({ comp: mainComp, res: mainRes, resp: main });
   // other structures in the frame (sheds, detached garages): nearest-building lookup gives their planes
   // candidate outbuildings: small, fully inside the frame, close to the main building (large components are neighbours)
@@ -482,20 +632,36 @@ async function autoTraceRoof(opts = {}) {
       const inside = r.center && Math.abs((r.center.longitude - ll.lng) * kx) < 8 && Math.abs((r.center.latitude - ll.lat) * ky) < 8;
       resp = inside ? r : null;
     } catch (_) { /* no model for this component */ }
-    try { const res = await traceBuilding(resp, dsmT, mask, c, geo, opts); results.push({ comp: c, res, resp }); } catch (_) { /* skip */ }
+    try { const res = await traceBuilding(resp, dsmUse, mask, c, geo, opts); results.push({ comp: c, res, resp }); } catch (_) { /* skip */ }
   }
+  // The other dataset was copied in around the canopy, but did it show any roof the trace image hides? If it resolved
+  // less than 1 m2 (the same tree is over the same corner, say), the sketch must not be built on it: trace again without it.
+  if (altInfo && altInfo.used) { const resolved = results.reduce((a, r) => a + (r.res.altResolvedPx || 0), 0) * geo.pxM2;
+    if (resolved < 1) { const info2 = await autoTraceRoof({ ...opts0, noAlt: true }); const na = { ...altInfo, used: false, reasons: ['The other dataset shows none of the roof this one has under tree canopy, so nothing was carried in.'] }; info2.alt = na; if (state.trace) state.trace.alt = na; return info2; } }
   // load into the app
   for (const f of state.facets) f.shape.setMap(null); for (const e of state.edges) e.shape.setMap(null);
   state.facets = []; state.edges = []; state.selected = null;
   let fi = 0, mainSqft = 0;
+  const hiddenZones = [];
   results.forEach(({ res }, idx) => {
-    for (const f of res.facets) { const added = addFacet(f.path, f.pitch, `F${++fi}`); added.azimuth = f.azimuth; if (idx === 0) mainSqft += facetMetrics(added).sloped; }
-    for (const e of res.edges) addEdge(e.type, e.path, null);
+    const base = fi;
+    if (res.obstruction && res.obstruction.hiddenZones) for (const z of res.obstruction.hiddenZones) hiddenZones.push({ ...z, id: 'H' + (hiddenZones.length + 1), structure: idx + 1, facetName: z.facet != null ? 'F' + (base + z.facet + 1) : null });
+    for (const f of res.facets) {
+      // engine evidence kept on the facet: exact fitted slope, fit quality, Measured / Inferred / Unresolved, raw outline
+      const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null } : { azimuth: f.azimuth, structure: idx + 1 });
+      if (idx === 0) mainSqft += facetMetrics(added).sloped;
+    }
+    for (const e of res.edges) addEdge(e.type, e.path, null, '', e.factor != null ? { factor: e.factor, basis: e.basis, status: e.status, autoType: e.type, obscuredFt: e.obscuredFt, structure: idx + 1, evidence: e.evidence, missing: e.missing, paired: e.paired, confirmedBy: e.confirmedBy ? { source: e.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, altFt: e.altFt } : { structure: idx + 1 });
   });
   state.otherSolar = results.slice(1).map((r) => r.resp).filter(Boolean);
   if (typeof drawSolar === 'function') drawSolar();
-  recompute();
-  const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}` };
+  if (altInfo && altInfo.used) altInfo.usedSqft = results.reduce((a, r) => a + r.res.facets.reduce((q, f) => q + (f.altSqft || 0), 0), 0);
+  const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}`, obstruction: mainRes.obstruction || null, hiddenZones, repairs: mainRes.repairs || [], plot: mainRes.plot || null, alt: altInfo };
+  // what the trace was made from, for the review panel, the audit trail and the report
+  state.trace = { engine: 'v2.1', tracedAt: new Date().toISOString(), imageryDate: layers.imageryDate || main.imageryDate || null, imageryQuality: layers.imageryQuality || main.imageryQuality || null, source: 'Google Solar API height model (DSM) and building mask, 0.1 m per pixel', hasRgb: !!rgbT, noiseSigmaM: mainRes.noiseSigma || null,
+    obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
+    raw: results.map(({ res }, idx) => ({ structure: idx + 1, facets: res.facets.map((f) => ({ pitch: f.pitch, slope: f.slope, status: f.status, path: f.path, rawPath: f.rawPath || null })), edges: res.edges.map((e) => ({ type: e.type, factor: e.factor, status: e.status, path: e.path })) })) };
+  recompute();   // after state.trace is set: labels, hatching and the review panel read the hidden zones from it
   if (!opts.quiet) toast(`Auto-traced ${fi} facets, ${state.edges.length} lines, ${results.length} structure${results.length === 1 ? '' : 's'}`);
   return info;
 }

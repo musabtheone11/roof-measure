@@ -1,6 +1,6 @@
 'use strict';
 /* cashpath.js - the two estimate paths.
- * Insurance claim: the existing Xactimate-format estimate (panel 6). Nothing about it changes.
+ * Insurance claim: the existing Xactimate-format estimate (panel 7). Nothing about it changes.
  * Cash: the Diversity Roofing estimate builder in cash/ (kept exactly as built). This file only hands the measured roof
  * to that builder the way the builder already loads a saved estimate: its own localStorage key "currentEstimate",
  * read by loadEstimate() in cash/main.js when the page opens. No file in cash/ is modified. */
@@ -40,6 +40,7 @@
   async function openCash() {
     if (typeof xmEnsureRoof === 'function') { if (!await xmEnsureRoof()) return; }      // traces the roof first when needed (existing behaviour)
     else if (!state.facets.length) { toast('Measure the roof first.', true); return; }
+    if (typeof window.rmExportGate === 'function' && !window.rmExportGate()) return;     // unresolved roof: ask before pricing from it
     localStorage.setItem('currentEstimate', JSON.stringify(buildCashHandoff(computeTotals(), state)));
     window.open('cash/index.html', '_blank', 'noopener');
   }
