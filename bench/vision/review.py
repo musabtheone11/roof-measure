@@ -60,11 +60,14 @@ def call(role, model, content):
     body = json.dumps({'model': model, 'max_tokens': a.max_tokens, 'temperature': 0, 'messages': [{'role': 'user', 'content': content}]}).encode()
     req = urllib.request.Request('https://api.apinex.bond/v1/chat/completions', data=body, headers={'Authorization': 'Bearer proxy-injected', 'Content-Type': 'application/json'})
     t0 = time.time(); tag = f'{role}_{model.replace("/", "_")}'
-    try:
-        with urllib.request.urlopen(req, timeout=a.timeout) as r: raw = r.read().decode()
-        code = 200
-    except urllib.error.HTTPError as e: raw = e.read().decode(errors='replace'); code = e.code
-    except Exception as e: raw = str(e); code = 0
+    for attempt in range(3):   # upstream 502s are frequent for image requests: retry twice with a pause
+        try:
+            with urllib.request.urlopen(req, timeout=a.timeout) as r: raw = r.read().decode()
+            code = 200
+        except urllib.error.HTTPError as e: raw = e.read().decode(errors='replace'); code = e.code
+        except Exception as e: raw = str(e); code = 0
+        if code == 200 or code == 400 or code == 401: break
+        time.sleep(15 * (attempt + 1))
     open(os.path.join(a.out, tag + '.resp.json'), 'w').write(raw)
     rec = {'role': role, 'model': model, 'http': code, 'seconds': round(time.time() - t0, 1), 'observations': None, 'finish': None}
     try:
@@ -84,15 +87,11 @@ else:
     jobs = [(role, m) for role in roles for m in models.get(role, [])]
     if a.dry: print('would send', [(r, m) for r, m in jobs]); sys.exit(0)
     built = {role: build(role) for role in roles}
-    threads, started = [], 0; t_win = time.time()
+    # one request at a time with a fixed spacing (the free vision models fail under parallel image requests)
+    gap = 60.0 / a.rpm
     for role, m in jobs:
-        if started and started % a.rpm == 0:
-            for t in threads: t.join()
-            el = time.time() - t_win
-            if el < 62: time.sleep(62 - el)
-            t_win = time.time()
-        t = threading.Thread(target=call, args=(role, m, built[role][1])); t.start(); threads.append(t); started += 1; time.sleep(0.3)
-    for t in threads: t.join()
+        t0 = time.time(); call(role, m, built[role][1]); el = time.time() - t0
+        if el < gap: time.sleep(gap - el)
 
 # ---- collect (external results now, local answers if present) into observations.json
 obs = []
