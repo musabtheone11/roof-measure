@@ -178,7 +178,7 @@ function reviewReportStatus(r) {
   r = r || reviewState(); const t = r.totals, tr = state.trace || {};
   return RM.reportStatus({ failed: tr.failed, facets: state.facets.length, hiddenZones: r.unresolved.filter((u) => u.kind === 'zone'), hiddenUpperSqft: t.hiddenUpperSloped,
     inferredSqft: t.inferredSloped, unresolved: r.unresolved.filter((u) => u.kind !== 'zone'), verify: r.verify, geometryErrors: r.errors, reconcileOk: r.reconcile.ok,
-    imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, extra: typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : [] });
+    imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, newerRecords: tr.newerRecords, extra: typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : [] });
 }
 // asked before any export: incomplete totals and geometry errors must be acknowledged, never silently exported
 function reviewGate() {

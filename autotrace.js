@@ -510,6 +510,25 @@ function rmOpenCover(f) {
   if (!(f.slope != null && f.slope <= 0.34 && (f.rms || 0) >= 0.06 && (f.areaM2 || 0) * Math.sqrt(1 + f.slope * f.slope) >= 4.65)) return null;
   return { source: 'Height model', date: '', note: `Low-slope section with an uneven surface (${(f.rms * 100).toFixed(0)} cm from a flat plane): it may be a screen enclosure, a pergola or an open patio cover rather than roofing.` };
 }
+// Google keeps one dataset per quality tier, often flown years apart. When a NEWER tier of the same building shows a lot
+// more roof than the image traced (25% or more), the building was probably extended or rebuilt after the traced flight
+// (or more of it was under trees then). Only the tiers' own roof-area figures are compared: two small requests.
+async function rmNewerRecords(main) {
+  if (typeof fetchSolarTier !== 'function' || !main || !main.imageryDate) return null;
+  const cur = String(main.imageryQuality || '').toUpperCase(), d0 = Date.UTC(main.imageryDate.year, main.imageryDate.month - 1, main.imageryDate.day || 1);
+  const a0 = main.solarPotential && main.solarPotential.wholeRoofStats ? main.solarPotential.wholeRoofStats.areaMeters2 : null; if (!a0) return null;
+  const out = [];
+  for (const q of ['HIGH', 'MEDIUM', 'BASE']) { if (q === cur) continue; let r = null; try { r = await fetchSolarTier(main.center.latitude, main.center.longitude, q); } catch (_) { continue; }
+    if (!r || r.name !== main.name || !r.imageryDate) continue; const d = Date.UTC(r.imageryDate.year, r.imageryDate.month - 1, r.imageryDate.day || 1); if (d - d0 < 365 * 864e5) continue;
+    const a = r.solarPotential && r.solarPotential.wholeRoofStats ? r.solarPotential.wholeRoofStats.areaMeters2 : null; if (!a) continue;
+    out.push({ quality: q, date: r.imageryDate, roofM2: a, tracedRoofM2: a0, ratio: a / a0 }); }
+  return out;
+}
+async function fetchSolarTier(lat, lng, q) {
+  if (typeof fetch !== 'function' || !state.key) return null;
+  const r = await fetch(`https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&requiredQuality=${q}&exactQualityRequired=true&key=${encodeURIComponent(state.key)}`);
+  return r.ok ? r.json() : null;
+}
 // how far the address point is from the building that was measured (Google picks the building nearest the point; a
 // geocode on an empty lot or between houses can pick the neighbour's)
 function rmAddressCheck(res, kx, ky, cLat, cLng) {
@@ -699,7 +718,7 @@ async function autoTraceRoof(opts = {}) {
   const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}`, obstruction: mainRes.obstruction || null, hiddenZones, repairs: mainRes.repairs || [], plot: mainRes.plot || null, alt: altInfo };
   // what the trace was made from, for the review panel, the audit trail and the report
   state.trace = { engine: 'v2.1', tracedAt: new Date().toISOString(), imageryDate: (layers || {}).imageryDate || main.imageryDate || null, imageryQuality: (layers || {}).imageryQuality || main.imageryQuality || null, source: 'Google Solar API height model (DSM) and building mask, 0.1 m per pixel', hasRgb: !!rgbT, noiseSigmaM: mainRes.noiseSigma || null,
-    layerChoice, addressCheck: rmAddressCheck(results[0] && results[0].res, kx, ky, cLat, cLng), obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
+    layerChoice, newerRecords: await rmNewerRecords(layerChoice && layerChoice.used === 'record' ? null : main).catch(() => null), addressCheck: rmAddressCheck(results[0] && results[0].res, kx, ky, cLat, cLng), obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
     raw: results.map(({ res }, idx) => ({ structure: idx + 1, facets: res.facets.map((f) => ({ pitch: f.pitch, slope: f.slope, status: f.status, path: f.path, rawPath: f.rawPath || null })), edges: res.edges.map((e) => ({ type: e.type, factor: e.factor, status: e.status, path: e.path })) })) };
   recompute();   // after state.trace is set: labels, hatching and the review panel read the hidden zones from it
   if (!opts.quiet) toast(`Auto-traced ${fi} facets, ${state.edges.length} lines, ${results.length} structure${results.length === 1 ? '' : 's'}`);

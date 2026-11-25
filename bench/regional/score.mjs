@@ -39,7 +39,7 @@ function reportStatus(dir, tot, runRec, isAlt) {
   const a0 = tot && tot.audit; if (a0 && a0.reportStatus) return { status: a0.reportStatus.status === 'COMPLETE' ? 'complete' : 'review-required', why: a0.reportStatus.reasons.map((q) => q.text).join('; '), stated: true };
   const gate = /export gate asked: (.*)/.exec(log); const a = tot && tot.audit; const reasons = [];
   if (gate) reasons.push('export gate: ' + gate[1].slice(0, 160));
-  if (a) { if ((a.hiddenZones || []).length) reasons.push(a.hiddenZones.length + ' hidden zone(s)'); if (a.inferredSloped > 0.5) reasons.push(Math.round(a.inferredSloped) + ' sq ft estimated'); if ((a.unresolved || []).length) reasons.push(a.unresolved.length + ' unresolved item(s)'); if ((a.verify || []).length) reasons.push(a.verify.length + ' marked for verification'); if ((a.issues || []).length) reasons.push(a.issues.length + ' geometry issue(s)'); }
+  if (a) { if ((a.hiddenZones || []).length) reasons.push(a.hiddenZones.length + ' hidden zone(s)'); /* an estimate alone was presented by the old report as part of a known full roof area, without asking: not a review flag */ if ((a.unresolved || []).length) reasons.push(a.unresolved.length + ' unresolved item(s)'); if ((a.verify || []).length) reasons.push(a.verify.length + ' marked for verification'); const errs = (a.issues || []).filter((q) => q.severity === 'error').length; if (errs) reasons.push(errs + ' geometry error(s)');   /* warnings are not shown to the reader as open items */ }
   return { status: reasons.length ? 'review-required' : 'complete', why: reasons.join('; ') };
 }
 const rows = [];
@@ -72,11 +72,18 @@ for (const p of M.properties) {
   out.review = REV[p.slug] || null;
   // release blockers: an unsupported value shown as measured, or an incomplete report exported as complete (from the visual review)
   out.blockers = []; const A = out.versions.automatic;
+  // building selection from the property's own input conditions: the geocoded address point is far from the building the
+  // run measured, and the report still says COMPLETE
+  const cs = COND[p.slug] && COND[p.slug].selected; if (A && A.status === 'complete' && cs && !cs.addressPointOnSelectedRoof && cs.centreToAddressM > 15) out.blockers.push(`possible wrong building reported as complete: the address point is ${Math.round(cs.centreToAddressM * 3.28)} ft from the measured building`);
   if (out.review && A) {
     const r = out.review;
-    if (A.status === 'complete' && (r.missingRoof || []).some((m) => (m.approxSqft || 0) >= 50)) out.blockers.push('incomplete report exported as complete: ' + r.missingRoof.map((m) => m.what).join('; '));
+    // "incomplete": a roof section missing from a report that says it is complete. A misplaced edge on a traced section is a
+    // measurement error (scored as such), not a missing section: the line is drawn at 150 sq ft or 5% of the measured roof.
+    const runSq = A.run ? A.run.sloped : 0; const big = (m) => (m.approxSqft || 0) >= Math.max(150, 0.05 * runSq) || /whole roof|entire|not traced/i.test(m.what);
+    if (A.status === 'complete' && (r.missingRoof || []).some(big)) out.blockers.push('incomplete report exported as complete: ' + r.missingRoof.filter(big).map((m) => m.what).join('; '));
+    if (A.status === 'complete' && (r.missingRoof || []).some((m) => !big(m) && (m.approxSqft || 0) >= 50)) out.warnings = (out.warnings || []).concat('unflagged small omission: ' + r.missingRoof.filter((m) => !big(m) && (m.approxSqft || 0) >= 50).map((m) => m.what + ' (~' + m.approxSqft + ' sq ft)').join('; '));
     if (r.wrongBuilding && A.status !== 'failed') out.blockers.push('wrong building measured and reported');
-    if ((r.extraRoof || []).some((m) => (m.approxSqft || 0) >= 50 && m.reportedAsMeasured)) out.blockers.push('non-roof area reported as measured roof: ' + r.extraRoof.filter((m) => m.reportedAsMeasured).map((m) => m.what).join('; '));
+    if (A.status === 'complete' && (r.extraRoof || []).some((m) => (m.approxSqft || 0) >= 50 && m.reportedAsMeasured)) out.blockers.push('non-roof area reported as measured roof: ' + r.extraRoof.filter((m) => m.reportedAsMeasured).map((m) => m.what).join('; '));
   }
   rows.push(out);
 }

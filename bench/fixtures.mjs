@@ -94,6 +94,17 @@ const empty = new Uint8Array(house.mask.length);
     for (const e of r.edges) { if (e.type !== 'rake' || e.paired) continue; tot++;   /* outline pieces only (paired = the upper edge of a height break) */ const g = e.path.map(kxy); const L = Math.hypot(g[1][0] - g[0][0], g[1][1] - g[0][1]); if (L < 2.5 && lows.some((h) => h.some((q) => g.some((p) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.3)))) bad++; } }
   out(bad === 0, 'D7 pure hip roofs: no short outline rake at a hip end', `${bad} of ${tot} rakes`);
 }
+// D8 (regional benchmark): the traced image (2016) showed an older, smaller building; a newer Google image showed the
+// rebuilt house (+39% roof) and the report still said COMPLETE. The tiers' own roof areas are now compared.
+{
+  const P = property(house, { recordDate: '2016-05-09' }); P.main.solarPotential = { wholeRoofStats: { areaMeters2: 130 } };
+  const tier = (ratio) => (ctx) => { altHook(P)(ctx); ctx.state.key = 'fixture'; ctx.fetchSolarTier = async (lat, lng, q) => (q === 'MEDIUM' ? { name: P.main.name, imageryDate: { year: 2021, month: 5, day: 8 }, imageryQuality: 'MEDIUM', solarPotential: { wholeRoofStats: { areaMeters2: 130 * ratio } } } : null); };
+  const r = await runApp(P, ROOT, { quiet: true, hook: tier(1.39) }); const tr = r.ctx.state.trace;
+  const st = RM.reportStatus({ facets: r.facets.length, reconcileOk: true, imageryQuality: 'HIGH', newerRecords: tr.newerRecords });
+  out(st.status === 'REVIEW REQUIRED' && st.reasons.some((q) => q.code === 'imagery-change'), 'D8 newer image shows 39% more roof: REVIEW REQUIRED', JSON.stringify(tr.newerRecords));
+  const r2 = await runApp(P, ROOT, { quiet: true, hook: tier(0.95) }); const st2 = RM.reportStatus({ facets: r2.facets.length, reconcileOk: true, imageryQuality: 'HIGH', newerRecords: r2.ctx.state.trace.newerRecords });
+  out(st2.status === 'COMPLETE', 'D8 newer image shows the same roof: no reason added', st2.reasons.map((q) => q.code).join(','));
+}
 // status rules: every open item is a reason with the evidence it needs; zero only for a verified absence
 {
   const st = RM.reportStatus({ facets: 4, hiddenZones: [{ id: 'H1' }], hiddenUpperSqft: 300, inferredSqft: 120, verify: [{ label: 'L3 rake' }], geometryErrors: 1, reconcileOk: false, imageryQuality: 'MEDIUM' });

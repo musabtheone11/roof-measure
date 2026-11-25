@@ -192,7 +192,7 @@ var RM = (function () {
   // open; otherwise REVIEW REQUIRED, each reason with the evidence that would settle it. f = {
   //   failed, facets, hiddenZones: [{id}], hiddenUpperSqft, inferredSqft, unresolved: [{label, missing}], verify: [{label}],
   //   geometryErrors, reconcileOk, imageryQuality, layerChoice: {used, recordDate, recordQuality, layersDate, buildingInLayers},
-  //   addressCheck: {distM, precision, partial}, extra: [{code,text,needs}] }
+  //   addressCheck: {distM, precision, partial}, newerRecords: [{date, ratio}], extra: [{code,text,needs}] }
   function reportStatus(f) {
     const why = []; const add = (code, text, needs) => why.push({ code, text, needs }); const n0 = (v) => Math.round(v).toLocaleString('en-US');
     const fd = (d) => (!d ? '?' : typeof d === 'string' ? d : `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`);
@@ -209,6 +209,8 @@ var RM = (function () {
     else if (lc && lc.buildingInLayers) add('imagery-change', `Google's building record comes from a newer image (${fd(lc.recordDate)}) than the image traced (${fd(lc.layersDate)}): the roof may have changed since the traced image.`, 'Compare the dated imagery (Review roof from other angles) or check on site.');
     const ac = f.addressCheck; if (f.facets && ac && (ac.distM > 6 || (ac.distM > 2 && ac.precision && ac.precision !== 'ROOFTOP') || ac.partial))
       add('selection', `The address point is ${ac.distM > 0 ? Math.round(ac.distM * 3.28084) + ' ft from' : 'on'} the building measured` + (ac.precision && ac.precision !== 'ROOFTOP' ? ` and the address was located only approximately (${String(ac.precision).toLowerCase().replace(/_/g, ' ')})` : '') + (ac.partial ? ' (partial address match)' : '') + ': it may be a neighbouring building.', 'Confirm on the map that this is the customer\'s building (lot lines or a site visit).');
+    const grown = (f.newerRecords || []).filter((q) => q.ratio >= 1.25).sort((p, q) => q.ratio - p.ratio)[0];
+    if (f.facets && grown) add('imagery-change', `A newer Google image of this building (${fd(grown.date)}) shows about ${Math.round((grown.ratio - 1) * 100)}% more roof than the image traced: the building may have been extended or rebuilt since, or more of it was under trees.`, 'Compare the dated imagery (Review roof from other angles) and trace from the newer image, or measure on site.');
     for (const x of f.extra || []) why.push(x);
     return { status: why.length ? 'REVIEW REQUIRED' : 'COMPLETE', reasons: why };
   }
