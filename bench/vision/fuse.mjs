@@ -28,15 +28,16 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
   // evidence along a segment: outline step (one side far lower), crease (surface bends), mask boundary
   function segmentEvidence(a, b) {
     const L = dist(a, b); if (L < 0.3) return { len: L, n: 0, step: 0, crease: 0, maskEdge: 0 };
-    const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nrm = [-u[1], u[0]]; const n = Math.max(3, Math.floor(L / 0.25)); let step = 0, crease = 0, maskEdge = 0, cnt = 0;
+    const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nrm = [-u[1], u[0]]; const n = Math.max(3, Math.floor(L / 0.25)); let step = 0, crease = 0, maskEdge = 0, maskRoofSide = 0, cnt = 0;
     for (let i = 0; i <= n; i++) { const t = i / n; const q = [a[0] + u[0] * L * t, a[1] + u[1] * L * t];
       const hp = hAt([q[0] + nrm[0] * 0.6, q[1] + nrm[1] * 0.6]), hm = hAt([q[0] - nrm[0] * 0.6, q[1] - nrm[1] * 0.6]), h0 = hAt(q);
       const mp = mAt([q[0] + nrm[0] * 0.5, q[1] + nrm[1] * 0.5]), mm = mAt([q[0] - nrm[0] * 0.5, q[1] - nrm[1] * 0.5]);
       if (hp == null || hm == null || h0 == null) continue; cnt++;
       if (Math.abs(hp - hm) > 1.2) step++;
       if (Math.abs(hp + hm - 2 * h0) > 0.10 && Math.abs(hp - hm) < 1.2) crease++;
-      if (mp != null && mm != null && mp !== mm) maskEdge++; }
-    return { len: L, n: cnt, step: cnt ? step / cnt : 0, crease: cnt ? crease / cnt : 0, maskEdge: cnt ? maskEdge / cnt : 0 };
+      if (mp != null && mm != null && mp !== mm) maskEdge++;
+      if ((hp >= hm ? mp : mm) === 1) maskRoofSide++; }   // the building mask covers the higher (roof) side
+    return { len: L, n: cnt, step: cnt ? step / cnt : 0, crease: cnt ? crease / cnt : 0, maskEdge: cnt ? maskEdge / cnt : 0, maskRoofSide: cnt ? maskRoofSide / cnt : 0 };
   }
   const outlineSupport = (a, b) => { const e = segmentEvidence(a, b); return Math.max(e.step, e.maskEdge); };
   // lumpiness of the height model along a run (mean absolute second difference at 0.3 m): roof planes ~0.03 m, tree crowns > 0.15 m
@@ -123,7 +124,12 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
       else decision = support < 0.3 && outlineSupport(s.a, s.b) < 0.3 ? 'unresolved' : 'reject';
       why = `observed run ${near.dist.toFixed(2)} m from sketch ${s.e.type} #${s.i} (support observed ${support.toFixed(2)}, sketch ${outlineSupport(s.a, s.b).toFixed(2)}); end A: ${ca.why}; end B: ${cb.why}`;
     }
-    else if (!near || near.dist >= 1.5) { kind = 'missing'; decision = support >= minSupport && strong ? 'accept-as-open' : (support < 0.25 ? 'reject' : 'unresolved'); why = `no sketch line within ${near ? near.dist.toFixed(1) : '?'} m (after sliding ${snapped.off.toFixed(1)} m to the evidence); ${wantOutline ? 'step/mask' : 'crease'} support ${support.toFixed(2)}; ${models.length} model(s), ${ev.len.toFixed(1)} m`; }
+    else if (!near || near.dist >= 1.5) {
+      // roof the sketch lacks: opened only when the height step is there, the building mask covers its higher side (the
+      // Solar data call it building, so the trace dropped it) and the surface beside it is a roof plane, not a tree crown
+      kind = 'missing'; const rough = wantOutline ? roughness(a, b, true) : null; const lumpy = rough != null && rough > 0.15; const inMask = ev.maskRoofSide >= 0.5;
+      decision = support >= minSupport && strong && inMask && !lumpy ? 'accept-as-open' : (support < 0.25 ? 'reject' : 'unresolved');
+      why = `no sketch line within ${near ? near.dist.toFixed(1) : '?'} m (after sliding ${snapped.off.toFixed(1)} m to the evidence); ${wantOutline ? 'step/mask' : 'crease'} support ${support.toFixed(2)}; building mask on the roof side ${(ev.maskRoofSide * 100).toFixed(0)}%${rough != null ? `; lumpiness ${rough.toFixed(2)} m` : ''}; ${models.length} model(s), ${ev.len.toFixed(1)} m${decision === 'unresolved' && support >= minSupport ? (!inMask ? ' (not in the building mask: possibly a neighbouring structure, noted)' : lumpy ? ' (lumpy: tree crown, noted)' : '') : ''}`; }
     else { kind = 'near'; decision = 'unresolved'; why = `near sketch ${near.s.e.type} #${near.s.i} (${near.dist.toFixed(2)} m, ${near.ang.toFixed(0)} deg) but not the same line`; }
     const challenged = verdicts.filter((v) => ['unsupported', 'follows-canopy', 'follows-shadow'].includes(v)).length;
     if (kind === 'confirms' && challenged && challenged >= verdicts.length / 2) {

@@ -47,8 +47,17 @@ may be read off a picture.
   no ground in between). Shared corners move together; every line end at that corner moves with it.
 - A line is renamed only when the height model supports the new name (an outer edge steps down to the ground; an
   interior line only bends) and not the old one.
-- A roof edge two models saw where the sketch has nothing, with a height step under it (3 m or longer), opens the nearest
-  facet for review with the evidence. It is never drawn as measured roof: that needs the trace, not a photo.
+- Observations are grouped only when they lie on one line (same direction, within 0.8 m perpendicular, overlapping along
+  it); a run is matched to a sketch line by its perpendicular offset and overlap, so a run that overshoots a corner is
+  still the same line and a shed's eave in line with the house's is not.
+- A roof edge two models saw where the sketch has nothing, with a height step under it (3 m or longer), the building mask
+  on its higher side (the Solar data call it building, so the trace dropped it) and a smooth surface beside it (not a tree
+  crown), opens the nearest facet for review with the evidence. Outside the mask or on a lumpy surface it is noted as a
+  possible neighbouring structure or canopy. It is never drawn as measured roof: that needs the trace, not a photo.
+- A challenge reviewer's verdict that a sketch line is unsupported or follows a tree crown or shadow is checked the same
+  way: the line's step / mask (or crease) support and the lumpiness of the surface on its roof side (mean absolute second
+  difference 0.8 m beside the run; roof planes about 0.03 m, crowns well above 0.15 m). Lumpy or unsupported lines open
+  their facet; lines the height model shows are kept and the verdict is rejected.
 - A line a reviewer drew where the height model shows nothing is rejected. A corner seen in a photo but under canopy in
   the height model is never moved on the photo alone; the matter stays open.
 - Canopy, shadow or neighbour regions over a sketch line are flags for the reviewer, not corrections.
