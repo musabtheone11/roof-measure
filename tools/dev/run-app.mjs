@@ -40,7 +40,7 @@ try {
     const byType = {}; for (const k of Object.keys(t.byType)) byType[k] = { planFt: t.byType[k].plan, trueFt: t.byType[k].true, count: t.byType[k].count };
     const audit = typeof window.rmAudit === 'function' ? window.rmAudit() : null;
     return { roof: serialize(), totals: { slopedSqft: t.sloped, planSqft: t.plan, facetCount: t.facetCount, predominant: t.predominant, pitchGroups: t.pitchGroups, byType, structures: t.structures.map((g) => ({ index: g.index, sloped: g.sloped, facets: g.facetCount, predominant: g.predominant })), recWaste: t.recWaste,
-      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch })) },
+      facets: t.facetsAll.map((x) => ({ name: x.f.name, pitch: x.f.pitch, plan: x.m.plan, sloped: x.m.sloped, excluded: x.f.excluded, structure: x.f.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.f) : null })), edges: t.edges.map((x) => ({ type: x.e.type, planFt: x.m.planFt, trueFt: x.m.trueFt, factor: x.m.factor, pitch: x.m.pitch , structure: x.e.structure || 1, status: typeof RM !== 'undefined' && RM.statusOf ? RM.statusOf(x.e) : null})) },
       solar: s ? { total: s.total, ground: s.ground, segs: s.segs.length, predominant: s.predominant, imageryDate: s.imageryDate, quality: s.quality } : null, audit };
   });
     fs.writeFileSync(path.join(out, `roof${sfx}.json`), JSON.stringify(data.roof));
