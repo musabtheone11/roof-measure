@@ -17,7 +17,7 @@ def px(ll):
 def dashed(p, q, fill, w=2, dash=8):
     L = ((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5; n = max(1, int(L / dash))
     for i in range(0, n, 2): t0, t1 = i / n, min(1, (i + 1) / n); d.line([(p[0] + (q[0] - p[0]) * t0, p[1] + (q[1] - p[1]) * t0), (p[0] + (q[0] - p[0]) * t1, p[1] + (q[1] - p[1]) * t1)], fill=fill, width=w)
-counts = {'accepted': 0, 'open': 0, 'rejected': 0, 'flag': 0}
+counts = {'accepted': 0, 'open': 0, 'notes': 0, 'rejected': 0, 'flag': 0}
 for p in P:
     if p['kind'] in ('corner-displaced',) and p['decision'] == 'accept':
         old = px(p['from']) if 'from' in p else None; new = px(p['p']); counts['accepted'] += 1
@@ -25,13 +25,17 @@ for p in P:
         d.ellipse([new[0] - 7, new[1] - 7, new[0] + 7, new[1] + 7], outline=(40, 255, 40, 255), width=3)
     elif p['kind'] == 'misclassified' and p['decision'] == 'accept':
         d.line([px(p['a']), px(p['b'])], fill=(40, 255, 40, 255), width=4); counts['accepted'] += 1
-    elif p['decision'] in ('accept-as-open', 'unresolved') and 'a' in p:
-        d.line([px(p['a']), px(p['b'])], fill=(255, 230, 0, 230), width=3); counts['open'] += 1
-    elif p['decision'] in ('accept-as-open', 'unresolved') and 'p' in p:
-        q = px(p['p']); d.ellipse([q[0] - 7, q[1] - 7, q[0] + 7, q[1] + 7], outline=(255, 230, 0, 255), width=3); counts['open'] += 1
+    elif p['decision'] == 'accept-as-open' and 'a' in p:
+        d.line([px(p['a']), px(p['b'])], fill=(255, 230, 0, 240), width=5); counts['open'] += 1
+    elif p['decision'] == 'accept-as-open' and 'p' in p:
+        q = px(p['p']); d.ellipse([q[0] - 8, q[1] - 8, q[0] + 8, q[1] + 8], outline=(255, 230, 0, 255), width=4); counts['open'] += 1
+    elif p['decision'] == 'unresolved' and 'a' in p:
+        d.line([px(p['a']), px(p['b'])], fill=(255, 230, 0, 110), width=1); counts['notes'] += 1
+    elif p['decision'] == 'unresolved' and 'p' in p:
+        q = px(p['p']); d.ellipse([q[0] - 5, q[1] - 5, q[0] + 5, q[1] + 5], outline=(255, 230, 0, 150), width=1); counts['notes'] += 1
     elif p['decision'] == 'reject' and 'a' in p:
         dashed(px(p['a']), px(p['b']), (255, 60, 60, 200)); counts['rejected'] += 1
     elif p['decision'] == 'flag': counts['flag'] += 1
 w, h = im.size; d.rectangle([0, h - 20, w, h], fill=(0, 0, 0, 190))
-d.text((6, h - 18), f"green accepted ({counts['accepted']})  yellow open for review ({counts['open']})  red dashed rejected: no height evidence ({counts['rejected']})  canopy/shadow flags ({counts['flag']})", fill=(255, 255, 255, 255), font=font)
+d.text((6, h - 18), f"green accepted ({counts['accepted']})  thick yellow opened for review ({counts['open']})  thin yellow notes ({counts['notes']})  red dashed rejected ({counts['rejected']})  canopy/shadow flags ({counts['flag']})", fill=(255, 255, 255, 255), font=font)
 im.save(a.out); print(a.out, counts)

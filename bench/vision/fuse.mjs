@@ -47,7 +47,21 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
   }
   const facetsM = job.facets.map((f, i) => ({ i, f, pts: f.path.map(toM) }));
   const sketchEdges = job.edges.map((e, i) => ({ i, e, a: toM(e.path[0]), b: toM(e.path[e.path.length - 1]) }));
-  function nearestSketchEdge(a, b) { let best = null; for (const s of sketchEdges) { const dm = (segDist(a, s.a, s.b) + segDist(b, s.a, s.b)) / 2, ang = angDiff(a, b, s.a, s.b); const score = dm + ang / 30; if (!best || score < best.score) best = { s, dist: dm, ang, score }; } return best; }
+  // nearest sketch line to an observed run: perpendicular offset of the run's ends from the sketch line (not clamped to the
+  // segment, so a run that overshoots a corner is still the same line) plus the angle, provided the two overlap along the line
+  function nearestSketchEdge(a, b) {
+    let best = null;
+    for (const s of sketchEdges) {
+      const L = dist(s.a, s.b); if (L < 0.3) continue; const u = [(s.b[0] - s.a[0]) / L, (s.b[1] - s.a[1]) / L], nrm = [-u[1], u[0]];
+      const perp = (p) => Math.abs((p[0] - s.a[0]) * nrm[0] + (p[1] - s.a[1]) * nrm[1]), along = (p) => (p[0] - s.a[0]) * u[0] + (p[1] - s.a[1]) * u[1];
+      const ta = along(a), tb = along(b); const lo = Math.max(0, Math.min(ta, tb)), hi = Math.min(L, Math.max(ta, tb)); const overlap = Math.max(0, hi - lo) / Math.max(0.3, Math.min(L, Math.abs(tb - ta)));
+      // a run that does not overlap the sketch line along it is another line (a shed's eave in line with the house's), unless it only overshoots a corner a little
+      const gap = Math.max(ta, tb) < 0 ? -Math.max(ta, tb) : Math.min(ta, tb) > L ? Math.min(ta, tb) - L : 0; if (overlap < 0.3 && gap > 1.5) continue;
+      const dm = (perp(a) + perp(b)) / 2, ang = angDiff(a, b, s.a, s.b); const score = dm + ang / 30 + (overlap < 0.3 ? 1 : 0);
+      if (!best || score < best.score) best = { s, dist: dm, ang, overlap, score };
+    }
+    return best;
+  }
   function nearestVertex(p) { let best = null; for (const F of facetsM) F.pts.forEach((q, k) => { const d = dist(q, p); if (!best || d < best.d) best = { d, F, k, q }; }); return best; }
   // the wall lines meeting at a vertex: the two polygon segments of every facet that has a vertex there
   function wallsAt(v) { const W = []; for (const F of facetsM) F.pts.forEach((q, k) => { if (dist(q, v) < 0.3) { const n = F.pts.length; W.push(F.pts[(k + n - 1) % n]); W.push(F.pts[(k + 1) % n]); } }); return W.filter((q, i) => W.findIndex((r) => dist(r, q) < 0.3) === i); }
