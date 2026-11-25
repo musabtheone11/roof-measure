@@ -52,12 +52,24 @@ const obs = (o) => ({ source: 'test-image', role: 'outline', model: 'recorded', 
 {
   const house = W({}); const sc = render([house], rng(72), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false }); const { w, h, px } = sc;
   const cnr = corner(house, -1, -1);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const E = sc.E0 + (x + 0.5) * px, N = sc.N0 - (y + 0.5) * px; if (Math.hypot(E - cnr[0], N - cnr[1]) < 3.2) { const i = y * w + x; sc.dsm[i] = Math.max(sc.dsm[i], 7.5); sc.mask[i] = 1; } }
+  const rr = rng(5); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const E = sc.E0 + (x + 0.5) * px, N = sc.N0 - (y + 0.5) * px; if (Math.hypot(E - cnr[0], N - cnr[1]) < 3.2) { const i = y * w + x; sc.dsm[i] = Math.max(sc.dsm[i], 7.5 + (rr() - 0.5) * 1.2); sc.mask[i] = 1; } }   // a lumpy crown, as real ones are
   const P = property(sc); const r = await runApp(P, ROOT, { quiet: true }); const job = jobOf(r);
   const nv = nearestVertex(job, cnr);
   const R = fuseModel({ job, obs: [obs({ kind: 'corner', type: 'convex', ll: [ll(cnr[0], cnr[1])] })], dsm: P.dsmT, mask: P.maskT });
   const p = R.proposals[0];
   out(p && p.decision !== 'accept' && R.summary.moved === 0, 'a corner seen in a photo but under canopy in the height model is never moved on the photo alone', p ? `${p.kind}:${p.decision} (traced vertex ${nv ? nv.d.toFixed(1) : '?'} m away) ${p.why.slice(0, 100)}` : 'no proposal');
+  // a sketch facet drawn over the tree crown: a challenge reviewer says its outer edge follows canopy; the height model is lumpy there
+  const c = Math.cos(house.th), sn = Math.sin(house.th); const sq = (x, y) => ll(cnr[0] + x * c - y * sn, cnr[1] + x * sn + y * c);
+  const badFacet = { name: 'Fx', pitch: 6, path: [sq(-2.8, -2.8), sq(0.2, -2.8), sq(0.2, 0.2), sq(-2.8, 0.2)].map(([lat, lng]) => ({ lat, lng })), status: 'measured', structure: 1 };
+  const badEdge = { type: 'eave', path: [sq(-2.8, -2.8), sq(0.2, -2.8)].map(([lat, lng]) => ({ lat, lng })), structure: 1 };
+  const jobX = { facets: [...job.facets, badFacet], edges: [...job.edges, badEdge] };
+  const Rx = fuseModel({ job: jobX, obs: [obs({ role: 'challenge', kind: 'edge', type: 'eave', verdict: 'follows-canopy', sketch_type: 'eave', ll: [sq(-2.8, -2.8), sq(0.2, -2.8)] })], dsm: P.dsmT, mask: P.maskT });
+  const px_ = Rx.proposals.find((q) => q.kind === 'challenged');
+  out(px_ && px_.decision === 'accept-as-open' && Rx.edited.facets.some((f) => f.name === 'Fx' && f.status === 'unresolved'), 'a sketch edge a reviewer says follows a tree crown, lumpy in the height model, opens that facet for review', px_ ? `${px_.decision}: ${px_.why.slice(0, 140)}` : 'no challenged proposal');
+  // the same verdict on a real eave with a clean height step is rejected
+  const realEave = job.edges.find((e) => e.type === 'eave'); const Ry = fuseModel({ job, obs: [obs({ role: 'challenge', kind: 'edge', type: 'eave', verdict: 'follows-canopy', ll: [[realEave.path[0].lat, realEave.path[0].lng], [realEave.path[realEave.path.length - 1].lat, realEave.path[realEave.path.length - 1].lng]] })], dsm: P.dsmT, mask: P.maskT });
+  const py = Ry.proposals.find((q) => q.kind === 'challenged');
+  out(py && py.decision === 'reject' && Ry.summary.opened === 0, 'the same verdict on a real eave with a clean height step is rejected', py ? `${py.decision}: ${py.why.slice(0, 120)}` : 'no challenged proposal');
 }
 // ---- scene 3: a roofed shed the trace missed; two models draw its eave and the height model shows the step: opened for review
 {

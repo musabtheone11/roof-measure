@@ -39,6 +39,14 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
     return { len: L, n: cnt, step: cnt ? step / cnt : 0, crease: cnt ? crease / cnt : 0, maskEdge: cnt ? maskEdge / cnt : 0 };
   }
   const outlineSupport = (a, b) => { const e = segmentEvidence(a, b); return Math.max(e.step, e.maskEdge); };
+  // lumpiness of the height model along a run (mean absolute second difference at 0.3 m): roof planes ~0.03 m, tree crowns > 0.15 m
+  // measured 0.8 m to either side of the run (on the run itself a blurred roof edge reads lumpy); a roof edge has a smooth
+  // plane on at least one side, a tree crown is lumpy on both: the smaller of the two is used
+  function roughness(a, b, outline = true) { const L = dist(a, b); if (L < 0.9) return null; const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nrm = [-u[1], u[0]];
+    const side = (sg) => { const hs = []; for (let t = 0; t <= L; t += 0.3) hs.push(hAt([a[0] + u[0] * t + nrm[0] * 0.8 * sg, a[1] + u[1] * t + nrm[1] * 0.8 * sg])); let s = 0, n = 0, hm = 0, nh = 0; for (const h of hs) if (h != null) { hm += h; nh++; } for (let i = 1; i + 1 < hs.length; i++) if (hs[i - 1] != null && hs[i] != null && hs[i + 1] != null) { s += Math.abs(hs[i - 1] - 2 * hs[i] + hs[i + 1]); n++; } return n ? { rough: s / n, mean: hm / nh } : null; };
+    const r1 = side(1), r2 = side(-1); if (!r1 || !r2) return (r1 || r2 || {}).rough ?? null;
+    // an outline edge has ground on one side: judge the higher (roof or crown) side; an interior line has roof on both: the smoother side decides
+    return outline ? (r1.mean >= r2.mean ? r1.rough : r2.rough) : Math.min(r1.rough, r2.rough); }
   // observations carry about a metre of positional noise: slide a run sideways (up to 1.2 m) to where the evidence is best
   function snapLine(a, b, wantOutline) {
     const L = dist(a, b); if (L < 0.3) return { a, b, off: 0, support: 0 }; const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nrm = [-u[1], u[0]];
@@ -117,7 +125,16 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
     }
     else if (!near || near.dist >= 1.5) { kind = 'missing'; decision = support >= minSupport && strong ? 'accept-as-open' : (support < 0.25 ? 'reject' : 'unresolved'); why = `no sketch line within ${near ? near.dist.toFixed(1) : '?'} m (after sliding ${snapped.off.toFixed(1)} m to the evidence); ${wantOutline ? 'step/mask' : 'crease'} support ${support.toFixed(2)}; ${models.length} model(s), ${ev.len.toFixed(1)} m`; }
     else { kind = 'near'; decision = 'unresolved'; why = `near sketch ${near.s.e.type} #${near.s.i} (${near.dist.toFixed(2)} m, ${near.ang.toFixed(0)} deg) but not the same line`; }
-    if (kind === 'confirms' && near.s.e.type !== type && (INTERIOR.has(type) || OUTLINE.has(type)) && type !== 'outline') {
+    const challenged = verdicts.filter((v) => ['unsupported', 'follows-canopy', 'follows-shadow'].includes(v)).length;
+    if (kind === 'confirms' && challenged && challenged >= verdicts.length / 2) {
+      // a reviewer says this sketch line is not a roof edge: the height model decides (step / mask evidence and lumpiness)
+      const sOut = outlineSupport(near.s.a, near.s.b), evS = segmentEvidence(near.s.a, near.s.b), rough = roughness(near.s.a, near.s.b, OUTLINE.has(near.s.e.type));
+      const isOutline = OUTLINE.has(near.s.e.type); const supported = isOutline ? sOut >= 0.5 : evS.crease >= 0.4; const lumpy = rough != null && rough > 0.15;
+      kind = 'challenged';
+      if (!supported || lumpy) { decision = 'accept-as-open'; why = `reviewer verdict ${verdicts.join('/')} on sketch ${near.s.e.type} #${near.s.i}; height model: ${isOutline ? 'step/mask' : 'crease'} support ${(isOutline ? sOut : evS.crease).toFixed(2)}, lumpiness ${rough == null ? '?' : rough.toFixed(2)} m${lumpy ? ' (tree crown, not a roof plane)' : ''}`; }
+      else { decision = 'reject'; why = `reviewer verdict ${verdicts.join('/')} on sketch ${near.s.e.type} #${near.s.i} rejected: the height model shows the edge (support ${(isOutline ? sOut : evS.crease).toFixed(2)}, lumpiness ${rough == null ? '?' : rough.toFixed(2)} m)`; }
+    }
+    else if (kind === 'confirms' && near.s.e.type !== type && (INTERIOR.has(type) || OUTLINE.has(type)) && type !== 'outline') {
       const evS = segmentEvidence(near.s.a, near.s.b); const outl = Math.max(evS.step, evS.maskEdge);
       const obsOK = OUTLINE.has(type) ? outl >= minSupport : evS.crease >= minSupport, skOK = OUTLINE.has(near.s.e.type) ? outl >= minSupport : evS.crease >= minSupport;
       if (obsOK && !skOK) { kind = 'misclassified'; decision = 'accept'; why += `; height model supports ${type}, not ${near.s.e.type} (step ${evS.step.toFixed(2)}, mask ${evS.maskEdge.toFixed(2)}, crease ${evS.crease.toFixed(2)})`; }
