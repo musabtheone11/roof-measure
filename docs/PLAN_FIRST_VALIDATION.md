@@ -165,7 +165,7 @@ quantities are withheld.
 Existing measurement, smoke, color/canopy, regression fixture, report acceptance,
 PDF reconciliation, mixed-pitch takeoff, roof-summary and vision-fusion suites
 passed. New geometry, plan-dimension, per-quantity provenance, scope-evidence and
-asynchronous stale-export regressions passed; the evidence gate contains 19
+asynchronous stale-export regressions passed; the evidence gate contains 20
 focused checks. App JavaScript syntax, Python tool compilation and diff whitespace
 checks passed. A headless browser additionally saved an individual default-unresolved
 quantity through the actual collapsed evidence form and verified its revision binding.

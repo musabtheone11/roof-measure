@@ -37,4 +37,5 @@ const inferredAudit = RM.auditEvidence(inferred,ctx);
 assert(inferredAudit.issues.some(x=>x.code==='inferred-quantity'));
 assert(!inferredAudit.issues.some(x=>x.code==='quantity-evidence'));
 assert.equal(RM.reportStatus({facets:1,evidenceAudit:inferredAudit}).status,'REVIEW REQUIRED');
-console.log('Evidence gate: 19 checks passed');
+assert.equal(RM.reportStatus({facets:1,evidenceAudit:inferredAudit}).reasons.find(x=>x.code==='inferred-quantity').id, 'F1', 'status retains stable evidence IDs for schedule cross-references');
+console.log('Evidence gate: 20 checks passed');

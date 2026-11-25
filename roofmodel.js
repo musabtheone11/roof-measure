@@ -281,7 +281,7 @@ var RM = (function () {
     const grown = (f.newerRecords || []).filter((q) => q.ratio >= 1.25).sort((p, q) => q.ratio - p.ratio)[0];
     if (f.facets && grown) add('imagery-change', `A newer Google image of this building (${fd(grown.date)}) shows about ${Math.round((grown.ratio - 1) * 100)}% more roof than the image traced: the building may have been extended or rebuilt since, or more of it was under trees.`, 'Compare the dated imagery (Review roof from other angles) and trace from the newer image, or measure on site.');
     if (f.unclassifiedFt > 2) add('unclassified-boundary', `${n0(f.unclassifiedFt)} ft of required boundary is unclassified.`, 'Classify each supported boundary; leave hidden boundaries unresolved.');
-    if (f.evidenceAudit && !f.evidenceAudit.ok) for (const x of f.evidenceAudit.issues) add(x.code, x.text, x.needs);
+    if (f.evidenceAudit && !f.evidenceAudit.ok) for (const x of f.evidenceAudit.issues) why.push({ ...x });
     for (const x of f.extra || []) why.push(x);
     return { status: why.length ? 'REVIEW REQUIRED' : 'COMPLETE', reasons: why };
   }

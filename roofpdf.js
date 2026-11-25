@@ -596,7 +596,12 @@ function rpReviewItems(M) {
   const byNote = new Map(); if (!(M.src && M.src.zones && M.src.zones.length)) for (const F of M.facets) if (F.status === 'unresolved' && !F.f.excluded) { const k = F.f.missing || F.f.note || ''; if (!byNote.has(k)) byNote.set(k, []); byNote.get(k).push(F); }
   for (const [k, Fs] of byNote) out.push({ key: Fs.map((F) => F.id).join(', '), title: Fs[0].f.label || 'Roof plane not supported', action: k || 'Measure the footprint and pitch. Confirm inclusion in scope.' });
   if (M.rv) for (const v of M.rv.verify) out.push({ key: v.label.split(' ')[0], title: 'Marked for verification', action: v.note || `Seen on ${v.source}${v.date ? ' (' + v.date + ')' : ''}; confirm the measurement on site.` });
-  for (const r of M.status.reasons) if (!['hidden', 'unresolved', 'verify', 'estimate'].includes(r.code)) out.push({ key: '•', title: r.text, action: r.needs });
+  for (const r of M.status.reasons) if (!['hidden', 'unresolved', 'verify', 'estimate'].includes(r.code)) {
+    const line = M.lines.find(L => L.e.modelId === r.id);
+    const facet = M.facets.find(F => F.f.modelId === r.id);
+    const key = line ? `${r.id} / plan ${line.key}` : facet ? `${r.id} / facet ${facet.id}` : (r.id || '•');
+    out.push({ key, title: r.text, action: r.needs });
+  }
   return out;
 }
 
