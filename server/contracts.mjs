@@ -46,16 +46,31 @@ export function imageHeaderDimensions(dataURL) {
   if(!Number.isInteger(width)||!Number.isInteger(height)||width<16||height<16||width*height>40000000)fail('Image dimensions exceed supported limits');
   return {width,height,mime:'image/'+match[1]};
 }
+export function validateBudget(budget) {
+  if(!object(budget))fail('Budget must be an object');
+  const limits={maxRequests:[20,true],maxTokens:[20000000,true],maxOutputTokens:[8000,true],maxUsd:[20,false],maxCostUsd:[20,false]};
+  if(Object.keys(budget).some(name=>!Object.hasOwn(limits,name)))fail('Unknown budget limit');
+  for(const [name,[max,integer]] of Object.entries(limits)) if(Object.hasOwn(budget,name)) {
+    const value=budget[name];
+    if(!finite(value)||value<0||value>max||(integer&&!Number.isInteger(value)))fail('Invalid explicit budget limit: '+name);
+  }
+  if(Object.hasOwn(budget,'maxUsd')&&Object.hasOwn(budget,'maxCostUsd')&&budget.maxUsd!==budget.maxCostUsd)fail('Conflicting dollar budget limits');
+  return budget;
+}
 export function validateInput(input) {
   if (!object(input) || !string(input.revision,1000000)) fail('A model revision is required');
   if (input.consentExternal!==true) fail('Explicit authorization for external image processing is required');
   const m=input.imageMetadata;
   if (!object(m)||!Number.isInteger(m.width)||!Number.isInteger(m.height)||m.width<16||m.height<16||m.width>8192||m.height>8192) fail('Source image dimensions are invalid');
+  if(m.purpose!==undefined&&!['photo','roof-sketch','document'].includes(m.purpose))fail('Invalid source purpose');
+  if(m.sourcePage!==undefined&&(!Number.isInteger(m.sourcePage)||m.sourcePage<1||m.sourcePage>1000))fail('Invalid source page index');
+  if(m.rotation!==undefined&&![0,90,180,270].includes(m.rotation))fail('Rotation describes an already-rendered quarter turn');
   if (m.targetPixel != null) point(m.targetPixel,m);
   if (!['orthographic','oblique','unknown'].includes(m.view)) fail('Identify source perspective');
   if (!string(input.image,16000000))fail('Supply a bounded supported image data URL');
   const actual=imageHeaderDimensions(input.image);if(actual.width!==m.width||actual.height!==m.height)fail('Declared dimensions do not match the image header');
   if (m.crop && (!object(m.crop)||!Array.isArray(m.crop.origin)||!m.crop.origin.every(finite)||!finite(m.crop.scale)||m.crop.scale<=0))fail('Invalid crop transform');
+  if(input.budget!==undefined)validateBudget(input.budget);
   if (input.models && (!object(input.models)||Object.keys(input.models).some(k=>!ROLES.includes(k))||!Object.values(input.models).every(x=>string(x,200))))fail('Invalid model selection');
   return input;
 }
@@ -94,10 +109,19 @@ export function validateResponse(role, value, meta) {
     if(value.buildings.filter(b=>b.target).length>1)fail('Multiple target buildings require review');return structuredClone(value);
   }
   if(role==='structure') {
-    keys(value,['planes','edges','notes']);notes(value.notes);
+    keys(value,['planes','edges','notes','annotations'],['planes','edges','notes']);notes(value.notes);
     if(!Array.isArray(value.planes)||value.planes.length>300||!Array.isArray(value.edges)||value.edges.length>1000)fail('Invalid roof structure proposals');
     const ids=new Set();for(const p of value.planes){keys(p,['id','vertices','status','evidence']);if(!string(p.id,80)||ids.has(p.id))fail('Duplicate or invalid plane ID');ids.add(p.id);p.vertices=ring(p.vertices,meta);status(p.status);evidence(p.evidence);}
     const edgeIds=new Set();for(const e of value.edges){keys(e,['id','type','points','status','evidence']);if(!string(e.id,80)||edgeIds.has(e.id)||!EDGE_TYPES.includes(e.type))fail('Invalid edge identifier or classification');edgeIds.add(e.id);e.points=points(e.points,meta,2);status(e.status);evidence(e.evidence);}
+    if(value.annotations!==undefined) {
+      if(!Array.isArray(value.annotations)||value.annotations.length>200)fail('Invalid source annotations');
+      const annotationIds=new Set();
+      for(const a of value.annotations) {
+        keys(a,['id','kind','text','region','status']);
+        if(!string(a.id,80)||annotationIds.has(a.id)||!['dimension','pitch','area','label','contradiction'].includes(a.kind)||!string(a.text,2000)||!['source-reported','unresolved'].includes(a.status))fail('Invalid literal source annotation');
+        annotationIds.add(a.id);a.region=ring(a.region,meta);
+      }
+    }
     return structuredClone(value);
   }
   if(role==='adjudication') {
@@ -111,6 +135,6 @@ export const OUTPUT_CONTRACTS = {
  quality:'{"traceable":boolean,"target":[x,y]|null,"issues":[{"kind":"obstruction|shadow|perspective|resolution|wrong-target|unknown","region":[[x,y],...],"reason":string}],"evidence":string}',
  outline:'{"buildings":[{"id":string,"target":boolean,"vertices":[[x,y],...],"status":"inferred|unresolved","evidence":string}],"notes":[string]}',
  independent:'{"buildings":[{"id":string,"target":boolean,"vertices":[[x,y],...],"status":"inferred|unresolved","evidence":string}],"notes":[string]}',
- structure:'{"planes":[{"id":string,"vertices":[[x,y],...],"status":"inferred|unresolved","evidence":string}],"edges":[{"id":string,"type":"eave|rake|ridge|hip|valley|step|wall|transition|parapet|unspecified|obstruction","points":[[x,y],...],"status":"inferred|unresolved","evidence":string}],"notes":[string]}',
+ structure:'{"planes":[{"id":string,"vertices":[[x,y],...],"status":"inferred|unresolved","evidence":string}],"edges":[{"id":string,"type":"eave|rake|ridge|hip|valley|step|wall|transition|parapet|unspecified|obstruction","points":[[x,y],...],"status":"inferred|unresolved","evidence":string}],"annotations":[{"id":string,"kind":"dimension|pitch|area|label|contradiction","text":string,"region":[[x,y],...],"status":"source-reported|unresolved"}],"notes":[string]}',
  adjudication:'{"decisions":[{"id":string,"resolution":"unresolved|prefer-first|prefer-independent|needs-crop|needs-field","region":[[x,y],...],"reason":string}],"notes":[string]}'
 };

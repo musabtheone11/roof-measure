@@ -32,12 +32,53 @@ function containsPoint(point,ring){
  if(ring.some((p,i)=>pointSegment(point,p,ring[(i+1)%ring.length])<=EPS))return true;
  let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++)if((ring[i][1]>point[1])!==(ring[j][1]>point[1])&&point[0]<(ring[j][0]-ring[i][0])*(point[1]-ring[i][1])/(ring[j][1]-ring[i][1])+ring[i][0])inside=!inside;return inside;
 }
+const EDGE_TYPES=new Set(['eave','rake','ridge','hip','valley','step','wall','transition','parapet','unspecified','obstruction']);
+function segmentIntervals(a,b,ring) {
+ const dx=b[0]-a[0],dy=b[1]-a[1],len2=dx*dx+dy*dy,ts=[0,1];
+ for(let i=0;i<ring.length;i++){const c=ring[i],d=ring[(i+1)%ring.length],ex=d[0]-c[0],ey=d[1]-c[1],den=dx*ey-dy*ex;
+  if(Math.abs(den)>EPS){const t=((c[0]-a[0])*ey-(c[1]-a[1])*ex)/den,u=((c[0]-a[0])*dy-(c[1]-a[1])*dx)/den;if(t>0&&t<1&&u>=-EPS&&u<=1+EPS)ts.push(t);}
+  else if(Math.abs(cross(a,b,c))<=EPS&&len2>EPS)for(const p of[c,d]){const t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len2;if(t>0&&t<1)ts.push(t);}
+ }
+ return [...new Set(ts)].sort((x,y)=>x-y);
+}
+function segmentInside(a,b,ring){if(!containsPoint(a,ring)||!containsPoint(b,ring))return false;const ts=segmentIntervals(a,b,ring);return ts.slice(1).every((t,i)=>containsPoint([a[0]+(b[0]-a[0])*(t+ts[i])/2,a[1]+(b[1]-a[1])*(t+ts[i])/2],ring));}
+function coverage(a,b,rings){
+ const dx=b[0]-a[0],dy=b[1]-a[1],len2=dx*dx+dy*dy,intervals=[];
+ if(len2<=EPS)return [];
+ for(let r=0;r<rings.length;r++)for(let i=0;i<rings[r].length;i++){const c=rings[r][i],d=rings[r][(i+1)%rings[r].length];if(Math.abs(cross(a,b,c))>EPS||Math.abs(cross(a,b,d))>EPS)continue;const values=[c,d].map(p=>((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len2).sort((x,y)=>x-y),lo=Math.max(0,values[0]),hi=Math.min(1,values[1]);if(hi-lo>EPS)intervals.push({lo,hi,ring:r});}
+ return intervals;
+}
+function boundarySupported(a,b,rings,minimum=1){const intervals=coverage(a,b,rings),ts=[...new Set([0,1,...intervals.flatMap(i=>[i.lo,i.hi])])].sort((x,y)=>x-y);return ts.slice(1).every((t,i)=>{if(t-ts[i]<=EPS)return true;const mid=(t+ts[i])/2;return new Set(intervals.filter(v=>v.lo<=mid+EPS&&v.hi>=mid-EPS).map(v=>v.ring)).size>=minimum;});}
+function validateEdges(proposal,metadata,outline,facets){
+ const issues=[],edges=[],source=proposal.edges||[];
+ if(!Array.isArray(source)||source.length>1000||source.reduce((n,e)=>n+(Array.isArray(polygonOf(e))?polygonOf(e).length:8193),0)>8192)return{edges,issues:[issue('edge-budget','Edge geometry exceeds the bounded validation budget')]};
+ const ids=new Set(facets.map(f=>f.id)),outer=clean(outline),rings=facets.map(f=>clean(f.polygon)).filter(r=>r.length>=3);
+ for(let i=0;i<source.length;i++){
+  const e=source[i]&&typeof source[i]==='object'?source[i]:{},id=e.id||`E${i+1}`,points=polygonOf(e),start=issues.length;
+  if(typeof id!=='string'||!id.length||ids.has(id))issues.push(issue('duplicate-id','Edge and facet IDs must be unique nonempty strings',[id]));ids.add(id);
+  if(!EDGE_TYPES.has(e.type))issues.push(issue('edge-type','Edge classification is missing or unknown',[id]));
+  if(!Array.isArray(points)||points.length<2||points.length>512||points.some(p=>!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite))){issues.push(issue('edge-coordinates','Edge requires finite pixel coordinates',[id]));edges.push({...e,id,points:[],valid:false});continue;}
+  if(points.some(p=>p[0]<0||p[1]<0||(metadata.width&&p[0]>metadata.width)||(metadata.height&&p[1]>metadata.height)))issues.push(issue('edge-bounds','Edge lies outside the source image',[id]));
+  for(let j=1;j<points.length;j++){
+   const a=points[j-1],b=points[j];if(dist(a,b)<=EPS){issues.push(issue('duplicate-edge-vertex','Consecutive edge vertices coincide',[id]));continue;}
+   if(outer.length<3||!segmentInside(a,b,outer)){issues.push(issue('edge-outside-roof','An edge segment is not contained by the target roof',[id]));continue;}
+   if(['eave','rake','parapet'].includes(e.type)&&!boundarySupported(a,b,[outer]))issues.push(issue('edge-boundary','Exterior edge classification requires the exterior roof boundary',[id]));
+   if(['ridge','hip','valley'].includes(e.type)&&(!boundarySupported(a,b,rings,2)||coverage(a,b,[outer]).length))issues.push(issue('edge-shared-boundary','Ridges, hips and valleys require a supported interior boundary shared by two facets',[id]));
+   if(['step','wall','transition'].includes(e.type)&&!boundarySupported(a,b,rings))issues.push(issue('edge-facet-boundary','Flashing or transition requires a roof facet boundary',[id]));
+  }
+  // IDs share one namespace across facets and edges; physical paths must not overlap.
+  const segments=points.slice(1).map((b,j)=>[points[j],b]);
+  if(segments.some(([a,b],j)=>coverage(a,b,segments.slice(0,j)).length)||edges.some(other=>other.type===e.type&&segments.some(([a,b])=>coverage(a,b,other.points.slice(1).map((q,k)=>[other.points[k],q])).length)))issues.push(issue('duplicate-edge','Overlapping or retraced physical line in the same category',[id]));
+  edges.push({...e,id,points:points.map(p=>p.slice()),valid:issues.length===start});
+ }
+ return{edges,issues};
+}
 export function validateProposal(proposal,metadata={}){
  proposal=proposal&&typeof proposal==='object'?proposal:{};
  const outline=validatePolygon(proposal.outline,metadata),issues=[...outline.issues],facets=[];
  if(metadata.targetPixel!=null&&outline.ok&&!containsPoint(metadata.targetPixel,clean(outline.polygon)))issues.push(issue('target-mismatch','The proposed roof does not contain the selected target point',['outline']));
  const sourceFacets=proposal.facets||[]; if(!Array.isArray(sourceFacets)||sourceFacets.length>300||sourceFacets.reduce((n,f)=>n+polygonOf(f).length,0)>4096)return{ok:false,issues:[...issues,issue('geometry-budget','Roof geometry exceeds the bounded validation budget')],outline:outline.polygon,facets:[],topology:{overlapPixels2:null,gapPixels2:null,outsidePixels2:null,sharedBoundaries:[]}};
- const ids=new Set();for(const[f,i]of(sourceFacets.map((f,i)=>[f&&typeof f==='object'?f:{},i]))){const id=f.id||`F${i+1}`;if(ids.has(id))issues.push(issue('duplicate-id','Facet IDs must be unique',[id]));ids.add(id);const v=validatePolygon(f,metadata,id);facets.push({...f,id,polygon:v.polygon});issues.push(...v.issues);}
+ const ids=new Set();for(const[f,i]of(sourceFacets.map((f,i)=>[f&&typeof f==='object'?f:{},i]))){const id=f.id||`F${i+1}`;if(typeof id!=='string'||!id.length||ids.has(id))issues.push(issue('duplicate-id','Facet IDs must be unique nonempty strings',[id]));ids.add(id);const v=validatePolygon(f,metadata,id);facets.push({...f,id,polygon:v.polygon});issues.push(...v.issues);}
  const topology={overlapPixels2:null,gapPixels2:null,outsidePixels2:null,sharedBoundaries:[]};
  if(outline.ok&&facets.length&&facets.every(f=>f.polygon.length>=4)&&!issues.length){try{
   const union=pc.union(...facets.map(f=>[f.polygon]));
@@ -46,7 +87,8 @@ export function validateProposal(proposal,metadata={}){
   for(const[k,label]of[['overlapPixels2','overlap'],['gapPixels2','gap'],['outsidePixels2','outside-outline']])if(topology[k]>EPS)issues.push(issue(label,`${topology[k]} square pixels of ${label} require review`,facets.map(f=>f.id)));
   for(let i=0;i<facets.length;i++)for(let j=i+1;j<facets.length;j++){let length=0;const a=facets[i].polygon,b=facets[j].polygon;for(let x=1;x<a.length;x++)for(let y=1;y<b.length;y++){if(Math.abs(cross(a[x-1],a[x],b[y-1]))>EPS||Math.abs(cross(a[x-1],a[x],b[y]))>EPS)continue;const d=dist(a[x-1],a[x]);if(!d)continue;const ux=(a[x][0]-a[x-1][0])/d,uy=(a[x][1]-a[x-1][1])/d;const ts=[b[y-1],b[y]].map(p=>(p[0]-a[x-1][0])*ux+(p[1]-a[x-1][1])*uy).sort((m,n)=>m-n);length+=Math.max(0,Math.min(d,ts[1])-Math.max(0,ts[0]));}if(length>EPS)topology.sharedBoundaries.push({facets:[facets[i].id,facets[j].id],lengthPixels:length});}
  }catch{issues.push(issue('topology-unresolved','Polygon topology could not be reliably evaluated'));}}
- return{ok:!issues.length,issues,outline:outline.polygon,facets,topology};
+ const checkedEdges=validateEdges(proposal,metadata,outline.polygon,facets);issues.push(...checkedEdges.issues);
+ return{ok:!issues.length,issues,outline:outline.polygon,facets,edges:checkedEdges.edges,topology};
 }
 export function transformPoint(point,affine){if(!Array.isArray(point)||point.length!==2||!point.every(Number.isFinite))throw Error('A finite pixel point is required');if(!Array.isArray(affine)||affine.length!==6||!affine.every(Number.isFinite))throw Error('A six-value affine transform is required');const[x,y]=point;return[affine[0]*x+affine[1]*y+affine[2],affine[3]*x+affine[4]*y+affine[5]];}
 export function invertAffine(a){const det=a[0]*a[4]-a[1]*a[3];if(!Number.isFinite(det)||Math.abs(det)<1e-14)throw Error('Singular transform');return[a[4]/det,-a[1]/det,(a[1]*a[5]-a[4]*a[2])/det,-a[3]/det,a[0]/det,(a[3]*a[2]-a[0]*a[5])/det];}
@@ -71,12 +113,11 @@ export function measurementTransform(metadata={}){
 }
 export function measureProposal(proposal,metadata={}){
  proposal=proposal&&typeof proposal==='object'?proposal:{};
- const validation=validateProposal(proposal,metadata);let t;try{t=measurementTransform(metadata);}catch{t={ok:false,reason:'Invalid spatial metadata; physical quantities withheld.'};}const issues=[...validation.issues];if(!t.ok)issues.push(issue('scale-unresolved',t.reason));
+ const validation=validateProposal(proposal,metadata);let t;try{t=measurementTransform(metadata);}catch{t={ok:false,reason:'Invalid spatial metadata; physical quantities withheld.'};}if(proposal.measurementRestrictions?.perspective===true)t={ok:false,reason:'Perspective imagery cannot establish physical quantities from a planar scale.'};const issues=[...validation.issues];if(proposal.measurementRestrictions?.perspective===true)issues.push(issue('perspective-restriction','Perspective quality restriction persists through geometry edits'));if(!t.ok)issues.push(issue('scale-unresolved',t.reason));
  const rows=validation.facets.map(f=>{const pixels2=areaRing(f.polygon),planM2=t.ok&&validation.ok?areaRing(f.polygon.map(t.point)):null,p=f.pitch;const supported=p&&p.source&&Number.isFinite(p.uncertainty)&&p.uncertainty>=0&&['measured','user-provided'].includes(p.status)&&Number.isFinite(p.rise)&&Number.isFinite(p.run)&&p.rise>=0&&p.run>0;
   if(!supported)issues.push(issue('pitch-unresolved','Sloped surface area requires a sourced pitch and stated uncertainty',[f.id]));
   return{id:f.id,pixels2,projectedAreaM2:planM2,projectedAreaSqft:planM2==null?null:planM2*RM.SQFT,slopedAreaM2:planM2!=null&&supported?planM2*Math.hypot(p.run,p.rise)/p.run:null,pitch:supported?p:null,status:'inferred'};});
- let sourceEdges=proposal.edges||[];if(!Array.isArray(sourceEdges)||sourceEdges.length>1000||sourceEdges.reduce((n,e)=>n+polygonOf(e).length,0)>8192){issues.push(issue('edge-budget','Edge geometry exceeds the bounded validation budget'));sourceEdges=[];}
- const edges=sourceEdges.map((raw,i)=>{const e=raw&&typeof raw==='object'?raw:{};const points=polygonOf(e);const valid=points.length>=2&&points.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite));let px=0,m=0;if(valid)for(let j=1;j<points.length;j++){px+=dist(points[j-1],points[j]);if(t.ok)m+=dist(t.point(points[j-1]),t.point(points[j]));}else issues.push(issue('edge-coordinates','Invalid edge coordinates',[e.id||`E${i+1}`]));return{...e,id:e.id||`E${i+1}`,lengthPixels:valid?px:null,horizontalLengthM:valid&&t.ok&&validation.ok?m:null,trueSlopedLengthM:null,status:e.status||'unresolved'};});
+ const edges=(validation.edges||[]).map(e=>{let pixels=0,meters=0;if(e.valid)for(let j=1;j<e.points.length;j++){pixels+=dist(e.points[j-1],e.points[j]);if(t.ok)meters+=dist(t.point(e.points[j-1]),t.point(e.points[j]));}return{...e,lengthPixels:e.valid?pixels:null,horizontalLengthM:e.valid&&t.ok&&validation.ok?meters:null,trueSlopedLengthM:null,status:e.status||'unresolved'};});
  return{status:'REVIEW REQUIRED',issues,validation,measurementBasis:t.ok?t.basis:null,facets:rows,edges,projectedAreaM2:rows.length&&rows.every(r=>r.projectedAreaM2!=null)?rows.reduce((s,r)=>s+r.projectedAreaM2,0):null,slopedAreaM2:rows.length&&rows.every(r=>r.slopedAreaM2!=null)?rows.reduce((s,r)=>s+r.slopedAreaM2,0):null};
 }
 export function compareProposals(a,b,metadata={}){

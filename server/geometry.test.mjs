@@ -40,3 +40,22 @@ assert.deepEqual(cropToSource([20,30],{origin:[100,200],scale:2}),[110,215]);
 assert.throws(()=>cropToSource([20,30],{origin:[100,200],scale:0}),/positive/);
 
 const far=measureProposal(model,{...meta,calibration:null,georef:{verified:true,source:'Local survey',date:'2026-11-25',crs:'LOCAL_EN_METERS',affine:[1,0,1000000000,0,1,1000000000]}});assert.equal(far.projectedAreaM2,200,'large coordinate offsets do not cancel small roof areas');
+
+const outOfBounds={...model,edges:[{id:'outside',type:'eave',points:[[1000,1000],[2000,1000]]}]};
+assert.equal(validateProposal(outOfBounds,meta).ok,false);
+assert.equal(measureProposal(outOfBounds,meta).edges[0].horizontalLengthM,null,'out-of-image line has no physical quantity');
+assert.equal(measureProposal(outOfBounds,meta).projectedAreaM2,null,'invalid edge cannot leave overall validation approved');
+const interiorEave={...model,edges:[{id:'not-eave',type:'eave',points:[[2,5],[8,5]]}]};assert(validateProposal(interiorEave,meta).issues.some(i=>i.code==='edge-boundary'));
+const sharedRidge={...model,edges:[{id:'shared',type:'ridge',points:[[10,0],[10,10]]}]};assert.equal(validateProposal(sharedRidge,meta).ok,true);assert(Math.abs(measureProposal(sharedRidge,meta).edges[0].horizontalLengthM-3.048)<1e-10);
+const exteriorRidge={...model,edges:[{id:'bad-ridge',type:'ridge',points:[[0,0],[20,0]]}]};assert(validateProposal(exteriorRidge,meta).issues.some(i=>i.code==='edge-shared-boundary'));
+const duplicateIDs={...model,edges:[{id:'E1',type:'eave',points:[[0,0],[10,0]]},{id:'E1',type:'eave',points:[[10,0],[20,0]]}]};assert(validateProposal(duplicateIDs,meta).issues.some(i=>i.code==='duplicate-id'));
+const duplicateLines={...model,edges:[{id:'E1',type:'eave',points:[[0,0],[20,0]]},{id:'E2',type:'eave',points:[[20,0],[0,0]]}]};assert(validateProposal(duplicateLines,meta).issues.some(i=>i.code==='duplicate-edge'));
+const concave={outline:[[0,0],[10,0],[10,10],[6,10],[6,2],[4,2],[4,10],[0,10]],facets:[],edges:[{id:'chord',type:'unspecified',points:[[2,8],[8,8]]}]};assert(validateProposal(concave,meta).issues.some(i=>i.code==='edge-outside-roof'),'endpoints inside a concave roof do not validate an exterior chord');
+const bent={outline:rect(0,0,20,10),facets:[{id:'F1',polygon:rect(0,0,20,10),pitch}],edges:[{id:'poly',type:'eave',points:[[0,0],[20,0],[20,10]]}]};assert.equal(validateProposal(bent,meta).ok,true);assert(Math.abs(measureProposal(bent,meta).edges[0].horizontalLengthM-30*.3048)<1e-9,'bent boundary length is its path, not its chord');
+console.log('Runtime edge guards: image/roof bounds, shared topology, duplicate IDs/lines, concave escape and true path length pass');
+const partialOverlap={...model,edges:[{id:'EA',type:'eave',points:[[0,0],[20,0]]},{id:'EB',type:'eave',points:[[10,0],[20,0]]}]};assert.equal(measureProposal(partialOverlap,meta).edges[0].horizontalLengthM,null);assert(validateProposal(partialOverlap,meta).issues.some(i=>i.code==='duplicate-edge'));
+const retrace={...model,edges:[{id:'EA',type:'eave',points:[[0,0],[20,0],[10,0]]}]};assert(validateProposal(retrace,meta).issues.some(i=>i.code==='duplicate-edge'));
+const endpointOnly={...model,edges:[{id:'EA',type:'eave',points:[[0,0],[10,0]]},{id:'EB',type:'eave',points:[[10,0],[20,0]]}]};assert.equal(validateProposal(endpointOnly,meta).ok,true);
+const noFacets={outline:model.outline,facets:[],edges:[{id:'EA',type:'eave',points:[[0,0],[20,0]]}]};assert.equal(measureProposal(noFacets,meta).status,'REVIEW REQUIRED');assert(measureProposal(noFacets,meta).edges[0].horizontalLengthM>0);assert.equal(measureProposal({...noFacets,edges:[{id:'R',type:'ridge',points:[[10,0],[10,10]]}]},meta).edges[0].horizontalLengthM,null);
+assert(validateProposal({...model,edges:[{id:model.facets[0].id,type:'eave',points:[[0,0],[20,0]]}]},meta).issues.some(i=>i.code==='duplicate-id'),'facets and edges use a shared ID namespace');
+const perspective={...sharedRidge,measurementRestrictions:{perspective:true,reasons:['oblique roof']}};for(const p of[perspective,{...structuredClone(perspective),revision:'edited'}]){const m=measureProposal(p,meta);assert.equal(m.projectedAreaM2,null);assert.equal(m.slopedAreaM2,null);assert.equal(m.edges[0].horizontalLengthM,null);assert(m.issues.some(i=>i.code==='perspective-restriction'));}

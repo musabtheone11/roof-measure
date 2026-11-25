@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {validateBudget} from './contracts.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -27,6 +28,10 @@ export async function startRuntime({port=3000,host='127.0.0.1',runAgents,measure
      if([...jobs.values()].filter(j=>j.status==='running').length>=2||[...jobs.values()].some(j=>j.owner===sid&&j.status==='running'))return send(429,{error:'A roof is already processing. Wait or cancel it before starting another.'});
      if(jobs.size>=30)return send(429,{error:'Processing history is full. Try again after older jobs expire.'});
      const input=await read();if(input.consentExternal!==true)return send(400,{error:'Confirm authorization to send this image for external processing.'});
+     // Recheck after awaiting the body, immediately before synchronous insertion.
+     if([...jobs.values()].filter(j=>j.status==='running').length>=2||[...jobs.values()].some(j=>j.owner===sid&&j.status==='running'))return send(429,{error:'A roof is already processing. Wait or cancel it before starting another.'});
+     if(jobs.size>=30)return send(429,{error:'Processing history is full. Try again after older jobs expire.'});
+     if(input.budget!==undefined)validateBudget(input.budget);
      input.budget={...input.budget,maxRequests:Math.min(8,input.budget?.maxRequests??8),maxTokens:Math.min(6000000,input.budget?.maxTokens??6000000),maxUsd:Math.min(2,input.budget?.maxUsd??input.budget?.maxCostUsd??2)};
      const id=crypto.randomUUID(),controller=new AbortController(),job={id,owner:sid,created:now,status:'running',progress:[],revision:input.revision,controller};jobs.set(id,job);
      Promise.resolve().then(()=>runAgents(input,{apiKey,signal:controller.signal,compareTraces,onProgress:event=>job.progress.push(event),isCurrent:revision=>job.status==='running'&&job.revision===revision})).then(async result=>{if(controller.signal.aborted)return;job.result=result;job.status='completed';}).catch(err=>{if(controller.signal.aborted){job.status='cancelled';return;}job.status='failed';job.error={code:err.code||'PROCESSING_FAILED',message:String(err.message||'Roof processing failed.').split(apiKey).join('[redacted]')};});

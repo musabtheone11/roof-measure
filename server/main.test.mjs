@@ -1,0 +1,8 @@
+import test from'node:test';import assert from'node:assert/strict';import{canonicalResult}from'./main.mjs';import{analyzeRoofModel}from'./geometry.mjs';
+test('quality perspective evidence blocks physical quantities across edits',()=>{
+ const ring=[[0,0],[100,0],[100,100],[0,100]],input={revision:'r1',imageMetadata:{width:100,height:100,view:'orthographic',calibration:{verified:true,start:[0,0],end:[100,0],lengthFt:10,source:'Synthetic known scale',date:'2026-11-25'}}};
+ const source={quality:{traceable:true,issues:[{kind:'perspective',reason:'Oblique source without orthorectification'}]},outline:{buildings:[{id:'B1',target:true,vertices:ring}]},structure:{planes:[{id:'F1',vertices:ring,status:'inferred'}],edges:[{id:'E1',type:'eave',points:[[0,0],[100,0]],status:'inferred'}]}};
+ const first=canonicalResult(source,input);assert.equal(first.measurements.projectedAreaM2,null);assert.equal(first.measurements.edges[0].horizontalLengthM,null);
+ const edited=structuredClone(first.model);edited.facets[0].pitch={rise:6,run:12,source:'Synthetic source',uncertainty:0,status:'user-provided'};
+ const next=analyzeRoofModel(edited,input.imageMetadata,{revision:'r2'});assert.equal(next.measurements.projectedAreaM2,null);assert.equal(next.measurements.slopedAreaM2,null);assert.equal(next.model.measurementRestrictions.perspective,true);
+});

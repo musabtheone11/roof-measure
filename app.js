@@ -542,19 +542,20 @@ function nearPx(a, b, px) {
 }
 function allVertices() {
   const v = [];
-  for (const f of state.facets) f.shape.getPath().forEach((ll) => v.push(ll));
-  for (const e of state.edges) e.shape.getPath().forEach((ll) => v.push(ll));
-  if (draft) for (const p of draft.points) v.push(p);
+  for (const f of state.facets.filter((f) => !f.omit)) f.shape.getPath().forEach((ll) => v.push(ll));
+  for (const e of state.edges.filter((e) => !e.omit)) e.shape.getPath().forEach((ll) => v.push(ll));
+  if (draft) for (const p of draft.points.slice(0, -1)) v.push(p);
   return v;
 }
 function snap(latLng) {
-  let best = null, bestD = SNAP_PX + 1;
+  let best = null, bestD = SNAP_PX;
   const p0 = labels.pixel(latLng);
   if (!p0) return latLng;
   for (const v of allVertices()) {
     const p = labels.pixel(v);
+    if (!p) continue;
     const d = Math.hypot(p.x - p0.x, p.y - p0.y);
-    if (d < bestD) { bestD = d; best = v; }
+    if (p && d <= bestD) { bestD = d; best = v; }
   }
   return best || latLng;
 }
@@ -573,9 +574,11 @@ function onMapClick(e, isDbl) {
   if (state.tool === 'select') { if (!isDbl) select(null); return; }
   if (isDbl) { finishDraft(); return; }
   if (!draft) startDraft(state.tool);
-  const pt = snap(e.latLng);
+  if (e.domEvent?.detail >= 2) return;
   const pts = draft.points;
-  if (pts.length && nearPx(pt, pts[pts.length - 1], 4)) return;             // ignore the 2nd click of a double-click
+  if (pts.length && pts[pts.length - 1].equals(e.latLng)) return;
+  const pt = e.domEvent?.altKey ? e.latLng : snap(e.latLng);
+  if (pts.length && pts[pts.length - 1].equals(pt)) return; // reject exact duplicates; retain deliberate short corners
   if (draft.tool === 'facet' && pts.length >= 3 && pts[0].equals(pt)) { finishDraft(); return; } // close on first point
   pts.push(pt);
   refreshDraft();
