@@ -277,7 +277,7 @@ function rpDrawPlan(doc, M, V, o = {}) {
     rpPolyline(doc, pts); }
   doc.setLineDashPattern([], 0);
   // labels: facet IDs (solid tags) first, then one key tag per line (or per source reference), then zone tags
-  const placed = []; const hit = (b) => placed.some((q) => !(b.x1 + 1 < q.x0 || b.x0 - 1 > q.x1 || b.y1 + 1 < q.y0 || b.y0 - 1 > q.y1)); const fits = (b) => inWin([b.x0, b.y0]) && inWin([b.x1, b.y1]);
+  const placed = (o.reserve || []).map((b) => ({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 })); const hit = (b) => placed.some((q) => !(b.x1 + 1 < q.x0 || b.x0 - 1 > q.x1 || b.y1 + 1 < q.y0 || b.y0 - 1 > q.y1)); const fits = (b) => inWin([b.x0, b.y0]) && inWin([b.x1, b.y1]);
   const tagBox = (x, y, s, size) => { const w = rpWidth(doc, s, size, true) + 7; return { x0: x - w / 2, y0: y - 6.6, x1: x + w / 2, y1: y + 5.4 }; };
   for (const F of M.facets) { if (F.f.excluded) continue; const lp = rpLabelPoint(F.xy); const c = P(lp.p); if (!inWin(c)) continue; const b = tagBox(c[0], c[1], F.id, 8.1); if (hit(b)) continue; rpTag(doc, c[0], c[1], F.id, 8.1, true); placed.push(b); }
   // review-zone tags next: inside the hatched envelope, sliding off the label point when a facet tag already sits there
@@ -593,6 +593,9 @@ function rpSchedules(M) {
   const facetNum = est ? [2, 3] : [2, 3];
   return { edgeRows, edgeHead, edgeNum, edgeWidths, facetRows, facetHead, facetNum, refs: refs.size > 0, grouped: M.keys.grouped };
 }
+// how many rows rpLegendKey will draw (the panel budget needs it before anything is drawn)
+function rpLegendRows(M) { const used = ROOF_LINE_TYPES.filter((k) => M.t.byType[k] && M.t.byType[k].count); const seen = new Set(); let n = 0; for (const k of used) { const tag = k === 'wall' || k === 'step' ? 'flashing' : k; if (!seen.has(tag)) { seen.add(tag); n++; } }
+  if (M.lines.some((L) => L.status === 'inferred')) n++; if (M.lines.some((L) => L.status === 'unresolved')) n++; if (M.zones.length || M.facets.some((F) => F.status === 'unresolved')) n++; return n + 1; }
 function rpLegendKey(doc, M, x, y) {
   const used = ROOF_LINE_TYPES.filter((k) => M.t.byType[k] && M.t.byType[k].count); const merged = []; const seen = new Set();
   for (const k of used) { const tag = k === 'wall' || k === 'step' ? 'flashing' : k; if (seen.has(tag)) continue; seen.add(tag); merged.push([k, tag === 'flashing' ? 'Flashing' : EDGE_TYPES[k].label]); }
@@ -612,33 +615,52 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
   // and reference-keyed source sketches (full-width plan, keyed dimensions and facets below). Long schedules continue.
   const mode = S.refs ? 'refs' : S.grouped ? 'simple' : 'busy';
   const rowh = mode === 'refs' ? 21 : mode === 'simple' ? 20 : 13.5, headH = 19, titleH = 33, footH = 56;
-  const facetsInPanel = mode === 'busy' && nF <= 12; const edgeCols = mode === 'busy' ? (facetsInPanel ? 3 : 2) : 1;
-  const needRows = mode === 'simple' ? Math.max(nE, nF) : mode === 'busy' && !facetsInPanel ? Math.max(Math.ceil(nE / 2), nF) : Math.ceil(nE / edgeCols);
+  // The busy layout's right panel (facet schedule, legend, scale text, and the north arrow with the scale bar when no corner
+  // of the drawing is free) is budgeted in its fonts before anything is drawn; what does not fit moves below the plan.
+  const legendRows = mode === 'busy' ? rpLegendRows(M) : 0; const scaleLines = 3;
+  const panelNeed = (withFacets, withNorth) => (withFacets && nF ? 19 + 15 * nF + 18 : 0) + 17 + 15 * legendRows + 6 + 16 + 15 + scaleLines * 7.9 * 1.3 + 4 + (withNorth ? 62 : 0);
+  let facetsInPanel = mode === 'busy' && nF <= 12 && panelNeed(true, false) <= 368 - 41;
   // Height budget: what the sheet needs below the plan is measured first (schedules; in the refs layout also the pitch note
   // and the evidence paragraphs, in their fonts), and the plan gets what is left. It shrinks when the content needs the room,
   // keeps its compact size when the schedule continues on another sheet anyway, and grows only when a taller window buys a
   // larger architectural scale.
   const evid = mode === 'refs' && M.src && M.src.evidence && M.src.evidence.length ? M.src.evidence : null;
-  let Hfit;
-  if (mode === 'refs') { const facetSide = headH + 20 * nF + (M.src && M.src.pitchNote ? 27 + rpLines(doc, M.src.pitchNote, 235, 8.5) * 8.5 * 1.3 : 0); const edgeSide = headH + rowh * nE;
-    const below = 24 + Math.max(facetSide, edgeSide) + 20 + (evid ? 17 + evid.reduce((a, q) => a + rpLines(doc, q, 548, 8.65) * 8.65 * 1.3 + 6, 0) : 26 + 2 * 8.45 * 1.3); Hfit = RP.FOOT - 40 - 145 - titleH + 24 - below; }
-  else Hfit = RP.FOOT - footH - titleH - headH - rowh * needRows - 145;
   const Hcompact = mode === 'simple' ? 314 : mode === 'refs' ? 327 : 368, Hmin = 260, Hmax = mode === 'busy' ? 368 : mode === 'refs' ? 420 : 400;
-  let H = Hfit >= Hmin ? Math.min(Hcompact, Math.floor(Hfit)) : Hcompact;
   const padFt = mode === 'simple' ? 3 : 2; const innerFor = (h) => (mode === 'refs' ? { x: 44, y: 165, w: 524, h: h - 48 } : mode === 'busy' ? { x: 44, y: 160, w: 318, h: h - 28 } : { x: 48, y: 170, w: 318, h: h - 36 });
   const viewFor = (h) => { const inner = innerFor(h); const rot = M.src && !M.src.rotateToAxis ? 0 : rpChooseRotation(M, inner); return { inner, rot, V: rpView(M, inner, { rotDeg: rot, padFt }) }; };
-  if (Hfit > H + 12) { const top = Math.min(Hmax, Math.floor(Hfit)); const best = viewFor(top).V.perIn; if (best < viewFor(H).V.perIn) { let h = H + 6; while (h < top && viewFor(h).V.perIn > best) h += 6; H = Math.min(top, h); } }
+  const stepFor = (k) => (k >= 4 ? 5 : k >= 2 ? 10 : 20);
+  // a corner of the drawing for the north arrow and scale bar: its footprint must hold no roof geometry (vertices and
+  // points along every edge); the corner is then reserved so no key tag or dimension lands on it
+  const cornerRect = (c, k, h) => { const nx = c === 'bl' || c === 'tl' ? 65 : 290, ny = c === 'bl' || c === 'br' ? 145 + h - 66 : 145 + 58; const barW = 2 * stepFor(k) * k; return { c, nx, ny, x0: nx - 16, y0: ny - 27, x1: Math.max(nx + 12, nx - 5 + barW + 16), y1: ny + 47 }; };
+  const geomPts = (V2) => { const out = []; const add = (ring, closed) => { const P = ring.map(V2.P); for (let i = 0; i < P.length - (closed ? 0 : 1); i++) { const a = P[i], b = P[(i + 1) % P.length]; const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 8)); for (let t = 0; t <= n; t++) out.push([a[0] + (b[0] - a[0]) * t / n, a[1] + (b[1] - a[1]) * t / n]); } }; for (const F of M.facets) add(F.xy, true); for (const Z of M.zones) add(Z.xy, true); for (const L of M.lines) add(L.xy, false); return out; };
+  const freeRect = (r, pts) => !pts.some((q) => q[0] > r.x0 - 3 && q[0] < r.x1 + 3 && q[1] > r.y0 - 3 && q[1] < r.y1 + 3);
+  let needRows, Hfit, H, inner, rot, V, corner = null;
+  for (let pass = 0; pass < 2; pass++) {
+    const cols = mode === 'busy' ? (facetsInPanel ? 3 : 2) : 1;
+    needRows = mode === 'simple' ? Math.max(nE, nF) : mode === 'busy' && !facetsInPanel ? Math.max(Math.ceil(nE / 2), nF) : Math.ceil(nE / cols);
+    if (mode === 'refs') { const facetSide = headH + 20 * nF + (M.src && M.src.pitchNote ? 27 + rpLines(doc, M.src.pitchNote, 235, 8.5) * 8.5 * 1.3 : 0); const edgeSide = headH + rowh * nE;
+      const below = 24 + Math.max(facetSide, edgeSide) + 20 + (evid ? 17 + evid.reduce((a, q) => a + rpLines(doc, q, 548, 8.65) * 8.65 * 1.3 + 6, 0) : 26 + 2 * 8.45 * 1.3); Hfit = RP.FOOT - 40 - 145 - titleH + 24 - below; }
+    else Hfit = RP.FOOT - footH - titleH - headH - rowh * needRows - 145;
+    H = Hfit >= Hmin ? Math.min(Hcompact, Math.floor(Hfit)) : Hcompact;
+    if (Hfit > H + 12) { const top = Math.min(Hmax, Math.floor(Hfit)); const best = viewFor(top).V.perIn; if (best < viewFor(H).V.perIn) { let h = H + 6; while (h < top && viewFor(h).V.perIn > best) h += 6; H = Math.min(top, h); } }
+    ({ inner, rot, V } = viewFor(H));
+    // room for dimension lines outside the outline (about 26 pt), taken only when it does not cost a scale step
+    if (!(M.src && M.src.kind === 'source')) { const padDim = 26 / V.k; if (padDim > padFt) { const V2 = rpView(M, inner, { rotDeg: rot, padFt: padDim }); if (V2.perIn === V.perIn) V = V2; } }
+    if (mode !== 'busy') break;
+    const pts = geomPts(V); corner = ['bl', 'br', 'tl', 'tr'].map((c) => cornerRect(c, V.k, H)).find((r) => freeRect(r, pts)) || null;
+    if (corner || !facetsInPanel || panelNeed(true, true) <= H - 41) break;
+    facetsInPanel = false;   // the panel must also hold the north arrow and scale bar: the facet schedule moves below the plan
+  }
+  const edgeCols = mode === 'busy' ? (facetsInPanel ? 3 : 2) : 1;
   const box = { x: RP.L, y: 145, w: 548, h: H }; rpRect(doc, box.x, box.y, box.w, box.h, 0.993, 0.72);
   rpCap(doc, (M.src && M.src.planCaption) || (M.kind === 'source' ? 'Reported roof plan' : 'Roof plan'), 44, 162);
-  let { inner, rot, V } = viewFor(H);
-  // room for dimension lines outside the outline (about 26 pt), taken only when it does not cost a scale step
-  if (!(M.src && M.src.kind === 'source')) { const padDim = 26 / V.k; if (padDim > padFt) { const V2 = rpView(M, inner, { rotDeg: rot, padFt: padDim }); if (V2.perIn === V.perIn) V = V2; } }
   // a dry run on a throwaway document decides whether the keys fit this plan; when most would collide, the overview plan
   // carries facet IDs and dimensions only and every key goes to the detail sheets (same fonts, so the same placement)
   V.limit = { x0: box.x + 5, y0: box.y + 24, x1: mode === 'refs' ? box.x + box.w - 5 : mode === 'busy' ? 359 : 372, y1: box.y + box.h - (mode === 'refs' ? 30 : 5) };   // dimensions stay inside the drawing area
-  const dry = rpDrawPlan(rpDoc(), M, V, { dims: true }); const noKeys = dry.keys > 0 && dry.missed.length > 0.35 * dry.keys;
-  const res = rpDrawPlan(doc, M, V, { noKeys, dims: true }); res.noKeys = noKeys;
-  const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20; const rotNote = rot ? ` The plan is turned ${Math.round(Math.abs(rot))}° to the roof's long axis; the arrow is true north.` : '';
+  const reserve = corner ? [corner] : [];
+  const dry = rpDrawPlan(rpDoc(), M, V, { dims: true, reserve }); const noKeys = dry.keys > 0 && dry.missed.length > 0.35 * dry.keys;
+  const res = rpDrawPlan(doc, M, V, { noKeys, dims: true, reserve }); res.noKeys = noKeys;
+  const step = stepFor(V.k); const rotNote = rot ? ` The plan is turned ${Math.round(Math.abs(rot))}° to the roof's long axis; the arrow is true north.` : '';
   const barIn = (2 * step * V.k / 72).toFixed(2).replace(/\.?0+$/, '');
   // layout self-check, reported to the caller: the longest straight measured piece must draw at exactly k points per foot
   let chk = null; for (const L of M.lines) for (let i = 1; i < L.xy.length; i++) { const ft = Math.hypot(L.xy[i][0] - L.xy[i - 1][0], L.xy[i][1] - L.xy[i - 1][1]); if (!chk || ft > chk.segmentFt) { const a = V.P(L.xy[i - 1]), b = V.P(L.xy[i]); chk = { key: L.tag || L.key, segmentFt: ft, segmentPt: Math.hypot(b[0] - a[0], b[1] - a[1]) }; } }
@@ -655,12 +677,9 @@ function rpSheetPlan(doc, M, S, n, total, ctx) {
     rpCap(doc, 'Plan legend', 379, py); py += 17; py = rpLegendKey(doc, M, 379, py) + 6;
     rpCap(doc, M.src && M.src.scaleNote ? 'Approximate scale' : 'Drawing scale', 379, py); py += 16; rpText(doc, V.label + ' at 100%', 379, py, { size: 10, bold: true }); py += 15;
     py = rpText(doc, (M.src && M.src.scaleNote ? M.src.scaleNote + ' ' : 'Print at 100% on US Letter. ') + 'Scale bar ' + barIn + ' in.' + rotNote, 379, py, { size: 7.9, color: GR(0.3), maxWidth: 190 });
-    // north arrow and scale bar in a corner of the drawing the roof leaves free (bottom-left first, as on the reference sheet)
-    const pts = [...M.facets, ...M.zones].flatMap((g) => g.xy.map(V.P)); const free = (x0, y0, x1, y1) => !pts.some((q) => q[0] > x0 && q[0] < x1 && q[1] > y0 && q[1] < y1) && !res.placed.some((b) => !(b.x1 < x0 || b.x0 > x1 || b.y1 < y0 || b.y0 > y1));
-    const corners = { bl: [44, box.y + box.h - 90, 150, box.y + box.h], br: [260, box.y + box.h - 90, 366, box.y + box.h], tl: [44, box.y + 28, 150, box.y + 112], tr: [260, box.y + 28, 366, box.y + 112] };
-    const corner = Object.keys(corners).find((c) => free(...corners[c])) || null;
-    if (corner) { const nx = corner === 'bl' || corner === 'tl' ? 65 : 290, ny = corner === 'bl' || corner === 'br' ? box.y + box.h - 66 : box.y + 58; rpNorth(doc, nx, ny, rot); rpBar(doc, nx - 5, ny + 28, V.k, step); }   // top corners sit below the caption
-    else if (py + 62 < box.y + box.h - 12) { rpNorth(doc, 395, py + 34, rot); rpBar(doc, 428, py + 25, V.k, step); }   // no free corner (dimensions all round): under the scale text in the panel
+    // north arrow and scale bar: in the corner reserved before the keys were placed, else under the scale text in the panel
+    if (corner) { rpNorth(doc, corner.nx, corner.ny, rot); rpBar(doc, corner.nx - 5, corner.ny + 28, V.k, step); }
+    else if (py + 62 < box.y + box.h - 12) { rpNorth(doc, 395, py + 34, rot); rpBar(doc, 428, py + 25, V.k, step); }
     else { rpNorth(doc, 290, box.y + 58, rot); rpBar(doc, 285, box.y + 86, V.k, step); }
   } else {
     rpNorth(doc, box.x + box.w - 44, box.y + 60, rot); rpBar(doc, box.x + box.w - 150, box.y + box.h - 74, V.k, step); rpText(doc, V.label + ' at 100%', box.x + box.w - 150 + V.k * step, box.y + box.h - 44, { size: 8.5, bold: true, color: GR(0.25), align: 'center' }); rpText(doc, 'scale bar ' + barIn + ' in', box.x + box.w - 150 + V.k * step, box.y + box.h - 32, { size: 7.8, color: GR(0.35), align: 'center' });

@@ -36,3 +36,6 @@ jobs:
       - name: Report acceptance example and status rules
         run: node reporttest.mjs
         working-directory: bench
+      - name: Independent PDF reconciliation (consistent, altered, stale, dropped line)
+        run: node reconciletest.mjs
+        working-directory: bench
