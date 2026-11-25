@@ -62,6 +62,21 @@ const obs = (o) => ({ source: 'test-image', role: 'outline', model: 'recorded', 
   const R2 = fuseModel({ job, obs: O2, dsm: P.dsmT, mask: P.maskT }); const p2 = R2.proposals.find((q) => q.kind === 'misclassified');
   out(p2 && p2.decision === 'reject' && R2.summary.retyped === 0, 'calling the true ridge a hip is rejected: the height model shows a level crease', p2 ? `${p2.decision}: ${p2.why.slice(-80)}` : 'no proposal');
 }
+// ---- scene 1c: a gable house: a rake relabelled "eave" in the sketch is renamed when a reviewer says rake (the edge climbs);
+// calling a true eave a rake is rejected (level edge)
+{
+  const house = W({ kind: 'gable' }); const sc = render([house], rng(75), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false });
+  const P = property(sc); const r = await runApp(P, ROOT, { quiet: true }); const job = jobOf(r);
+  const rakes = job.edges.filter((e) => e.type === 'rake'), eaves = job.edges.filter((e) => e.type === 'eave');
+  out(rakes.length >= 2 && eaves.length >= 2, 'fixture: the traced gable house has rakes and eaves', `${rakes.length} rakes, ${eaves.length} eaves`);
+  const bad = JSON.parse(JSON.stringify(job)); for (const e of bad.edges) if (e.type === 'rake') e.type = 'eave';
+  const k0 = rakes[0]; const O = [obs({ role: 'challenge', kind: 'edge', type: 'rake', verdict: 'misclassified', sketch_type: 'eave', ll: [[k0.path[0].lat, k0.path[0].lng], [k0.path[k0.path.length - 1].lat, k0.path[k0.path.length - 1].lng]] })];
+  const R = fuseModel({ job: bad, obs: O, dsm: P.dsmT, mask: P.maskT }); const p = R.proposals.find((q) => q.kind === 'misclassified');
+  out(p && p.decision === 'accept' && R.summary.retyped === 1, 'a rake mislabelled as an eave is renamed when a reviewer says rake and the edge climbs in the height model', p ? `${p.decision}: ${p.why.slice(-90)}` : 'no proposal');
+  const e0 = eaves[0]; const O2 = [obs({ role: 'challenge', kind: 'edge', type: 'rake', verdict: 'misclassified', sketch_type: 'eave', ll: [[e0.path[0].lat, e0.path[0].lng], [e0.path[e0.path.length - 1].lat, e0.path[e0.path.length - 1].lng]] })];
+  const R2 = fuseModel({ job, obs: O2, dsm: P.dsmT, mask: P.maskT }); const p2 = R2.proposals.find((q) => q.kind === 'misclassified');
+  out(p2 && p2.decision === 'reject' && R2.summary.retyped === 0, 'calling a true eave a rake is rejected: the edge is level', p2 ? `${p2.decision}: ${p2.why.slice(-80)}` : 'no proposal');
+}
 // ---- scene 2: a corner under tree canopy (mask kept, height model shows the crown): the image may show the corner, the height
 // model cannot confirm it, so the move is refused and the matter stays open
 {

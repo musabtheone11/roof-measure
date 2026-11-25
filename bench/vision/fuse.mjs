@@ -48,6 +48,13 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
     if (n < 3) return null; const rise = Math.abs(hs[hs.length - 1][1] - hs[0][1]) / (hs[hs.length - 1][0] - hs[0][0] || 1);
     if (conv / n >= 0.6) return rise < 0.12 ? 'ridge' : 'hip'; if (conc / n >= 0.6) return 'valley'; return null;
   }
+  // eave or rake: both are outer edges with a height step; an eave is level along its run, a rake climbs (gable end)
+  function outlineKind(a, b) {
+    const L = dist(a, b); if (L < 1.0 || outlineSupport(a, b) < 0.5) return null; const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nrm = [-u[1], u[0]]; const hs = [];
+    for (let t = 0.3; t <= L - 0.3; t += 0.3) { const q = [a[0] + u[0] * t, a[1] + u[1] * t]; const hp = hAt([q[0] + nrm[0] * 0.6, q[1] + nrm[1] * 0.6]), hm = hAt([q[0] - nrm[0] * 0.6, q[1] - nrm[1] * 0.6]); if (hp == null || hm == null) continue; hs.push([t, Math.max(hp, hm)]); }   // the roof side's height along the edge
+    if (hs.length < 3) return null; const rise = Math.abs(hs[hs.length - 1][1] - hs[0][1]) / (hs[hs.length - 1][0] - hs[0][0] || 1);
+    return rise < 0.10 ? 'eave' : rise > 0.20 ? 'rake' : null;
+  }
   // lumpiness of the height model along a run (mean absolute second difference at 0.3 m): roof planes ~0.03 m, tree crowns > 0.15 m
   // measured 0.8 m to either side of the run (on the run itself a blurred roof edge reads lumpy); a roof edge has a smooth
   // plane on at least one side, a tree crown is lumpy on both: the smaller of the two is used
@@ -151,7 +158,7 @@ export function fuseModel({ job, obs, dsm, mask, minSupport = 0.6 }) {
     else if (kind === 'confirms' && near.s.e.type !== type && (INTERIOR.has(type) || OUTLINE.has(type)) && type !== 'outline') {
       const evS = segmentEvidence(near.s.a, near.s.b); const outl = Math.max(evS.step, evS.maskEdge);
       const obsOK = OUTLINE.has(type) ? outl >= minSupport : evS.crease >= minSupport, skOK = OUTLINE.has(near.s.e.type) ? outl >= minSupport : evS.crease >= minSupport;
-      const CREASE = new Set(['ridge', 'hip', 'valley']); const shown = CREASE.has(type) && CREASE.has(near.s.e.type) ? interiorKind(near.s.a, near.s.b) : null;
+      const CREASE = new Set(['ridge', 'hip', 'valley']), EDGE = new Set(['eave', 'rake']); const shown = CREASE.has(type) && CREASE.has(near.s.e.type) ? interiorKind(near.s.a, near.s.b) : EDGE.has(type) && EDGE.has(near.s.e.type) ? outlineKind(near.s.a, near.s.b) : null;
       if (shown) { kind = 'misclassified'; if (shown === type && shown !== near.s.e.type) { decision = 'accept'; why += `; the height model shows a ${shown} here (${type} proposed, sketch says ${near.s.e.type})`; } else if (shown === near.s.e.type) { decision = 'reject'; why += `; ${type} proposed but the height model shows the sketch's ${near.s.e.type}`; } else { decision = 'unresolved'; why += `; the height model shows a ${shown}, neither the proposed ${type} nor the sketch's ${near.s.e.type}`; } }
       else if (obsOK && !skOK) { kind = 'misclassified'; decision = 'accept'; why += `; height model supports ${type}, not ${near.s.e.type} (step ${evS.step.toFixed(2)}, mask ${evS.maskEdge.toFixed(2)}, crease ${evS.crease.toFixed(2)})`; }
       else if (!obsOK && skOK) why += `; ${type} proposed but the height model supports the sketch's ${near.s.e.type}`;
