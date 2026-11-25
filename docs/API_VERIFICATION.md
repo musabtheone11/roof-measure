@@ -164,3 +164,36 @@ The paid baseline remains intact. Results and original responses are stored at
 `roof-delivery/runtime-free-vision/results.json`; roster and extracted official
 free datasheet claims are stored alongside it. Calls stop on HTTP 429 without
 retrying; Retry-After headers are retained for diagnosis.
+
+Reproduce this exact eight-call screen (sequential, no automatic retries):
+
+```bash
+RUNTIME_JSON_MODE=1 RUNTIME_VISION_CASE=attached-wings \
+RUNTIME_VISION_MODELS=free/gemini-4-hydrogen,free/gpt-6-luna,free/deepseek-v4.1-flash,free/glm-5.3-flash,free/glm-5.3-flashx,free/qwen-3.8-max,free/minimax-m3.1-flash,free/deepseek-v4-pro-0813 \
+node --use-env-proxy tools/dev/runtime-vision-benchmark.mjs .devcache/runtime-free-vision
+```
+
+| Model (all exact `free/` IDs) | HTTP / strict output | IoU | Mean / max boundary px | Latency ms | Actual reported debit |
+|---|---|---:|---|---:|---|
+| `free/gemini-4-hydrogen` | 200 / valid | 0.929480 | 5.433 / 10.817 | 20048 | $0.00 |
+| `free/gpt-6-luna` | 200 / valid | 0.966136 | 2.587 / 4.243 | 5985 | $0.00 |
+| `free/deepseek-v4.1-flash` | 200 / valid | 0.947854 | 3.996 / 7.071 | 17749 | $0.00 |
+| `free/glm-5.3-flash` | 200 / valid | 0.976896 | 1.758 / 4.000 | 7477 | $0.00 |
+| `free/glm-5.3-flashx` | 200 / valid | 0.954483 | 3.489 / 11.000 | 5468 | $0.00 |
+| `free/qwen-3.8-max` | 200 / valid | 0.994915 | 0.381 / 2.000 | 20587 | $0.00 |
+| `free/minimax-m3.1-flash` | 200 / schema-invalid | — | — | 7894 | $0.00 |
+| `free/deepseek-v4-pro-0813` | 400 / upstream failure | — | — | 205 | unknown |
+
+Seven HTTP 200 responses explicitly reported `usage.cost_tokens: 0`; the HTTP
+400 response did not report billing and is unknown. Six proposals passed the
+strict outline contract. Minimax returned malformed JSON and was rejected;
+JSON mode did not guarantee valid output. DeepSeek V4 Pro returned HTTP 400,
+consistent with its official no-vision claim. No HTTP 429 or retries occurred.
+The other no-vision DeepSeek Flash variant was not image-tested.
+
+Qwen, GLM Flash, and Luna met the existing diagnostic thresholds on this one
+attached-wings case. They are candidates for further role-specific testing,
+not validated defaults. Hydrogen, DeepSeek V4.1, and GLM FlashX missed at least
+one threshold. Runtime defaults were not changed by this screen. Free models
+with subscription-only labels were roster-checked and documentation-checked,
+but their entitlement and actual image responses were not tested.
