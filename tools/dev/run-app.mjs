@@ -79,6 +79,11 @@ try {
   console.log(`     report: ${dlRec.pages} sheets; preview / print / download ${same ? 'identical' : 'DIFFER'} (sha256 ${String(dlRec.hash).slice(0, 12)}); printed via ${printRec.printed}`);
   fs.writeFileSync(path.join(out, 'report-check.json'), JSON.stringify({ preview: previewRec, print: printRec, download: dlRec, identical: same }, null, 1));
   if (!same) throw new Error('preview, print and download do not agree');
+  // the report's own layout check: exact scale, every key accounted for (plan, detail sheet or named as unplaced)
+  const L = dlRec.layout; if (L && L.scaleCheck) {
+    console.log(`     layout: ${L.scale} (${L.ptPerFt.toFixed(3)} pt/ft${L.rotationDeg ? ', turned ' + Math.round(Math.abs(L.rotationDeg)) + ' deg' : ''}); keys ${L.keys.total}: ${L.keys.overview} on the plan, ${L.keys.detail} on detail sheets, ${L.keys.unplaced.length} named unplaced; ${L.dims} dimension lines; scale bar ${L.bar.inches} in; scale check ${L.scaleCheck.ok ? 'exact' : 'FAILED'} (${L.scaleCheck.segmentFt.toFixed(2)} ft -> ${L.scaleCheck.segmentPt.toFixed(2)} pt, expected ${L.scaleCheck.expectedPt.toFixed(2)})`);
+    if (!L.scaleCheck.ok || L.keys.unaccounted.length) throw new Error('layout self-check failed: ' + JSON.stringify({ scale: L.scaleCheck, unaccounted: L.keys.unaccounted }));
+  }
   // --alt: the reviewer's second look, through the same controls a person uses (Review roof from other angles)
   if (process.argv.includes('--alt')) {
     const panel = page.locator('#avPanel'); const busy = () => page.waitForFunction(() => !window.rmAltView.state.busy, null, { timeout: 240000 });

@@ -1,7 +1,8 @@
 .superpowers/
 leads-data/
 tools/leads/leads.config.json
-.claude/
+.claude/*
+!.claude/skills/
 leads-pilot.log
 leads-data-inv/
 leads-inv.log
