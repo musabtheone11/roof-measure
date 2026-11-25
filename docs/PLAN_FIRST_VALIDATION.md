@@ -13,18 +13,21 @@ supplied files. The changes adapt the existing measurement/report code.
   `/v1/models`, Google Geocoding and Google Solar buildingInsights with HTTP 200.
   The alias and key values were not committed or printed. APInex model trials and
   the public-building trace are documented in the session artifacts below.
-- `/workspace` contained no saved jobs or independent reference reports for Nahane
-  Way, Sandlake, Woodhaven or Mayflower. The supplied attachment was the task brief.
-  A connected Google Drive search for Nahane failed because the connector requires
-  a non-empty `link_id` that was not available. No customer file was sent externally.
+- Initial workspace inspection found no named customer references. Later authenticated
+  Gmail/Drive searches resolved account IDs and found regional reports, including
+  the two named regression references. The initial connector lookup issue was
+  resolved; it was not a permission denial. Nahane/Sandlake and an independent
+  report for R-PIN-01 were not found. No customer file was sent to APINEX.
 - Historical repository regional benchmark documents describe 45 properties and a
   frozen 15-property blind set. Their private inputs and references were absent.
   Those historical aggregates were not regenerated or reclassified as new evidence.
-- New independently referenced numerical property coverage is **0 of 30 requested**
-  across all six towns. There is no Nahane first-page comparison. Separate source
-  and visual checks cover one public building and private regression **R-PIN-01**;
-  these are not independently scored roof measurements. Real orbit behavior and
-  roof-configuration agreement with current field conditions remain unverified.
+- Strictly source/scope/date-verified numerical property coverage remains **0 of 30
+  requested**. A later frozen 39-candidate study includes 34 regional properties,
+  22 regional independent-report candidates and 17 paired conditional area
+  comparisons. These are differences from printed reports, not validated accuracy
+  passes. The holdout median worsened. See [regional results](REGIONAL_REFERENCE_RESULTS.md)
+  for complete coverage, exclusions and failures. There is no Nahane first-page
+  comparison. Current field-condition agreement remains unverified.
 
 ## Synthetic engine comparison
 
@@ -32,7 +35,8 @@ The existing unchanged seed generator and scoring rules were run on seeds 1–12
 for each engine. All three produced the same 71 eligible geometries; 49 degenerate
 or ground-truth clipping cases were excluded, with no engine errors. This is a
 synthetic regression sample, not 71 Florida properties or an independent holdout.
-No new one-third property holdout could be frozen without the property inputs.
+At this initial stage the property inputs were unavailable; the later regional
+holdout and its limitations are documented separately above.
 
 | Engine | Area mean absolute percentage error | Area within 3% | Existing composite report-grade metric |
 |---|---:|---:|---:|
