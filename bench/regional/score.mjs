@@ -104,10 +104,13 @@ function propTable(priv) {
   return L.join('\n');
 }
 function groupTable(key) {
-  const keys = [...new Set(rows.map((r) => r[key] || 'untagged'))];
-  const L = [`| ${key === 'roofType' ? 'Roof type' : 'Obstruction'} | Properties | Complete / review required / failed | Area: median abs. diff % (n scored) | Area: median signed % | Pitch: median abs. diff (n) | Facets: median run - ref (n) | Edge ft missing / extra (sum over scored types) | Values missing from runs | Release blockers |`, '|' + '---|'.repeat(10)];
+  // towns with a single property are pooled so no public row describes one property
+  const tag = (r) => (r[key] || 'untagged'); const nOf = {}; for (const r of rows) nOf[tag(r)] = (nOf[tag(r)] || 0) + 1;
+  const kOf = (r) => (key === 'town' && nOf[tag(r)] < 2 ? 'other towns (one property each)' : tag(r));
+  const keys = [...new Set(rows.map(kOf))];
+  const L = [`| ${key === 'roofType' ? 'Roof type' : key === 'town' ? 'Town' : 'Obstruction'} | Properties | Complete / review required / failed | Area: median abs. diff % (n scored) | Area: median signed % | Pitch: median abs. diff (n) | Facets: median run - ref (n) | Edge ft missing / extra (sum over scored types) | Values missing from runs | Release blockers |`, '|' + '---|'.repeat(10)];
   for (const k of keys) {
-    const G = rows.filter((r) => (r[key] || 'untagged') === k); const A = G.map((r) => r.versions.automatic).filter(Boolean);
+    const G = rows.filter((r) => kOf(r) === k); const A = G.map((r) => r.versions.automatic).filter(Boolean);
     const st = (s) => G.filter((r) => (r.versions.automatic ? r.versions.automatic.status : 'failed') === s).length;
     const pick = (m) => A.map((a) => (a.compare || []).find((x) => x.metric === m)).filter((x) => x && x.state === 'scored');
     const ar = pick('Net sloped area'), pt = pick('Predominant pitch'), fc = pick('Facets');
@@ -119,6 +122,6 @@ function groupTable(key) {
   return L.join('\n');
 }
 const head = `Run \`${label}\`, code ${(rows.find((r) => r.run) || {}).run ? JSON.stringify((rows.find((r) => r.run)).run.code && { commit: rows.find((r) => r.run).run.code.commit, appHash: rows.find((r) => r.run).run.code.appHash, dirty: rows.find((r) => r.run).run.code.dirty }) : '?'}. ${rows.length} properties.\nNo approved tolerances exist: differences are shown, nothing is called a pass. "Not scored" = the reference does not print the value. Values the run did not produce are counted as missing, never as zero.\n`;
-fs.writeFileSync(path.join(PRIV, 'regional', `score-${label}.md`), `# Regional benchmark (PRIVATE: addresses)\n\n${head}\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n\n## Property by property\n\n${propTable(true)}\n`);
-fs.writeFileSync(path.join(REPO, 'bench', 'regional', `RESULTS-${label}.md`), `# Regional benchmark: aggregate results\n\n${head}\nAggregates only: the property-by-property table, addresses and reference documents stay in the private folder (bench/private/regional/score-<label>.md).\n\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n`);
-console.log(groupTable('roofType')); console.log(); console.log(groupTable('obstruction'));
+fs.writeFileSync(path.join(PRIV, 'regional', `score-${label}.md`), `# Regional benchmark (PRIVATE: addresses)\n\n${head}\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n\n## By town\n\n${groupTable('town')}\n\n## Property by property\n\n${propTable(true)}\n`);
+fs.writeFileSync(path.join(REPO, 'bench', 'regional', `RESULTS-${label}.md`), `# Regional benchmark: aggregate results\n\n${head}\nAggregates only: the property-by-property table, addresses and reference documents stay in the private folder (bench/private/regional/score-<label>.md).\n\n## By roof type\n\n${groupTable('roofType')}\n\n## By obstruction level\n\n${groupTable('obstruction')}\n\n## By town\n\n${groupTable('town')}\n`);
+console.log(groupTable('roofType')); console.log(); console.log(groupTable('obstruction')); console.log(); console.log(groupTable('town'));
