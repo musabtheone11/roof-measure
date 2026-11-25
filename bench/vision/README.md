@@ -18,6 +18,7 @@ python3 -I bench/vision/review.py --crops .../crops-local-shade --out .../review
 node bench/vision/fuse.mjs --slug <slug> --run <run> --obs .../review/observations.json --out .../fuse --apply   # proposals, job-c.json, marks
 python3 -I bench/vision/marks.py --crops .../crops --fuse .../fuse --out .../fuse/marks.png
 python3 -I bench/vision/rereview.py --crops .../crops --fuse .../fuse --out .../rereview           # disputed edges back to the challenge models
+python3 -I bench/vision/selection.py --crops .../crops --out .../selection                  # address point away from the traced building: which structure is it on?
 node bench/vision/run-c.mjs --from new-dev --label apinex-dev                                        # version C through the real app
 ```
 

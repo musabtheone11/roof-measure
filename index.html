@@ -376,6 +376,7 @@
 
     <footer class="muted small">
       Measurements come from orthorectified satellite imagery and are typically within a few percent of field measurements. Verify pitch, penetrations, and layers on site.
+      <span id="deployStamp" title="When this copy of the page was published (from the page's Last-Modified header); hard-refresh (Ctrl/Cmd+Shift+R) if it looks old"></span>
     </footer>
   </aside>
 
@@ -457,5 +458,6 @@
 <script src="leadopen.js"></script>
 <script src="leads.js"></script>
 <script src="cashpath.js"></script>
+<script>(function () { var el = document.getElementById('deployStamp'); var t = new Date(document.lastModified); if (el && !isNaN(t)) el.textContent = ' Site updated ' + t.toUTCString().replace(/:\d\d GMT$/, ' UTC') + '.'; })();</script>
 </body>
 </html>
