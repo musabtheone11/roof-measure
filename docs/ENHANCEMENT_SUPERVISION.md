@@ -1,359 +1,125 @@
-# Enhancement supervision
+# Enhancement supervision — 2026-11-25
 
-Initial audit on 2026-11-25 used commit `595bdb0`; later acceptance entries cover
-`7cbd3d0` and the parent-frozen subsequent working tree. This file records an active
-implementation review; it does not promise unattended monitoring after agents stop.
-The supervisor owns this record and reviews fixes independently of their authors.
+The initial audit used `595bdb0`; fixes progressed through `bd4556f`, `7cbd3d0`
+and `b37ae00`, followed by the parent-frozen source/semantic corrections reviewed
+below. This is an implementation audit, not a promise of unattended monitoring.
+
+**Current status:** all identified correctness findings below passed their stated
+independent checks. The parent is repeating the complete current suite before
+commit. Private cloud/container functionality is demonstrated; public hosting is
+blocked by the Vercel team-access grant. Roof accuracy remains unvalidated.
 
 ## Ownership and task ledger
 
-| Canonical agent | Owned work | Acceptance evidence / remaining work |
+| Canonical agent | Owned work | Acceptance / remaining work |
 |---|---|---|
-| `/root/runtime_ui` | `ai-trace.js`, `ai-trace.css`, image/PDF/cancellation browser tests | Source identity, edits, manual outline, remove/undo, real PDF, import, unknown billing and basic nonce tests pass; held-DELETE cancellation, compact 100-edit reopening and all target/source scope-reset checks independently pass. Final Docker replay proof is owned by deployment. |
-| `/root/runtime_geometry` | `server/geometry.mjs`, geometry/manual-pen tests; coordinated `app.js` pen handlers | Independent bounds/topology/overlap/retrace, supported line paths, projection extent/polar and pen regressions pass. No field-accuracy certification. |
-| `/root/runtime_orchestrator` | `server/agents.mjs`, contracts and local HTTP provider tests | Blind input, bounded repair, response limits, budget/usage accounting and one-call target-selection gate pass. No additional paid inference needed for those controls. |
-| `/root/artifacts` | `ai-report.js`, report contract and real-PDF tests | Independent current snapshot, calibrated/unknown/perspective/missing-outline cases, visible vector edges, aspect ratio and Letter/layout checks pass. Geographic quantities are explicitly withheld in this source-image PDF. |
-| `/root/engine_diagnosis` | Docker/private-preview modules and tests, deployment configuration/evidence | Protected local container and one bounded live synthetic call set exercised; public hosted route remains blocked by the external access grant. No public deployment claimed. |
-| `/root/supervisor` | This ledger and independent acceptance review | Reproduces defects and challenges owners' fixes without changing their modules. Current open items are stated below; no unattended monitoring promise. |
+| `/root/runtime_ui` | `ai-trace.js`, `ai-trace.css`, image/PDF/cancellation/source/boundary browser tests | Manual recovery, source identity, semantic review, cancellation, compact history and import tests pass. |
+| `/root/runtime_geometry` | `server/geometry.mjs`, geometry/manual-pen tests; coordinated `app.js` pen handlers | Bounds, topology, path lengths, projection, pen and unresolved/diagnostic guards pass. |
+| `/root/runtime_orchestrator` | `server/agents.mjs`, contracts, provider HTTP fixtures | Independent input, bounded repair, budgets, usage, response limits and target-selection gate pass. |
+| `/root/artifacts` | `ai-report.js`, report contract and real-PDF tests | Current snapshots, withheld quantities, evidence notes, vector visibility and layout checks pass. |
+| `/root/engine_diagnosis` | Docker/private-preview modules, deployment tests/configuration/evidence | Protected container and live/replay functional checks pass; public deployment still needs its access grant. |
+| `/root/supervisor` | This ledger; independent reproduction and acceptance | Challenges owners' changes without editing their modules; preserves unresolved accuracy/deployment limits. |
 
-`/root` owns integration: `server/http.mjs`, `server/main.mjs`, script/module includes,
-dependency manifests, CI, branch/PR delivery and final cross-module checks. Tests
-that span owners are coordinated before edits. A completed agent turn does not
-mean its later queued findings have been fixed.
+`/root` owns HTTP/main integration, script/module includes, dependencies, CI,
+branch/PR delivery and final cross-module checks. A completed agent turn does not
+mean later queued findings have been fixed; acceptance follows actual reruns.
 
-Current status: all current server/UI/report correctness findings have passed their
-stated independent acceptance checks. The final zero-inference Docker human-repair
-replay remains under review, and the public hosted route is still blocked by the
-external access grant. Field accuracy remains unvalidated. Historical descriptions
-below preserve the defects as found; later acceptance entries supersede earlier
-pending statuses.
+## Findings and independent acceptance
 
-## Acceptance rules
-
-A change is accepted only after a meaningful regression test reproduces the
-original defect and passes with the fix. Model agreement, a successful HTTP status,
-and a frozen output are not roof-accuracy evidence. Customer imagery and reports
-remain private; paid provider trials use only explicitly authorized inputs and
-bounded limits. Production stays unchanged until its deployment controls are met.
-
-A deployable preview must have an actual reachable URL, authentication protecting
-the shared provider credential, no secret in browser assets, and a completed flow
-smoke test. A process listening on port 3000 is not proof of external deployment.
-
-## Findings requiring fixes
-
-| ID | Finding and reproduced consequence | Required acceptance |
+| ID | Reproduced defect | Accepted correction and evidence |
 |---|---|---|
-| S-01 | HTTP job-limit checks precede asynchronous body reading. Four delayed-body POSTs from one owner were all accepted with HTTP 202, violating one running job per owner and two globally. | A same-owner four-request race admits exactly one job; competing owners never exceed two. Admission must be atomic after validation and before starting provider work. Cancellation and failures release capacity correctly. |
-| S-02 | Edge geometry is not validated with the roof. A valid 100 × 100 pixel roof and 10 ft / 100 px calibration accepted an eave from [1000,1000] to [2000,1000] and returned 30.48 m. | Out-of-image, off-roof, concave exterior crossings, duplicate IDs and unsupported edge classifications cannot produce physical line quantities. Valid exterior edges and supported shared interior edges retain correct dimensions. |
-| S-03 | Explicit small/zero budgets silently become larger defaults: maxUsd 0 becomes 1.6, maxTokens 500 becomes 3.2 million and maxRequests 0 becomes 8. | Explicit caps are never enlarged. Reject malformed values or preserve a no-call budget. Test that zero/insufficient caps issue no chat request and that integer/request and finite dollar/token limits are checked. Missing settings alone may use documented defaults. |
-| S-04 | Accepting a replacement AI result archives the previous corrections but leaves the old correction array active. Exports can attach prior-model corrections to the new original output. | Retrying after an edited plan archives that plan and its corrections; the new result starts a distinct empty correction log. Export retains both histories without assigning old edits to the new model. |
-| S-05 | A runtime quality finding of perspective distortion does not reach the measurement gate. A valid polygon with an explicit oblique-perspective finding still returned 9.290304 m² when the UI declared orthographic and supplied one horizontal calibration. | Bind perspective restrictions to the canonical model and preserve them through edit/reopen. Initial and recalculated physical quantities remain withheld until independently supported rectification/resolution. |
+| S-01 | Four delayed-body POSTs from one owner all received 202, bypassing admission limits. | Atomic admission after body reading, bounded uploads, one owner/two global jobs. The original race now returns `[202,429,429,429]`; cross-owner and post-read capacity tests pass. |
+| S-02 | An out-of-image eave returned 30.48 m. Partial overlapping/retraced lines also double-counted. | Image/roof bounds, concave segment containment, shared/exterior boundary support, unique IDs and positive-length duplicate guards pass; invalid physical quantities are null. Valid paths retain their full bent length. |
+| S-03 | Explicit zero/small budgets silently became larger defaults. HTTP clamping could also create conflicting aliases. | Missing values alone default. Invalid raw limits reject; zero/insufficient caps make no chat call. Valid aliases normalize before clamping. HTTP/provider fixture checks pass. |
+| S-04 | New AI results inherited old correction logs; full raw model snapshots made ordinary editing exceed the reopen bound. | Separate prior-review history, lean editable models and changed-shape/metadata deltas. The independent 100-facet/100-edit case preserves 500 KB of distinct legacy raw evidence in a 980,519-byte export and reopens with complete history. |
+| S-05 | Perspective findings were lost during recalculation or Retry. A fresh legacy import could also lose a warning stored only in earlier review history. | Source-bound restrictions persist through false later responses, edits, target/rotation changes, import/undo and identical-image reload. Actual `quality.issues` arrays and historical evidence are parsed. Matching-source warnings persist, explicitly different hashes stay separate, and unbound legacy warnings remain unresolved. Independent fresh-context checks pass. |
+| S-06 | Cancelling before the 202 response could lose the server job ID. A later held-DELETE case restarted Analyze after the user saw Cancelled. | Owner-scoped request IDs, pre-admission cancellation records, recovery, single-flight cancellation and user-intent epochs. The supervisor's original delayed 200/503 challenge now starts no second POST and retains the failed nonce for retry. |
+| S-07 | Rejected creation requests remained “creating”; stale IDs could have recovered different input. | Terminal failures record failed status; identical retries recover the same job and changed bodies return 409. Abrupt uploads release capacity. 5,000 cancellation records hit the cap; simulated 15-minute expiry reclaims it. These checks make zero provider calls. |
+| S-08 | Unresolved facets were relabelled inferred; unresolved/unspecified/obstruction lines could supply physical quantities. | Statuses are preserved, physical values withheld, pixel diagnostics retained and supported per-facet values kept. Required-note boundary confirmation is separate from pitch/classification edits and invalidates after coordinate edits. Source perspective remains binding. |
+| S-09 | PDF drawing erased internal edges, distorted thumbnails and duplicated an outdated geographic conversion. | Facet fills precede edge strokes; outline is stroke-only; previews retain aspect. The source-image PDF independently reconciles calibration quantities and explicitly withholds unsupported geographic values. Forged/stale/status-inconsistent values reject. Actual browser/vector/layout tests pass. |
+| S-10 | A missing AI outline could not be repaired. Target selection during an active trace consumed the click as another old vertex. | Explicit human outline tracing, removal/undo and mode switching pass. New source, PDF page, rotation and applied target changes clear draft/undo/committed geometry; direct Undo cannot resurrect the previous roof. |
+| S-11 | A secret-backed runtime lacked a protected deployable preview path. | Pinned non-root Docker service and authenticated loopback-runtime gateway pass local checks. Non-loopback startup requires an origin; trusted forwarded HTTPS is explicit. Public access remains blocked, not accepted as deployed. |
 
-The first two defects were independently reproduced by the supervisor without a
-paid API call. S-05 was also reproduced without a provider call. S-03 and S-04 were identified directly in their control paths;
-regression tests must demonstrate their externally observable behavior.
+Additional checked corrections:
 
-## Evidence and scope limits
+- Provider responses are bounded to 2 MiB; within-limit original text is exact.
+  Oversized text retains at most 250,000 characters plus truncation/length metadata.
+- One fresh same-model schema repair keeps the source/contract unchanged and does
+  not reveal the first outline to the independent verifier. Budget, cancellation,
+  permanent HTTP failures and invalid second responses are tested without paid AI.
+- Failed/oversized/timed-out requests retain conservative reservations and report
+  unknown billing rather than free usage. The UI separates known subtotal from
+  unknown requests and published-rate estimates from reported debit.
+- Geographic frames are centered, finite, bounded to 2 km and checked for polar/
+  scale distortion. A Florida case agrees with independent WGS84 ECEF distances;
+  unsupported frames withhold quantities. This is numerical validation, not field
+  accuracy.
+- Malformed request URLs return 400; shutting down the runtime aborts remaining
+  work and clears maps. Source/PDF decoding failures cannot submit the old image.
+- Local PDF parsing disables evaluation/XFA/system-font fallback, bounds file,
+  page and render sizes, and requires separate consent for the selected page image.
+- The unsupported generic few-percent accuracy claim was removed from the legacy
+  footer. Product copy must not contradict the current benchmark evidence.
 
-- The completed 3,000-case deterministic study has 1,765 eligible cases and zero
-  engine crashes, but worse holdout area error and fewer combined threshold passes
-  than baseline. Five final spatial cases remain unresolved. Repeating tests does
-  not turn those failures into passes.
-- The regional study froze 39 candidates, including 34 regional inputs. Its 17
-  paired regional area differences are conditional on printed reports. Exact
-  source/scope/date verification remains zero; the holdout median worsened.
-- Runtime vision tests are analytic synthetic examples. Free Qwen, GLM Flash and
-  Luna are candidates after a single passing outline case, not proven defaults.
-- The uploaded-image workspace exports review JSON. It does not yet integrate
-  verified image georeferencing into the map job and existing PDF workflow.
-- Dedicated JPEG EXIF-orientation tests and real externally hosted-flow validation
-  remain unverified. Browser PNG normalization alone is not that test.
-- Geographic conversion uses a local linear metric frame after CRS conversion.
-  Its acceptable image extent/distortion should be stated and tested before
-  treating unusually large or polar georeferenced images as measurable roofs.
+## Functional evidence and its limits
 
-## Next review sequence
+The supervisor independently ran the server/provider/report contracts and all six
+browser test types: image review, cancellation, local PDF import, actual report
+output, source restrictions and boundary confirmation. The parent repeats the
+complete current source suite before committing; no paid CI credential is needed.
 
-1. Independently verify S-01 through S-05 fixes and their regression coverage.
-2. Rerun relevant runtime/server/browser checks, then inspect exports for current
-   revision, correct model identity and retained original outputs.
-3. Check the exact protected deployment URL and complete its real flow when a
-   hosting route is available; do not expose the shared key through static Pages.
-4. Address field-reference alignment and the strongest classification failures
-   before claiming numerical roof accuracy. Keep development and evaluation
-   examples separate and disclose every missing output.
+Useful reproduction commands (Node 24; browser dependencies as in CI):
 
-The parent coordinates implementation owners and hosting. This supervisor will
-update findings as fixes arrive rather than silently marking them resolved.
+```sh
+node --test server/*.test.mjs
+node bench/runtime-agents-test.mjs
+node bench/ai-report-test.mjs
+node tools/dev/ai-ui-test.mjs
+node tools/dev/ai-cancel-ui-test.mjs
+node tools/dev/pdf-ui-test.mjs
+node tools/dev/ai-report-test.mjs
+node tools/dev/ai-source-restrictions-test.mjs
+node tools/dev/ai-boundary-review-test.mjs
+```
 
-## Independent fix review
+Browser fixtures start fresh keyless deterministic backends. Those fixtures do
+not establish paid-model accuracy. The test-only managed-proxy TLS exception does
+not alter production TLS verification.
 
-- **S-01 accepted in the current worktree:** the same delayed-body reproducer now
-  returns `[202, 429, 429, 429]`. The added server suite also checks admission
-  across distinct owners. This verifies request admission, not API accuracy.
-- **S-02 accepted in the current worktree:** independent challenges for the
-  original out-of-image edge, partially overlapping same-category lines and a
-  self-retracing bent path now return invalid geometry and null physical lengths.
-  The initially incomplete duplicate guard was caught and strengthened before
-  acceptance. Endpoint-only joins and valid shared boundaries remain covered.
-- **S-03 accepted in the current worktree:** provider-fixture tests confirm zero
-  and insufficient limits make no chat call. HTTP tests reject null, strings,
-  fractional request counts and conflicting aliases before any provider job.
-- **S-04 accepted in the current worktree:** the independent browser regression
-  verifies replacement archives old corrections, starts a new correction log,
-  preserves imported source/date metadata and clears saved calibration. A
-  mismatched image fingerprint rejects the import without replacing the review.
-- **S-05 accepted in the current worktree:** the initial canonical response,
-  cloned/edited deterministic model, and browser edit/export flow retain the
-  perspective restriction and withhold physical quantities. Reopening does not
-  turn calibration into rectification.
+The actual live synthetic Docker job completed five schema-valid roles in 34.591
+seconds with $0.007834 provider-reported debit. Its outline had no selected target,
+and adjudication wrongly assumed an implicit boundary from facets. The geometry
+gate overruled that opinion and withheld physical quantities. Five valid role
+contracts therefore did not mean five correct geometric decisions. The later
+one-call target-selection gate avoids proceeding without an identified target.
 
-The supervisor independently reran `node --test server/*.test.mjs` (six tests)
-and `node bench/runtime-agents-test.mjs`; both completed successfully. This check
-covers runtime guards, including manual pen handler tests added by its owner.
-It does not replace the separate UI, real provider or deployment checks.
+A zero-inference replay repaired that saved result through the human canvas flow.
+UI and actual PDF agreed on **960.00 ft² projected** and **1,073.31 ft² sloped**.
+Authenticated two-page PDF import also passed with all CDNs blocked, correct page
+fingerprints and consent/calibration resets, and no browser errors. Separate
+missing-outline recovery calculated 2,000 ft² from an analytic user-traced fixture.
+These are functional checks using synthetic references, not field validation.
 
-The supervisor independently ran the latest `tools/dev/ai-ui-test.mjs` against an
-isolated current-module server with a fixture-only credential. It passed its
-consent, calibrated/pitch calculation, correction/history, hash-bound reopen,
-source provenance, perspective persistence, stale export and image-load checks.
-No paid provider call was made by these independent checks.
+## Deployment and accuracy remain separate
 
-All five initial supervision findings are now accepted for the current worktree.
-Acceptance does not establish field accuracy, external deployment, or completion
-of the newly added PDF/sketch workflow. Those have separate pending checks.
+The parent opened and marked the working private shared-cloud browser for review.
+Its `http://127.0.0.1:3000` address is internal to that environment, **not a public
+preview URL**. The prepared private container and passing local workflow do not
+mean Vercel release occurred. The connector requires its specific team-access
+authorization; see [private-preview deployment](PRIVATE_PREVIEW_DEPLOYMENT.md).
+The production GitHub Pages deployment remains unchanged.
 
-## Additional integration review
+Preserve these limits in every handoff:
 
-- A valid cost alias above the server ceiling originally became conflicting
-  aliases after clamping. The HTTP layer now normalizes the alias; its regression
-  passes. Invalid values are still rejected before any provider work.
-- The geographic frame now uses the image center, bounds supported full-image
-  extent to 2 km, rejects polar frames above 75° absolute latitude, and checks
-  corner scale variation. Independent ordinary-Florida, polar and oversized-local
-  frame challenges preserved the supported measurement and withheld the other
-  two. The worker's ECEF comparison is a numerical projection check, not a field
-  roof reference.
-- Local PDF parsing uses pinned PDF.js assets with evaluation/XFA/system-font
-  fallback disabled. PDF size/page/render limits and per-page source invalidation
-  are present. The Docker allow-list and COPY instructions now include the local
-  loader and vendor assets, which were missing in the initial container draft.
-  Actual PDF-rendering browser acceptance remains a separate owner check.
-- Independent preview tests pass authentication, wrong-credential denial, stripped
-  upstream Authorization, exact public host checks, HTTPS enforcement when an
-  origin is configured, and secure session cookies. The reviewer recommended
-  requiring PUBLIC_ORIGIN for non-loopback binding so an omitted variable cannot
-  accidentally expose Basic authentication over plaintext HTTP. This startup
-  configuration safeguard is pending confirmation; no external URL is accepted.
-
-The latest independent server run completed **11 tests**, including alias and
-preview checks. No external deployment or provider accuracy conclusion follows
-from these integration tests.
-
-## Bounded response repair review
-
-The new repair path permits one fresh same-model response after local schema
-rejection. It retains the original source image and the local contract; it does
-not send another agent's trace to the independent verifier. It does not silently
-repair coordinates or relax polygon rules. The same request, token and dollar
-reservations cover the retry, and cancellation is checked before it starts.
-Permanent HTTP 400/401/403 failures are not retried as schema problems.
-
-The supervisor independently ran the HTTP fixture covering valid second output,
-two invalid outputs, exhausted request budget, cancellation before repair and
-blind independent retry; it passed. Additional paid calls are not needed to
-verify those control paths.
-
-The history-size regression is now corrected and independently tested: original
-content is retained exactly within 250,000 characters; larger content has an
-explicit truncation flag and original length. Overall response bodies are capped
-at 2 MiB before JSON parsing. The oversized-body test issues one failed request,
-retains its conservative reservation and stores no oversized history. The bounded
-repair control flow is accepted for one separately budgeted live integration
-trial; that trial would not validate field accuracy.
-
-A follow-up cost-presentation issue is open: failed network/HTTP/oversized-body
-requests do not reach the usage parser and initially left `usageMissing` at zero.
-The UI must distinguish unknown debit from reported zero even while the full
-conservative reservation continues to protect the budget. Track requests with
-reported usage and explicitly mark the remainder unknown.
-
-## Latest preview and report review
-
-The private gateway now refuses non-loopback startup without PUBLIC_ORIGIN and
-only trusts forwarded HTTPS after explicit trusted-ingress configuration. Both
-new tests pass in the independent preview run, along with the prior four. This
-closes the startup safeguard recommendation; an external URL and authenticated
-full-flow check are still required before claiming deployment.
-
-The report review found and sent three fixes to its owner: an outdated geographic
-conversion, source-thumbnail aspect distortion, and interior edge strokes erased
-by later opaque polygon fills. The owner is applying calibration-only independent
-physical reconciliation where projection support is unavailable, uniform image
-fitting and stroke-after-fill drawing. Actual PDF visual/parser acceptance is
-pending. Source-printed annotation values must remain unverified statements.
-
-The source-selection review also requires active source bytes/identity to be
-invalidated while a replacement PDF/page decodes. Disabling a button alone is not
-sufficient because cancellation or metadata changes may re-enable it. The UI owner
-is testing that no prior image can be submitted or reopened during a pending or
-failed replacement decode.
-
-## Remaining cancellation race
-
-Cancellation after a known job ID is covered, but cancellation before the 202
-creation response is received can lose the ID of a server job already started.
-The parent has queued an owner-bound request nonce and bounded cancellation
-record for the next batch. Acceptance must include cancellation before admission,
-a delayed/lost 202 response, duplicate submissions, cross-owner isolation and
-bounded record expiry. A stale creation response must never leave a job running
-without a way to cancel it. This is an open issue; the five initial fixes do not
-imply every cancellation interleaving is resolved.
-
-The latest supervisor fixture rerun also confirms unknown-billing counters for
-HTTP failures, timeouts and oversized response bodies. The UI is being updated to
-show unknown costs separately from known reported/estimated subtotals.
-
-## Current batch acceptance
-
-Independent actual-PDF browser verification completed on an isolated test port.
-The calibrated, uncalibrated and perspective-restricted PDFs passed Letter size,
-uniform source-preview aspect, visible interior edge strokes, unclipped text and
-current-revision checks. The local calibration numbers reconcile independently;
-georeferenced physical values are explicitly withheld by this source-image PDF
-rather than recomputed using a different projection. Source annotations remain
-unverified statements, and true sloped line lengths remain blank.
-
-The source-readiness fix also passed independent PDF and image-review browser
-regressions. Replacing a source clears active bytes/identity and guards Analyze,
-reopen, measurement and export until the new source is ready. Editing metadata or
-closing/reopening during delayed PDF decoding issued no AI request. Malformed,
-oversized and over-50-page PDFs remained unready; changing pages or rotation
-cleared calibration and consent. Parapet/transition classifications now match the
-runtime contract and survive review reopening.
-
-The parent independently repeated the actual-PDF checks using a dynamic-port
-private runtime. A single separately authorized synthetic Docker/APINEX workflow
-is now being tested against a frozen source context. The supervisor will review
-its result without editing that context. This is a workflow check, not a newly
-validated roof-accuracy benchmark. Pre-202 cancellation remains the explicitly
-open next-batch issue.
-
-## Recovery after a missing AI outline
-
-A zero-paid replay of a partial live result exposed an absent target outline. The
-report owner now permits review-only drawing of the remaining facets/edges while
-withholding all quantities; it does not invent a boundary from their union. The
-supervisor reviewed this behavior and the empty-geometry failure guard.
-
-The editor still needs an explicit human trace/replace-outline tool: adding a
-vertex to an empty outline currently has no segment to select. This is a next-batch
-recovery requirement, not a reason to certify incomplete geometry or issue repeated
-paid calls. Entering manual drawing must invalidate old measurements/PDF export;
-Done must require a valid current-image polygon; Cancel must not restore geometry
-onto a different source. Corrections and original AI output must remain distinct.
-
-## Request cancellation protocol — server acceptance
-
-The server now accepts an owner-scoped request ID before a job ID exists. A
-cancellation record can precede the POST or arrive while its body is uploading;
-after reading, admission checks the cancellation atomically. Identical retries
-recover the same job, while a changed image/revision/body with that ID is rejected
-with 409. Another owner's identical opaque ID cannot cancel or retrieve the job.
-
-Independent checks passed the root's request-ID regressions, abrupt mid-body
-connection failure with capacity recovery and no unhandled rejection, and a
-post-read capacity-loss interleaving: two other owners occupied the job slots,
-the delayed request returned 429 and its recovery record correctly became failed.
-The supervisor also created 5,000 cancellation records, confirmed the next was
-refused, advanced only the test clock by 15 minutes, and confirmed old records
-expired and capacity returned. That load test made zero provider calls and is
-not a roof-accuracy test.
-
-The server-side race fix is accepted. Browser cancellation before a delayed/lost
-202 response, initial-session single-flight, and honest failed-cancellation status
-remain separate UI acceptance checks. Server shutdown now aborts remaining work
-and clears its maps, verified by the local server test.
-
-The live synthetic Docker result also illustrates why adjudication is advisory:
-its first outline had no selected target, and the adjudicator incorrectly assumed
-an implicit boundary from facets. The deterministic gate retained the missing-
-boundary finding and withheld physical quantities despite the model's preference.
-Five schema-valid roles therefore did not mean five correct geometric decisions.
-
-## Manual recovery accepted; one cancellation interleaving still open
-
-The independent current-runtime browser run passed the new human outline recovery:
-an AI model with no target boundary was repaired by explicit corner clicks. With
-an analytic independently supplied scale, the rectangle recalculated to 2,000 ft²
-and exported through the actual PDF builder. Removal and undo remain user actions;
-no inferred union was silently promoted. These are synthetic workflow checks.
-
-The tracked nonce UI suite also passed initial-config single-flight, cancellation
-before admission, a held 202 response, and failed-cancellation retry. A separate
-supervisor challenge exposed a further case outside that suite: cancellation first
-returned 503, Analyze retried while the cleanup DELETE was held, the user clicked
-Cancel and saw Cancelled, then releasing the old DELETE caused a second POST and
-Processing. The UI needs a cancellation-in-flight guard and user-intent generation
-across cleanup waits. Server admission prevents concurrent work for that owner,
-but that is not sufficient to promise the user's cancelled intent will not restart.
-This case remains open until a deterministic held-DELETE regression passes.
-
-## Further bounded-work checks
-
-The latest browser fixture confirms billing is displayed as a known subtotal plus
-an explicit count of unknown-charge requests, instead of calling failed requests
-free. The target-selection gate also passes its HTTP fixture: a traceable image
-with neither an explicit user target nor a quality-agent target stops after one
-quality call and requests a roof point. A supplied point does not bypass an
-untraceable-image refusal. Neither check needs new paid inference.
-
-A saved-review size issue remains queued: the actual two-facet/seven-edge model
-contains 91,408 serialized bytes because raw AI output and an original proposal
-are embedded within it. Each correction currently clones that whole model. About
-90 such edits alone would exceed the 8 MiB reopen limit, before the export's other
-audit records. Keep original raw output once, retain canonical geometry/provenance
-in edit snapshots, and prove a substantial edit/export/reopen cycle without
-silently discarding history. This is a usability/data-retention issue, not an
-accuracy pass or a reason to relax the import size bound.
-
-The supervisor independently reran the latest eight HTTP tests and two main-module
-tests. Malformed request URLs now return 400 without stopping the runtime. The
-canonical editable model no longer embeds raw provider responses; raw output is
-still retained separately. The 100-edit export/reopen acceptance remains assigned
-to the UI owner before closing the broader history-size finding.
-
-## Held-DELETE and compact-history acceptance
-
-The supervisor repeated its original adversarial cancellation sequence after the
-fix. For both a delayed 200 and delayed 503 cleanup response, fresh Cancel prevented
-a second POST. Cancellation was single-flight; after 503 the original nonce was
-retained and the later retry confirmed cancellation. This closes the previously
-reproduced restart-after-Cancel defect.
-
-The independent latest UI run also passed 100 facets, 100 edits and 500 KB of
-distinct legacy raw evidence through export/reopen. The export was 980,519 bytes,
-retained the raw records once and reopened with the complete correction history.
-Editable models and changed-shape/metadata deltas no longer duplicate raw outputs.
-No paid API call or browser error occurred in these checks.
-
-One final mode-switch check is pending: choosing a new target while manually tracing
-must end the draft before the canvas consumes its next click. Source, PDF page,
-rotation and applied-target changes already clear undo/committed geometry; the
-mode switch must make the target branch reachable as well.
-
-## Final scope-reset acceptance
-
-The supervisor independently tested all four scope changes after first creating
-undo history and an active manual draft: selecting a different target, replacing
-the image, rotating the source, and replacing the PDF page. Each ended the draft,
-cleared the active model/undo state, and refused to resurrect old geometry when
-Undo was invoked directly. The corrected target-mode switch recorded the clicked
-point instead of appending it to the old outline. This closes the last current UI
-scope finding without changing any owner module during the frozen Docker replay.
-
-The current batch's correctness fixes are accepted. This does not establish
-real-roof accuracy or a public deployed preview. Preserve the documented mixed
-benchmark results, zero strictly qualified regional comparisons, and the actual
-model disagreement/refusal examples in the final handoff.
+- The 3,000-case deterministic study has mixed results, including worse holdout
+  area error and fewer combined threshold passes than baseline. Five final
+  spatial cases remain unresolved; missing results never count as passes.
+- Regional printed-report comparisons are conditional. Strict source/scope/date
+  verification remains **zero**, not 30 validated properties.
+- Synthetic paid/free vision trials do not demonstrate a universally reliable
+  model or independent roof accuracy. Model agreement is not measurement evidence.
+- The source-image workspace remains review-only, with no fabricated geographic
+  north, true sloped line lengths or purchasing certification.
+- Private customer references/images were not submitted in these provider trials.
+  Further work must use reproduced defects or newly authorized verified evidence,
+  rather than repeat paid calls until a favorable response appears.

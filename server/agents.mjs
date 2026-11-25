@@ -56,7 +56,11 @@ export async function runRoofAgents(input, options={}) {
   const attemptMessages=repair?[...messages,{role:'user',content:'Your previous response failed strict local validation: '+repairError+'. Return a fresh complete JSON object satisfying the contract. Every region must have at least three distinct vertices; line edges alone may have two points. Do not invent or silently convert geometry. Required contract: '+OUTPUT_CONTRACTS[role]}]:messages;
   for(let attempt=0;attempt<=number(options.retries,1,0,2);attempt++) {
    current();
-   if(maxOutput===0||ledger.requests+1>maxRequests||ledger.reservedTokens+tokenReserve>maxTokens||ledger.reservedUsd+usdReserve>maxUsd)stop('BUDGET_LIMIT','The processing budget is exhausted; remaining roles need review');
+   const budgetStop=message=>stop('BUDGET_LIMIT',message+' No additional model call was sent. Conservative capacity reservations are separate from actual charges; explicit limits were not raised.');
+   if(maxOutput===0)budgetStop('The output token limit is zero.');
+   if(ledger.requests+1>maxRequests)budgetStop('The request limit allows '+maxRequests+' calls; '+ledger.requests+' have already been sent.');
+   if(ledger.reservedTokens+tokenReserve>maxTokens)budgetStop('The next call requires a conservative capacity reservation of '+tokenReserve+' tokens; '+Math.max(0,Math.floor(maxTokens-ledger.reservedTokens))+' tokens remain.');
+   if(ledger.reservedUsd+usdReserve>maxUsd)budgetStop('The next call requires a conservative capacity reservation of $'+usdReserve.toFixed(6)+'; $'+Math.max(0,maxUsd-ledger.reservedUsd).toFixed(6)+' remains under the dollar limit.');
    ledger.requests++;ledger.usageMissing++;ledger.unknownBillingRequests++;ledger.reservedTokens+=tokenReserve;ledger.reservedUsd+=usdReserve;emit(role,'running',{model,attempt:attempt+1});
    const r=await request('https://api.apinex.bond/v1/chat/completions',{model,messages:attemptMessages,max_tokens:maxOutput,stream:false,...(['claude-opus-5.5','gpt-6.2-astra'].includes(model)?{response_format:{type:'json_object'}}:{})},number(options.timeoutMs,45000,100,120000));
    if(!r.ok){const retryable=r.status===429||r.status>=500;emit(role,'request-failed',{httpStatus:r.status,attempt:attempt+1});if(retryable&&attempt<number(options.retries,1,0,2)){
@@ -93,17 +97,20 @@ export async function runRoofAgents(input, options={}) {
  });}
  async function optional(role,extra){try{const result=await run(role,extra);results[role]=result;return result;}catch(e){current();const failure={role,code:e.code||'AGENT_FAILED',message:e instanceof AgentError||e.name==='ContractError'?e.message:'The agent could not complete its task'};failures.push(failure);emit(role,'failed',{code:failure.code});return null;}}
  const quality=await optional('quality');
+ const perspectiveReasons=(quality?.issues||[]).filter(issue=>issue.kind==='perspective').map(issue=>issue.reason);
+ const sourceRestrictions={perspective:input.imageMetadata.sourceRestrictions?.perspective===true||perspectiveReasons.length>0,reasons:[...new Set([...(input.imageMetadata.sourceRestrictions?.reasons||[]),...perspectiveReasons])].slice(0,100)};
+ const comparisonMetadata={...input.imageMetadata,sourceRestrictions};
  if(quality?.traceable===true&&!input.imageMetadata.targetPixel&&!quality.target){failures.push({role:'quality',code:'TARGET_SELECTION_REQUIRED',message:'Choose the intended roof point on this image before tracing'});emit('quality','target-selection-required');}
  else if(quality?.traceable===true){await Promise.all([optional('outline'),optional('independent'),optional('structure')]);}
  else failures.push({role:'quality',code:'IMAGE_NOT_TRACEABLE',message:'The image quality agent could not support reliable tracing'});
  current();
  const first=proposalFromAgents(results.outline,results.structure),independent=proposalFromAgents(results.independent,null);
- let comparison=null;try{comparison=(options.compareTraces||compareProposals)(first,independent,input.imageMetadata);}catch{failures.push({role:'geometry',code:'GEOMETRY_INVALID',message:'The deterministic geometry comparison rejected a proposal'});}
+ let comparison=null;try{comparison=(options.compareTraces||compareProposals)(first,independent,comparisonMetadata);}catch{failures.push({role:'geometry',code:'GEOMETRY_INVALID',message:'The deterministic geometry comparison rejected a proposal'});}
  const boundaryLimit=Math.max(2,0.005*Math.hypot(input.imageMetadata.width,input.imageMetadata.height));
  const numericDisagreement=comparison && (comparison.iou==null || comparison.iou<0.95 || comparison.boundaryDistancePixels?.max>boundaryLimit);
  const issueDisputes=(comparison?.issues||[]).map((x,i)=>({id:x.id||'geometry-'+i,reason:x.message||x.text||x.code||'Geometry validation requires review'}));
  let geometryValidation;
- try{geometryValidation=validateProposal(first,input.imageMetadata);}catch{geometryValidation={ok:false,issues:[{code:'geometry-invalid',message:'The deterministic roof structure validation failed'}]};}
+ try{geometryValidation=validateProposal(first,comparisonMetadata);}catch{geometryValidation={ok:false,issues:[{code:'geometry-invalid',message:'The deterministic roof structure validation failed'}]};}
  const topologyDisputes=(geometryValidation.issues||[]).map((x,i)=>({id:'structure-'+(x.code||i),reason:x.message||x.text||'Roof plane topology requires review',affectedIds:x.ids||[],...(x.region?{region:x.region}:{})}));
  const disputes=[...(comparison?.disputes||[]),...issueDisputes,...topologyDisputes];
  if(numericDisagreement&&!disputes.length)disputes.push({id:'outline-comparison',reason:'Independent outlines disagree beyond provisional review thresholds'});
@@ -111,5 +118,5 @@ export async function runRoofAgents(input, options={}) {
  if(comparison)comparison={...comparison,needsReview:disputes.length>0,reviewThresholds:{minIoU:0.95,maxBoundaryPixels:boundaryLimit,accuracyAcceptance:false}};
  if(results.outline&&results.independent&&(disputes.length||comparison?.needsReview))await optional('adjudication',{first,independent,disputes});
  current();
- return{revision:input.revision,status:'REVIEW REQUIRED',...results,proposal:first,independentProposal:independent,comparison,geometryValidation,disputes,raw,originalOutputs,originalOutputHistory,failures,events,ledger:{...ledger,elapsedMs:Date.now()-started},provenance:{models,sourceImage:{width:input.imageMetadata.width,height:input.imageMetadata.height,view:input.imageMetadata.view,purpose:input.imageMetadata.purpose||'photo',sourcePage:input.imageMetadata.sourcePage||1,rotation:input.imageMetadata.rotation||0},externalProcessingAuthorized:true,structuredOutput:'JSON object mode observed compatible on selected models; locally schema-validated, provider schema enforcement is not assumed',confidence:'Uncalibrated model proposals; agreement is not measurement evidence'}};
+ return{revision:input.revision,status:'REVIEW REQUIRED',...results,proposal:first,independentProposal:independent,comparison,geometryValidation,disputes,raw,originalOutputs,originalOutputHistory,sourceRestrictions,failures,events,ledger:{...ledger,elapsedMs:Date.now()-started},provenance:{models,sourceImage:{width:input.imageMetadata.width,height:input.imageMetadata.height,view:input.imageMetadata.view,purpose:input.imageMetadata.purpose||'photo',sourcePage:input.imageMetadata.sourcePage||1,rotation:input.imageMetadata.rotation||0},externalProcessingAuthorized:true,structuredOutput:'JSON object mode observed compatible on selected models; locally schema-validated, provider schema enforcement is not assumed',confidence:'Uncalibrated model proposals; agreement is not measurement evidence'}};
 }

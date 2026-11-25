@@ -35,3 +35,8 @@ The review editor can trace a missing outline manually, remove false facets/edge
 and undo corrections. It never substitutes an inferred facet union for an omitted
 exterior boundary. Compact correction records retain source metadata and raw AI
 evidence once, so large editing sessions remain reopenable.
+
+Orientation warnings persist for the source image, including after retry and import.
+Unresolved geometry and diagnostic-only lines do not become physical takeoff.
+Explicit boundary confirmation requires an evidence note and is invalidated by edits;
+it remains user-provided review evidence. See the supervision ledger for tested scope.

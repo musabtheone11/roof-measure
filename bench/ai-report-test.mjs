@@ -15,6 +15,10 @@ export function fixture(overrides = {}) {
     calibration: { start: [100, 120], end: [500, 120], lengthFt: 40, source: 'Independent analytic calibration', date: '2026-11-25', verified: true } };
   Object.assign(metadata, overrides.metadata || {});
   if (overrides.perspective) model.measurementRestrictions = { perspective: true, reasons: ['Synthetic perspective finding'] };
+  if (overrides.boundaryReview) { model.facets[0].status = 'user-provided'; model.facets[0].geometryReview = { status: 'user-provided', source: 'Local visual review', date: '2026-11-25', note: 'Confirmed visible synthetic upper boundary; no independent certification.' }; model.edges[0].geometryReview = { status: 'invalidated', source: 'Previous local review', date: '2026-11-25', note: 'Prior edge confirmation invalidated after edit.' }; }
+  if (overrides.obstruction) { model.edges[2].type = 'obstruction'; model.edges[2].status = 'user-provided'; }
+  if (overrides.unresolvedFacet) model.facets[0].status = 'unresolved';
+  if (overrides.legacyStatus) model.facets[0].status = 'measured';
   if (overrides.missingOutline) model.outline = [];
   if (overrides.unknownPitch) delete model.facets[0].pitch;
   const revision = 7, latestResult = analyzeRoofModel(model, metadata, { revision });
@@ -31,7 +35,7 @@ assert.equal(report.status, 'SOURCE IMAGE REVIEW');
 assert.equal(report.annotations[0].status, 'SOURCE-REPORTED / UNVERIFIED');
 assert.equal(report.annotations[0].text, p.model.annotations[0].text);
 assert.equal(prepareAIReviewReport(fixture({ unknownPitch: true })).sloped, null);
-for (const data of [fixture({ perspective: true }), fixture({ metadata: { view: 'oblique' } }), fixture({ metadata: { calibration: null } })]) {
+for (const data of [fixture({ perspective: true }), fixture({ metadata: { sourceRestrictions: {perspective:true,reasons:['Prior source warning']} } }), fixture({ metadata: { view: 'oblique' } }), fixture({ metadata: { calibration: null } })]) {
   const r = prepareAIReviewReport(data); assert.equal(r.projected, null); assert.equal(r.sloped, null); assert(r.edges.every(e => e.horizontal === null));
 }
 const geographic = fixture({ metadata: { calibration: null, georef: { verified: true, source: 'Synthetic local georeference', date: '2026-11-25', crs: 'LOCAL_EN_METERS', affine: [.03, 0, 0, 0, .03, 0] } } });
@@ -50,3 +54,16 @@ console.log('AI review report: current snapshot, independent calibrated quantiti
 
 const missingOutline = prepareAIReviewReport(fixture({ missingOutline: true }));
 assert.equal(missingOutline.geometryOK, false); assert.equal(missingOutline.projected, null); assert.equal(missingOutline.sloped, null); assert(missingOutline.edges.every(e => e.horizontal === null));
+
+for (const flags of [{ unresolvedFacet: true }, { legacyStatus: true }]) { const r = prepareAIReviewReport(fixture(flags)); assert.equal(r.facets[0].status, 'unresolved'); assert.equal(r.facets[0].projected, null); assert(r.facets[0].pixels2 > 0); assert(r.facets[1].projected > 0); assert.equal(r.projected, null); assert.equal(r.edges[2].horizontal, null); assert(r.edges[2].pixels > 0); }
+const sourceRestricted = prepareAIReviewReport(fixture({ metadata: { sourceRestrictions: { perspective: true } } }));
+assert.equal(sourceRestricted.restricted, true); assert.equal(sourceRestricted.projected, null);
+const promoted = fixture({ unresolvedFacet: true }); promoted.latestResult.measurements.facets[0].status = 'inferred';
+assert.throws(() => prepareAIReviewReport(promoted), /geometry status differs/);
+const unsupportedArea = fixture({ unresolvedFacet: true }); unsupportedArea.latestResult.measurements.facets[0].projectedAreaM2 = 44;
+assert.throws(() => prepareAIReviewReport(unsupportedArea), /unresolved facet has a physical quantity/);
+const unsupportedEdge = fixture(); unsupportedEdge.latestResult.measurements.edges[2].horizontalLengthM = 6.096;
+assert.throws(() => prepareAIReviewReport(unsupportedEdge), /unresolved, unspecified or obstruction edge has a physical quantity/);
+
+const obstruction = fixture({ obstruction: true }); assert.equal(prepareAIReviewReport(obstruction).edges[2].horizontal, null); obstruction.latestResult.measurements.edges[2].horizontalLengthM = 6.096; assert.throws(() => prepareAIReviewReport(obstruction), /obstruction edge has a physical quantity/);
+const reviews = prepareAIReviewReport(fixture({ boundaryReview: true })).reviewRecords; assert.equal(reviews.length, 2); assert.match(reviews[0].note, /Confirmed visible/); assert.match(reviews[0].status, /NOT INDEPENDENTLY VERIFIED/); assert.match(reviews[1].status, /INVALIDATED/);

@@ -44,25 +44,31 @@
     const identity = item => { if (!stated(item.id) || item.id.length > 200 || ids.has(item.id)) fail('Facet and edge IDs must be unique.'); ids.add(item.id); };
     model.facets.forEach(f => { identity(f); ring(f.polygon, 3); }); model.edges.forEach(e => { identity(e); ring(e.points, 2); });
     const m = result.measurements, geometryOK = m.validation?.ok === true && model.outline.length >= 3;
-    const restricted = model.measurementRestrictions?.perspective === true || metadata.view !== 'orthographic' || metadata.perspective === 'oblique';
+    const restricted = metadata.sourceRestrictions?.perspective === true || model.measurementRestrictions?.perspective === true || metadata.view !== 'orthographic' || metadata.perspective === 'oblique';
     const frame = restricted ? null : transform(metadata), physical = geometryOK && !!frame;
     if (physical && stable(m.measurementBasis) !== stable(frame.basis)) fail('The measurement basis does not match the current calibration.');
+    const geometryStatus = value => value == null ? 'inferred' : ['inferred', 'user-provided', 'unresolved'].includes(value) ? value : 'unresolved';
+    const rowStatus = (row, item) => { const status = geometryStatus(row.status); if (status !== geometryStatus(item.status)) fail('The measurement geometry status differs from the current model.'); return status; };
     const number = (value, expected, label) => { if (value == null) return null; if (!finite(value) || expected != null && !sameNumber(value, expected)) fail('Inconsistent ' + label + ' in the measurement response.'); return value; };
     const facets = model.facets.map((f, i) => {
       const values = (m.facets || []).filter(q => q.id === f.id); if (values.length > 1) fail('Duplicate facet measurement ID.'); const row = values[0] || {};
+      const status = rowStatus(row, f), supported = physical && status !== 'unresolved';
+      if (physical && status === 'unresolved' && (row.projectedAreaM2 != null || row.slopedAreaM2 != null)) fail('An unresolved facet has a physical quantity.');
       const px = geometryOK ? number(row.pixels2, area(f.polygon), 'facet pixel area') : null;
-      const projected = physical ? number(row.projectedAreaM2, area(f.polygon.map(frame.point)), 'projected facet area') : null;
+      const projected = supported ? number(row.projectedAreaM2, area(f.polygon.map(frame.point)), 'projected facet area') : null;
       const p = f.pitch, knownPitch = p && stated(p.source) && finite(p.rise) && finite(p.run) && p.run > 0 && finite(p.uncertainty) && ['measured', 'user-provided'].includes(p.status);
       if (row.pitch != null && stable(row.pitch) !== stable(p)) fail('The pitch record differs from the current model.');
-      const sloped = physical && knownPitch ? number(row.slopedAreaM2, area(f.polygon.map(frame.point)) * Math.hypot(p.run, p.rise) / p.run, 'sloped facet area') : null;
+      const sloped = supported && knownPitch ? number(row.slopedAreaM2, area(f.polygon.map(frame.point)) * Math.hypot(p.run, p.rise) / p.run, 'sloped facet area') : null;
       if (physical && !knownPitch && row.slopedAreaM2 != null) fail('A sloped area has no supported pitch.');
-      return { id: f.id, key: 'F' + (i + 1), polygon: copy(f.polygon), pixels2: px, projected, sloped, pitch: knownPitch ? copy(p) : null, status: f.status || 'inferred' };
+      return { id: f.id, key: 'F' + (i + 1), polygon: copy(f.polygon), pixels2: px, projected, sloped, pitch: knownPitch ? copy(p) : null, status };
     });
     const edges = model.edges.map((e, i) => {
       const values = (m.edges || []).filter(q => q.id === e.id); if (values.length > 1) fail('Duplicate edge measurement ID.'); const row = values[0] || {};
+      const status = rowStatus(row, e), classified = !!e.type && !['unspecified', 'obstruction'].includes(e.type);
+      if (physical && (status === 'unresolved' || !classified) && row.horizontalLengthM != null) fail('An unresolved, unspecified or obstruction edge has a physical quantity.');
       if (row.type != null && row.type !== e.type) fail('An edge classification differs from the current model.');
-      return { id: e.id, key: 'E' + (i + 1), type: e.type || 'unspecified', points: copy(e.points), status: e.status || 'inferred', pixels: geometryOK && row.valid !== false ? number(row.lengthPixels, length(e.points), 'edge pixel length') : null,
-        horizontal: physical && row.valid !== false ? number(row.horizontalLengthM, length(e.points.map(frame.point)), 'horizontal edge length') : null,
+      return { id: e.id, key: 'E' + (i + 1), type: e.type || 'unspecified', points: copy(e.points), status, pixels: geometryOK && row.valid !== false ? number(row.lengthPixels, length(e.points), 'edge pixel length') : null,
+        horizontal: physical && status !== 'unresolved' && classified && row.valid !== false ? number(row.horizontalLengthM, length(e.points.map(frame.point)), 'horizontal edge length') : null,
         // A planar image does not establish a true 3D edge length.
         sloped: null };
     });
@@ -71,9 +77,13 @@
     if (!Array.isArray(annotations) || annotations.length > 300) fail('Too many source annotations for one review.');
     const annotationRows = annotations.map((a, i) => ({ key: 'A' + (i + 1), id: String(a.id || ''), kind: String(a.kind || 'annotation'), text: String(a.text || ''), status: 'SOURCE-REPORTED / UNVERIFIED' }));
     const issues = [...(m.issues || []), ...(payload.originalAI?.quality?.issues || []), ...(payload.originalAI?.adjudication?.decisions || [])].map(q => typeof q === 'string' ? q : String(q.text || q.message || q.reason || q.code || 'Review required') + (q.ids?.length ? ' [' + q.ids.join(', ') + ']' : ''));
+    const reviewRecords = [...model.facets.map(f => ({ item: f, kind: 'Facet' })), ...model.edges.map(e => ({ item: e, kind: 'Edge' }))].filter(q => q.item.geometryReview && typeof q.item.geometryReview === 'object').map(({ item, kind }) => {
+      const r = item.geometryReview, bounded = value => String(value ?? '').slice(0, 10000);
+      return { id: bounded(item.id), kind, status: r.status === 'user-provided' ? 'USER-PROVIDED / NOT INDEPENDENTLY VERIFIED' : 'INVALIDATED / NOT ACCEPTED', source: bounded(r.source), date: bounded(r.date), note: bounded(r.note) };
+    });
     const corrections = (payload.corrections || []).map(e => String(e.at || '') + ' / revision ' + String(e.revision ?? '') + ' / ' + String(e.action || 'Correction'));
-    if (annotationRows.reduce((n, a) => n + a.text.length, 0) + issues.join('').length + corrections.join('').length > 100000) fail('Review text exceeds the bounded PDF limit. Save the review JSON for the complete audit.');
-    return { revision: String(payload.revision), metadata: copy(metadata), outline: copy(model.outline), facets, edges, annotations: annotationRows, issues, corrections,
+    if (annotationRows.reduce((n, a) => n + a.text.length, 0) + issues.join('').length + corrections.join('').length + reviewRecords.reduce((n, r) => n + Object.values(r).join('').length, 0) > 100000) fail('Review text exceeds the bounded PDF limit. Save the review JSON for the complete audit.');
+    return { revision: String(payload.revision), metadata: copy(metadata), outline: copy(model.outline), facets, edges, annotations: annotationRows, issues, corrections, reviewRecords,
       projected: total('projected', m.projectedAreaM2), sloped: total('sloped', m.slopedAreaM2), physical, geometryOK, restricted, previousReviews: payload.previousReviews?.length || 0,
       status: 'SOURCE IMAGE REVIEW', fingerprint: stable({ revision: payload.revision, model, metadata, latestResult: result, measurementSnapshot: snapshot, sourceImage: payload.sourceImage }) };
   }
@@ -128,8 +138,8 @@
     const box = { x: 46, y: 212, w: 520, h: 370 }, scale = Math.min((box.w - 36) / Math.max(1, bounds[2] - bounds[0]), (box.h - 36) / Math.max(1, bounds[3] - bounds[1]));
     const P = p => [box.x + box.w / 2 + (p[0] - (bounds[0] + bounds[2]) / 2) * scale, box.y + box.h / 2 + (p[1] - (bounds[1] + bounds[3]) / 2) * scale];
     const path = (points, closed, fill, dashed) => { const pts = points.map(P); doc.setLineWidth(.7); doc.setDrawColor(45); if (fill != null) doc.setFillColor(fill); doc.setLineDashPattern(dashed ? [4, 2] : [], 0); doc.lines(pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], closed && fill != null ? 'FD' : 'S', closed); doc.setLineDashPattern([], 0); };
-    for (const f of prepared.facets) path(f.polygon, true, f.status === 'unresolved' ? 247 : 239, f.status !== 'measured');
-    for (const e of prepared.edges) path(e.points, false, null, e.status !== 'measured');
+    for (const f of prepared.facets) path(f.polygon, true, f.status === 'unresolved' ? 247 : 239, true);
+    for (const e of prepared.edges) path(e.points, false, null, true);
     if (prepared.outline.length >= 3) path(prepared.outline, true, null, true);
     const occupied = [];
     const key = (value, anchor, dark) => {
@@ -151,8 +161,8 @@
     text('Unknown quantities are blank. Source-printed dimensions are unverified statements. No order quantities.', L, 690, 8.2, false, data.sourceImage ? 395 : 548);
     next('Current measurement schedules');
     const modelId = row => row.key === row.id ? row.key : row.key + ' / ' + row.id;
-    table('Facet schedule / provisional areas', [118, 86, 100, 100, 144], ['Key / model ID', 'Image px²', 'Projected ft²', 'Sloped ft²', 'Sourced pitch'], prepared.facets.map(f => [modelId(f), number(f.pixels2), number(f.projected, SQFT), number(f.sloped, SQFT), f.pitch ? number(f.pitch.rise / f.pitch.run * 12, 1, 1) + ' / 12 ±' + number(f.pitch.uncertainty, 1, 2) : '']));
-    table('Edge schedule / path lengths, not chords', [118, 110, 88, 116, 116], ['Key / model ID', 'Candidate type', 'Image px', 'Horizontal ft', 'True sloped ft'], prepared.edges.map(e => [modelId(e), e.type + ' / unverified', number(e.pixels), number(e.horizontal, FT), '']));
+    table('Facet schedule / provisional areas', [118, 86, 100, 100, 144], ['Key / model ID / status', 'Image px²', 'Projected ft²', 'Sloped ft²', 'Sourced pitch'], prepared.facets.map(f => [modelId(f) + ' / ' + f.status, number(f.pixels2), number(f.projected, SQFT), number(f.sloped, SQFT), f.pitch ? number(f.pitch.rise / f.pitch.run * 12, 1, 1) + ' / 12 ±' + number(f.pitch.uncertainty, 1, 2) : '']));
+    table('Edge schedule / path lengths, not chords', [118, 110, 88, 116, 116], ['Key / model ID', 'Candidate type', 'Image px', 'Horizontal ft', 'True sloped ft'], prepared.edges.map(e => [modelId(e), e.type + ' / ' + e.status + ' / unverified', number(e.pixels), number(e.horizontal, FT), '']));
     if (unplaced.length) paragraph('Keys not placed on the plan because of density: ' + unplaced.join(', ') + '. Their model IDs and quantities remain in the schedules.');
     paragraph('Facet and edge IDs refer only to source pixels in this revision. Physical quantities, when present, use the stated calibration and sourced pitch; they are provisional review values. True sloped edge lengths are not established by a planar image.');
     next('Source and review notes');
@@ -160,6 +170,7 @@
     paragraph('Image: ' + prepared.metadata.width + ' × ' + prepared.metadata.height + ' pixels. Fingerprint: ' + (prepared.metadata.imageFingerprint?.sha256 || 'not provided') + '. Current model revision: ' + prepared.revision + '.');
     paragraph(prepared.physical ? 'Physical basis: ' + (prepared.metadata.georef?.source || prepared.metadata.calibration?.source || 'recorded calibration') + '. This does not certify the roof outline, pitch or source statements.' : 'Physical quantities withheld: ' + (prepared.restricted ? 'perspective, oblique or uncalibrated source orientation.' : !prepared.geometryOK ? 'geometry validation requires correction.' : prepared.metadata.georef?.verified ? 'georeferenced quantities require the geographic validation/report path; this PDF validates image calibration only.' : 'no usable verified image calibration.'));
     if (prepared.annotations.length) { section('Source-reported annotations / never verified takeoff'); for (const a of prepared.annotations) { paragraph(a.key + (a.id ? ' / ' + a.id : '') + ' / ' + a.kind + ' / ' + a.status, 8.5); paragraph(a.text); } }
+    if (prepared.reviewRecords.length) { section('User boundary reviews / not independent certification'); for (const r of prepared.reviewRecords) { paragraph(r.kind + ' / ' + r.id + ' / ' + r.status, 8.5); paragraph('Source: ' + (r.source || 'not recorded') + '; date: ' + (r.date || 'not recorded') + '. ' + r.note); } }
     if (prepared.issues.length) { section('Review findings'); prepared.issues.forEach(q => paragraph(q)); }
     if (prepared.corrections.length) { section('Current revision correction history'); prepared.corrections.forEach(q => paragraph(q)); }
     paragraph('Prior reviews retained in the saved JSON: ' + prepared.previousReviews + '. This PDF contains current-revision quantities only. Preserve the review JSON and original image for the complete audit.');

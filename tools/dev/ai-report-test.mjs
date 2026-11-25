@@ -29,7 +29,7 @@ try {
     return { image, sha256 };
   });
   const layouts = {};
-  for (const [name, flags] of [['calibrated', {}], ['unknown', { metadata: { calibration: null } }], ['perspective', { perspective: true }], ['missing-outline', { missingOutline: true }]]) {
+  for (const [name, flags] of [['calibrated', { boundaryReview: true, obstruction: true }], ['unknown', { metadata: { calibration: null } }], ['perspective', { perspective: true }], ['missing-outline', { missingOutline: true }], ['unresolved-facet', { unresolvedFacet: true }], ['source-perspective', { metadata: { sourceRestrictions: { perspective: true } } }]]) {
     const p = fixture(flags); p.sourceImage = source.image; p.imageMetadata.imageFingerprint = { algorithm: 'SHA-256', sha256: source.sha256 };
     p.measurementSnapshot.imageMetadata = structuredClone(p.imageMetadata); p.latestResult = analyzeRoofModel(p.model, p.imageMetadata, { revision: p.revision });
     const result = await page.evaluate(async p => { const blob = await buildAIReviewPDF(p); return { bytes: Array.from(new Uint8Array(await blob.arrayBuffer())), layout: blob.reviewReport }; }, p);
@@ -40,11 +40,18 @@ try {
     assert.match(r.stdout, /SOURCE-REPORTED \/ UNVERIFIED/); assert.match(r.stdout, /40 ft printed on source; not independently verified/);
     assert.match(r.stdout, /No geographic north or map scale is established/); assert.match(r.stdout, /No order quantities/);
     if (name === 'calibrated') {
+      assert.match(r.stdout, /Confirmed visible synthetic upper boundary; no independent certification/);
+      assert.match(r.stdout, /Prior edge confirmation invalidated after edit/); assert.match(r.stdout, /INVALIDATED \/ NOT ACCEPTED/);
       assert.match(r.stdout, /960\.00 ft²/); assert.match(r.stdout, /1,073\.31 ft²/); assert.match(r.stdout, /6\.0 \/ 12 ±0\.10/);
       assert.match(r.stdout, /E1 \/ top[\s\S]*?400\.00\s+40\.00/);
     } else {
       assert.doesNotMatch(r.stdout, /960\.00 ft²|1,073\.31 ft²/);
-      if (name === 'missing-outline') assert.match(r.stdout, /Polygon requires at least three vertices/);
+      if (name === 'unresolved-facet') {
+        assert.match(r.stdout, /480\.00\s+536\.66/);
+        assert.match(r.stdout, /F1 \/ P1 \/ unresolved/);
+        const edgeLine = r.stdout.split('\n').find(line => line.includes('E3 / internal'));
+        assert(edgeLine && /200\.00/.test(edgeLine) && !/20\.00/.test(edgeLine));
+      } else if (name === 'missing-outline') assert.match(r.stdout, /Polygon requires at least three vertices/);
       else assert.match(r.stdout, name === 'unknown' ? /no usable verified image calibration/ : /perspective, oblique or uncalibrated/);
     }
     assert.equal(result.layout.clippedText, 0); assert.equal(result.layout.unplacedKeys.length, 0);

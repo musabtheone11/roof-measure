@@ -4,7 +4,9 @@ import{runRoofAgents,proposalFromAgents}from'./agents.mjs';
 import{analyzeRoofModel,compareProposals}from'./geometry.mjs';
 export function canonicalResult(result,input){
  const perspectiveIssues=(result.quality?.issues||[]).filter(issue=>issue.kind==='perspective');
- const model={measurementRestrictions:{perspective:perspectiveIssues.length>0,reasons:perspectiveIssues.map(issue=>issue.reason)},revision:input.revision,...proposalFromAgents(result.outline,result.structure),corrections:[]};
+ const priors=[result.sourceRestrictions,input.imageMetadata?.sourceRestrictions];
+ const reasons=[...new Set([...priors.flatMap(prior=>Array.isArray(prior?.reasons)?prior.reasons:[]),...perspectiveIssues.map(issue=>issue.reason)])].slice(0,100);
+ const model={measurementRestrictions:{perspective:priors.some(prior=>prior?.perspective===true)||perspectiveIssues.length>0,reasons},revision:input.revision,...proposalFromAgents(result.outline,result.structure),corrections:[]};
  const measured=analyzeRoofModel(model,input.imageMetadata,{revision:input.revision,provenance:result.provenance});
  return {...result,...measured,originalAI:result,status:'REVIEW REQUIRED'};
 }

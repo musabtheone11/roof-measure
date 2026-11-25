@@ -86,15 +86,10 @@ jobs:
           node -e "console.log('CHROMIUM_PATH=' + require('playwright').chromium.executablePath())" >> "$GITHUB_ENV"
       - name: Browser source review, local PDF pages and rendered reports
         run: |
-          APINEX_API_KEY= node server/main.mjs > /tmp/roof-runtime.log 2>&1 &
-          roof_runtime_pid=$!
-          trap 'kill "$roof_runtime_pid"' EXIT
-          for attempt in 1 2 3 4 5; do
-            curl -fsS http://127.0.0.1:3000/api/ai/config > /dev/null && break
-            sleep 1
-          done
           node tools/dev/ai-ui-test.mjs
           node tools/dev/ai-cancel-ui-test.mjs
+          node tools/dev/ai-source-restrictions-test.mjs
+          node tools/dev/ai-boundary-review-test.mjs
           node tools/dev/pdf-ui-test.mjs
           node tools/dev/ai-report-test.mjs
       - uses: actions/upload-artifact@v4

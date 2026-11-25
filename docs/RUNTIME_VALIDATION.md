@@ -123,8 +123,9 @@ cleared model, consent and calibration.
 Tested container: `sha256:b0a6c1801a7be9a50ea45c6a24bf8c41e348baddb0f9b7626ebe88f6736c8b3a`.
 Source manifest: `572f99fa0a36ccbcb8fb35b7b98394b62397ea68e54f4af1db7d3c7ba0ee5ed6`.
 Proof remains under `.devcache/deployment/`. These analytic measurements are not
-a new field-accuracy benchmark. Total paid inference remains the single five-call
-Docker trial ($0.007834); both repair replays were key-free.
+a new field-accuracy benchmark. Paid inference for this Docker acceptance test was one five-call
+job ($0.007834); both repair replays were key-free. Other candidate and protocol
+trials are recorded separately in API_VERIFICATION.md and APINEX_REVIEW.md.
 
 Request-nonce tests cover cancellation before POST, during a chunked body, after a
 lost creation response, cross-owner denial, input-bound idempotency, failed creation
@@ -140,3 +141,34 @@ switching, rotation and page/source replacement preserve source/revision safety.
 When quality reports no target and the user has supplied no target point, the runtime
 now stops after that quality call and asks for an intended-roof click. It does not
 guess a center or infer an exterior boundary from the candidate facets.
+
+## Final source and quantity safeguards
+
+A later retry must not remove a known perspective warning. Source restrictions now
+bind to the normalized image fingerprint and survive target selection, rotation,
+undo, retries and imports. Legacy current/historical evidence with unresolved source
+identity conservatively withholds physical quantities; explicitly different-image
+evidence is not transferred. New archive entries retain source identity. Physical
+boundary-comparison metrics are withheld with physical quantities; pixel diagnostics
+remain available. Fresh-context and no-transient-value-flash regressions pass.
+
+Explicitly unresolved facets have blank physical areas; unresolved, unspecified and
+obstruction lines have blank physical roof lengths. Known facet rows remain, but a
+total with an unresolved facet stays unknown. A required-note boundary confirmation
+records user-provided evidence, date and fingerprint; pitch or classification edits
+alone do not resolve geometry. Later geometry edits invalidate confirmation. The PDF
+retains confirmation notes and clearly labels invalidated records. No such action
+certifies perspective, scale, pitch or field accuracy.
+
+The final accepted container replay used image
+`sha256:420832adbcffe0aaa1590456cf43fc432351d3bec2e0e22d0296a224188f8728`,
+source manifest `5bf1915e2f0fd8d13e6ef2b2f62b6d2a9f03031656de2d3686622575cb7d0eb5`.
+It again passed human repair, current measurement and an 83,654-byte three-page PDF
+with 960.00 / 1,073.31 ft², plus authenticated local multipage PDF import, with CDNs
+blocked and no additional inference. Proof is final-accepted-container-proof.json
+under the ignored deployment test directory.
+
+The shared Cloud Browser visibly opened the private workspace at
+`http://127.0.0.1:3000/` and its image-review dialog. That route exists only inside
+the managed environment; it is not an externally published URL. Vercel team access
+still returned HTTP 403. Production was not released.

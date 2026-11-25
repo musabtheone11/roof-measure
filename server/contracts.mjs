@@ -62,6 +62,7 @@ export function validateInput(input) {
   if (input.consentExternal!==true) fail('Explicit authorization for external image processing is required');
   const m=input.imageMetadata;
   if (!object(m)||!Number.isInteger(m.width)||!Number.isInteger(m.height)||m.width<16||m.height<16||m.width>8192||m.height>8192) fail('Source image dimensions are invalid');
+  if(m.sourceRestrictions!==undefined){keys(m.sourceRestrictions,['perspective','reasons']);if(typeof m.sourceRestrictions.perspective!=='boolean'||!Array.isArray(m.sourceRestrictions.reasons)||m.sourceRestrictions.reasons.length>100||!m.sourceRestrictions.reasons.every(x=>string(x,2000)))fail('Invalid source restrictions');}
   if(m.purpose!==undefined&&!['photo','roof-sketch','document'].includes(m.purpose))fail('Invalid source purpose');
   if(m.sourcePage!==undefined&&(!Number.isInteger(m.sourcePage)||m.sourcePage<1||m.sourcePage>1000))fail('Invalid source page index');
   if(m.rotation!==undefined&&![0,90,180,270].includes(m.rotation))fail('Rotation describes an already-rendered quarter turn');
