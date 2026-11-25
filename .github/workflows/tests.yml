@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [main, fix/autotrace-accuracy]
+  pull_request:
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bench/package-lock.json
+      - name: Install benchmark dependencies
+        run: npm ci
+        working-directory: bench
+      - name: Syntax check of the app scripts
+        run: for f in *.js; do node -e "new Function(require('fs').readFileSync('$f','utf8'))" || exit 1; done
+      - name: Measurement model (roofmodel.js)
+        run: node modeltest.mjs
+        working-directory: bench
+      - name: Plain roofs trace exactly
+        run: node smoke.mjs
+        working-directory: bench
+      - name: Roof colours and tree canopy
+        run: node colourtest.mjs
+        working-directory: bench
+      - name: Regression fixtures (defects found on the regional benchmark)
+        run: node fixtures.mjs
+        working-directory: bench

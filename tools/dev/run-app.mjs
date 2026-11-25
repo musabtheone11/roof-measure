@@ -30,7 +30,7 @@ try {
   await page.waitForTimeout(6000);
   await page.locator('#map').screenshot({ path: path.join(out, 'map-clean.png') });
   await step('get roof data', async () => { await page.click('#btnSolar'); await page.waitForFunction(() => state.solar || /class="err"/.test(document.querySelector('#solarOut').innerHTML), null, { timeout: 30000 }); });
-  await step('auto-trace', async () => { await page.click('#btnAuto'); await page.waitForFunction(() => state.facets.length > 0 && !document.querySelector('#btnAuto').disabled, null, { timeout: 180000 }); });
+  await step('auto-trace', async () => { await page.click('#btnAuto'); await page.waitForFunction(() => (state.facets.length > 0 || (state.trace && state.trace.failed)) && !document.querySelector('#btnAuto').disabled, null, { timeout: 180000 }); const why = await page.evaluate(() => state.facets.length ? null : state.trace.failed); if (why) console.log('     no roof traced: ' + why); });
   await page.evaluate(() => { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); ((state.trace && state.trace.hiddenZones) || []).forEach((z) => z.path.forEach((p) => b.extend(p))); map.fitBounds(b, 60); });
   await page.waitForTimeout(5000);
   await page.locator('#map').screenshot({ path: path.join(out, 'map-overlay.png') });

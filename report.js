@@ -546,7 +546,7 @@ async function downloadPDF(what = "report") {
   if (!document.querySelector('link[href*="fonts.googleapis.com/css2?family=Inter"]')) document.head.insertAdjacentHTML('beforeend', FONT_LINK);
   // the diagram, length, area, pitch and summary pages need a traced roof: trace it automatically when there is none yet
   const ensureTrace = async () => {
-    if (state.facets.length) return true;
+    if (state.facets.length || (state.trace && state.trace.failed)) return true;
     if (!state.solar && state.location && typeof runSolar === 'function') await runSolar();
     if (!state.solar) { if (!state.edges.length) { toast('Nothing to report yet. Enter an address and get roof data first.', true); return false; } return true; }
     if (typeof autoTraceRoof !== 'function') return true;
@@ -564,7 +564,7 @@ async function downloadPDF(what = "report") {
   const pdfBtn = (id, what) => { if ($(id)) $(id).onclick = run(async () => {
     try {
       if (!gateOk()) return;                                   // the estimate is priced from the same totals, so it asks too
-      if (what !== 'estimate' && typeof rpDownload === 'function' && state.facets.length) await rpDownload(what); else await downloadPDF(what);
+      if (what !== 'estimate' && typeof rpDownload === 'function' && (state.facets.length || (state.trace && state.trace.failed))) await rpDownload(what); else await downloadPDF(what);
     } catch (e) { console.error(e); toast('PDF failed: ' + e.message, true); } }, id); };
   pdfBtn('#btnReportPDF', 'report');
   pdfBtn('#btnReportBoth', 'both');

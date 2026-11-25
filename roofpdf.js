@@ -25,7 +25,7 @@ const rpCap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // ------------------------------------------------------------------ model: everything the pages draw, computed once
 function rpModel() {
-  const t = computeTotals(); const rv = typeof reviewState === 'function' ? reviewState() : null; const tr = state.trace;
+  const t = computeTotals(); const rv = typeof reviewState === 'function' ? reviewState() : null; const tr = state.trace; const status = rv && typeof reviewReportStatus === 'function' ? reviewReportStatus(rv) : null;
   const paths = [...t.facetsAll.map((x) => x.m.path), ...t.edges.map((x) => x.m.path), ...(t.hiddenZones || []).map((z) => z.path)];
   const fr = RM.frame(paths); if (!fr) return null;
   const ft = (v) => { const p = fr.xy(v); return [p[0] * RM.FT, p[1] * RM.FT]; };
@@ -56,7 +56,7 @@ function rpModel() {
   const structs = t.structures.map((g) => { const b = g.byType, zs = zones.filter((z) => z.group === g.index);
     return { index: g.index, name: g.index === 1 ? 'House' : 'Detached structure ' + (g.index - 1), facets: g.facetCount, confirmed: g.confirmedSloped, estimate: g.inferredSloped, unresolved: g.areaByStatus.unresolved, zones: zs.length, zoneUpper: zs.reduce((a, z) => a + z.upperSqft, 0), eave: b.eave.true, rake: b.rake.true, ridge: b.ridge.true, hip: b.hip.true, valley: b.valley.true, flashing: b.step.true + b.wall.true, obstruction: b.obstruction ? b.obstruction.true : 0, pitch: g.predominant }; });
   const alt = tr && tr.alt && tr.alt.used ? tr.alt : null;
-  return { t, rv, tr, fr, ft, facets, lines, obLines, zones, area, structs, alt, views: (state.altViews || []).slice(), evidence: (state.evidence || []).slice(), box: [x0, y0, x1, y1], ob, imagery, address: state.address || '', job: state.jobName || '', auto: !!tr, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) };
+  return { status, t, rv, tr, fr, ft, facets, lines, obLines, zones, area, structs, alt, views: (state.altViews || []).slice(), evidence: (state.evidence || []).slice(), box: [x0, y0, x1, y1], ob, imagery, address: state.address || '', job: state.jobName || '', auto: !!tr, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) };
 }
 
 // ------------------------------------------------------------------ aerial photo, north up, with a known lat/lng -> pixel mapping
@@ -340,6 +340,13 @@ function rpStructTable(doc, M, x, y, W, o = {}) {
 }
 function rpPageSummary(doc, M, A) {
   const t = M.t, R = M.area, x = RP.M, W = RP.W - 2 * RP.M; let y = 80;
+  // the report's status first: COMPLETE, or REVIEW REQUIRED with what is missing (details further down this page)
+  if (M.status) { const ok = M.status.status === 'COMPLETE', col = ok ? [40, 120, 70] : [190, 30, 20];
+    const first = M.status.reasons.slice(0, 2).map((q) => q.text).join(' ') + (M.status.reasons.length > 2 ? ` (+${M.status.reasons.length - 2} more below)` : '');
+    rpColor(doc, 'fill', ok ? [228, 243, 233] : [252, 228, 224]); doc.rect(x, y - 6, W, 24, 'F'); rpColor(doc, 'fill', col); doc.rect(x, y - 6, 4, 24, 'F');
+    rpText(doc, M.status.status, x + 10, y + 4, { size: 10.5, bold: true, color: col });
+    rpText(doc, ok ? 'Every reported value was measured on georeferenced imagery; nothing that affects the totals is open.' : first, x + 120, y + 1.5, { size: 7, color: RP.INK, maxWidth: W - 126 });
+    y += 26; }
   // left: aerial with the roofline. right: the area, confirmed first
   const ph = { x, y, w: 322, h: 262 }; rpDrawAerial(doc, M, A, ph, { thin: true, zones: true });
   rpText(doc, A ? A.credit : '', x, y + ph.h + 10, { size: 6.5, color: RP.MUTE });
@@ -383,6 +390,8 @@ function rpPageSummary(doc, M, A) {
   for (const F of M.facets) if (F.status === 'inferred') items.push([F.id, 'Inferred', rpNum(F.f.inferredSqft > 0 && F.f.inferredSqft < F.m.sloped ? F.f.inferredSqft : F.m.sloped) + ' of ' + rpNum(F.m.sloped) + ' sq ft' + (F.range ? ` (facet ${rpNum(F.range[0])}-${rpNum(F.range[1])})` : ''), F.f.evidence || F.f.note || 'Marked inferred']);
   const infL = M.lines.filter((L) => L.status === 'inferred'); if (infL.length) items.push([infL.length + ' line' + (infL.length > 1 ? 's' : ''), 'Inferred', rpNum(infL.reduce((a, L) => a + L.m.trueFt, 0), 1) + ' ft', 'Lines under tree canopy (dashed); positions follow the continued roof planes. Keys: ' + infL.map((L) => L.n).slice(0, 14).join(', ') + (infL.length > 14 ? ', ...' : '') + '.']);
   if (M.rv && M.rv.errors) items.push({ cells: ['Geometry', 'Check', M.rv.errors + ' error' + (M.rv.errors > 1 ? 's' : ''), M.rv.audit.issues.filter((i) => i.severity === 'error').slice(0, 3).map((i) => i.message).join('; ')], color: [150, 25, 15] });
+  const LBL = { 'no-roof': 'No roof', verify: 'To verify', reconcile: 'Totals', 'imagery-quality': 'Imagery', selection: 'Building', 'imagery-change': 'Imagery date', outline: 'Outline', mask: 'Outline' };
+  if (M.status) for (const q of M.status.reasons) if (LBL[q.code]) items.push({ cells: [LBL[q.code], 'Review required', '-', q.text + ' Needs: ' + q.needs], color: [150, 25, 15] });
   if (M.rv && M.rv.audit.unclassifiedFt > 2) items.push(['Outline', 'Not classified', rpNum(M.rv.audit.unclassifiedFt) + ' ft', 'Facet outline without a line type. It is not counted in any category and is not a confirmed zero.']);
   if (!items.length) { rpText(doc, M.auto ? 'None found. No tree canopy was detected over the traced roof and nothing was estimated. Roof hidden by something the trace did not recognise as canopy would not be listed here: compare the roofline with the photo.' : 'None. No facet or line is marked inferred or unresolved.', x, y, { size: 8.2, maxWidth: W }); y += 24; }
   else { /* rows with evidence text wrap to four or five lines */ const room = Math.max(2, Math.min(8, Math.floor((RP.H - 64 - y) / 42))); y = rpTable(doc, x, y - 4, [{ t: 'Item', w: 84, wrap: true }, { t: 'Status', w: 66 }, { t: 'Quantity', w: 118 }, { t: 'Evidence / what is missing', w: W - 268, wrap: true }], items.slice(0, room), { size: 7 }) + 4;
@@ -557,7 +566,7 @@ function rpPage3D(doc, M) {
 // ------------------------------------------------------------------ build
 async function rpBuild(opts = {}) {
   if (!window.jspdf) throw new Error('PDF library did not load; check the internet connection');
-  const M = rpModel(); if (!M || !M.facets.length) throw new Error('Trace the roof first');
+  const M = rpModel(); if (!M || !M.facets.length) { if (state.trace && state.trace.failed) return rpBuildNoRoof(); throw new Error('Trace the roof first'); }
   const A = await rpAerial(M);
   const pages = [['Summary', (d) => rpPageSummary(d, M, A)], ['Aerial view with roofline', (d) => rpPageAerial(d, M, A)], ['Roof plan', (d) => rpPagePlan(d, M, 'plan')],
     ['Length diagram', (d) => rpPagePlan(d, M, 'lengths', 'Each line shows its key number and true length (feet and inches). Short or crowded lines show the key number only; every key is listed with its length in the line schedule.')],
@@ -593,6 +602,25 @@ async function rpBuild(opts = {}) {
   for (let i = 1; i <= total; i++) { doc.setPage(i); rpFrame(doc, M, titles[i - 1], i, total + (opts.extraPages || 0)); }
   doc.setProperties({ title: 'Roof Measurement Report - ' + M.address, author: typeof company !== 'undefined' ? company.name : 'Diversity Roofing', subject: 'Roof measurements', creator: 'Roof Measure' });
   return { doc, M, pages: total };
+}
+// No roof could be measured from the imagery (for example the building is newer than the image): a one-page REVIEW
+// REQUIRED report that says what was looked at, what was found and what evidence would allow a measurement. No number
+// is given for anything that was not measured.
+function rpBuildNoRoof() {
+  const doc = rpDoc(); const tr = state.trace || {}; const st = typeof reviewReportStatus === 'function' ? reviewReportStatus() : { status: 'REVIEW REQUIRED', reasons: [{ text: tr.failed, needs: 'Imagery that shows the building.' }] };
+  const M = { address: state.address || '', date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) };
+  const x = RP.M, W = RP.W - 2 * RP.M; let y = 80;
+  rpColor(doc, 'fill', [252, 228, 224]); doc.rect(x, y - 6, W, 24, 'F'); rpColor(doc, 'fill', [190, 30, 20]); doc.rect(x, y - 6, 4, 24, 'F');
+  rpText(doc, 'REVIEW REQUIRED', x + 10, y + 4, { size: 10.5, bold: true, color: [190, 30, 20] }); rpText(doc, 'No roof area or length could be measured from the imagery. Nothing in this report is a measurement.', x + 120, y + 4, { size: 7.5, maxWidth: W - 126 }); y += 34;
+  y = rpSection(doc, 'What was found', x, y, W);
+  for (const q of st.reasons) { y = rpText(doc, q.text, x, y, { size: 8.5, maxWidth: W }) + 4; y = rpText(doc, 'Needed: ' + q.needs, x + 10, y, { size: 8, color: RP.MUTE, maxWidth: W - 10 }) + 10; }
+  y = rpSection(doc, 'Property & imagery', x, y + 4, W);
+  const kv = (k, v) => { rpText(doc, k, x, y, { size: 8, color: RP.MUTE }); y = rpText(doc, v, x + 90, y, { size: 8, maxWidth: W - 90 }) + 3; };
+  kv('Property', M.address || '-'); kv('Image date', tr.imageryDate || 'not reported by the source'); kv('Image source', 'Google Solar API (aerial photo, building mask and 10 cm height model)' + (tr.imageryQuality ? ' - ' + String(tr.imageryQuality).toLowerCase() + ' quality' : ''));
+  kv('Building record', tr.buildingName || '-');
+  rpFrame(doc, M, 'Summary', 1, 1);
+  doc.setProperties({ title: 'Roof Measurement Report - ' + M.address + ' (review required)', author: typeof company !== 'undefined' ? company.name : 'Diversity Roofing', subject: 'Roof measurements', creator: 'Roof Measure' });
+  return { doc, M, pages: 1 };
 }
 // the "Download PDF report" button: vector report; "both" appends the insurance estimate pages (rendered as before)
 async function rpDownload(what = 'report') {

@@ -187,6 +187,28 @@ var RM = (function () {
       for (let i = 0; i + 1 < xs.length; i += 2) out.push([[xs[i] * ca - y * sa, xs[i] * sa + y * ca], [xs[i + 1] * ca - y * sa, xs[i + 1] * sa + y * ca]]); }
     return out;
   }
-  return { hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
+  // The report's status from plain facts about the sketch and the imagery (shared by the app, the PDF and the tests).
+  // COMPLETE only when every reported value was measured on georeferenced imagery and nothing affecting the totals is
+  // open; otherwise REVIEW REQUIRED, each reason with the evidence that would settle it. f = {
+  //   failed, facets, hiddenZones: [{id}], hiddenUpperSqft, inferredSqft, unresolved: [{label, missing}], verify: [{label}],
+  //   geometryErrors, reconcileOk, imageryQuality, layerChoice: {used, recordDate, recordQuality, layersDate, buildingInLayers}, extra: [{code,text,needs}] }
+  function reportStatus(f) {
+    const why = []; const add = (code, text, needs) => why.push({ code, text, needs }); const n0 = (v) => Math.round(v).toLocaleString('en-US');
+    const fd = (d) => (!d ? '?' : typeof d === 'string' ? d : `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`);
+    if (!f.facets) add('no-roof', f.failed || 'No roof was traced.', 'Imagery that shows the building, or a hand trace / site measurement.');
+    const z = f.hiddenZones || []; if (z.length) add('hidden', `Roof under tree canopy that no image shows: ${z.map((q) => q.id).join(', ')} (0 to ${n0(f.hiddenUpperSqft || 0)} sq ft, in no total).`, 'An image without the canopy (another date, an oblique or drone photo) or a site measurement of those sections.');
+    if ((f.inferredSqft || 0) > 0.5) add('estimate', `${n0(f.inferredSqft)} sq ft is an estimate placed from evidence under canopy, not a measurement.`, 'Confirm on imagery of another date or on site.');
+    const u = f.unresolved || []; if (u.length) add('unresolved', `${u.length} item${u.length > 1 ? 's' : ''} marked unresolved: ${u.slice(0, 4).map((q) => q.label).join(', ')}.`, u[0].missing || 'Resolve before ordering.');
+    const v = f.verify || []; if (v.length) add('verify', `${v.length} item${v.length > 1 ? 's' : ''} marked for verification: ${v.slice(0, 4).map((q) => q.label).join(', ')}.`, 'Check on site or on a view that can measure them.');
+    if (f.geometryErrors) add('geometry', `${f.geometryErrors} geometry error${f.geometryErrors > 1 ? 's' : ''} that can change the totals.`, 'Fix in "5. Review before export".');
+    if (f.facets && f.reconcileOk === false) add('reconcile', 'A subtotal does not reconcile with the sketch.', 'Fix the sketch before ordering.');
+    const q = String(f.imageryQuality || '').toUpperCase(); if (f.facets && q && q !== 'HIGH') add('imagery-quality', `The trace image is ${q.toLowerCase()} quality: edges are good to about 1.3 ft, not 0.3 ft.`, 'High-quality or newer imagery, or a site check of the eaves and rakes.');
+    const lc = f.layerChoice;
+    if (lc && lc.used === 'record') add('imagery-change', `The best image (${fd(lc.layersDate)}) shows no building here; the roof was traced from Google's newer ${String(lc.recordQuality).toLowerCase()} quality image (${fd(lc.recordDate)}).`, 'Confirm the outline on newer imagery or on site.');
+    else if (lc && lc.buildingInLayers) add('imagery-change', `Google's building record comes from a newer image (${fd(lc.recordDate)}) than the image traced (${fd(lc.layersDate)}): the roof may have changed since the traced image.`, 'Compare the dated imagery (Review roof from other angles) or check on site.');
+    for (const x of f.extra || []) why.push(x);
+    return { status: why.length ? 'REVIEW REQUIRED' : 'COMPLETE', reasons: why };
+  }
+  return { reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = RM;

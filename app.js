@@ -919,7 +919,7 @@ function wire() {
   $('#address').addEventListener('keydown', (e) => { if (e.key === 'Enter') goToAddress(); });
   $('#btnSolar').onclick = runSolar;
   $('#btnScan').onclick = scanStructures;
-  $('#btnAuto').onclick = async () => { const b = $('#btnAuto'); b.disabled = true; b.textContent = 'Tracing...'; try { await autoTraceRoof(); } catch (e) { toast('Auto-trace failed: ' + e.message, true); } b.disabled = false; b.textContent = 'Auto-trace roof'; };
+  $('#btnAuto').onclick = async () => { const b = $('#btnAuto'); b.disabled = true; b.textContent = 'Tracing...'; try { await autoTraceRoof(); } catch (e) { toast('Auto-trace failed: ' + e.message, true); if (!state.facets.length && state.solar) { const d = state.solar.imageryDate; state.trace = { engine: 'v2.1', failed: e.message, buildingName: state.solar.name, imageryQuality: state.solar.imageryQuality || null, imageryDate: d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : null }; recompute(); } } b.disabled = false; b.textContent = 'Auto-trace roof'; };
   $('#chkSolar').onchange = (e) => { state.showSolar = e.target.checked; drawSolar(); recompute(); };
   $('#chkFacetEdges').onchange = (e) => { state.showFacetEdges = e.target.checked; recompute(); };
   $('#waste').onchange = (e) => { state.waste = +e.target.value; recompute(); };

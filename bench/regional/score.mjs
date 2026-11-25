@@ -29,9 +29,14 @@ function engineNumbers(tot, mainOnly) {
   return { sloped: F.reduce((s, f) => s + f.sloped, 0), facets: F.length, predominant: pred != null ? +pred : null, byType: by, statusArea: F.reduce((o, f) => { o[f.status || 'measured'] = (o[f.status || 'measured'] || 0) + f.sloped; return o; }, {}) };
 }
 // the report's status as a reader sees it: did the app ask for review before export, or state the roof is not fully measured?
-function reportStatus(dir, tot, runRec) {
-  if (!runRec || runRec.exit !== 0 || (runRec.failedSteps || []).length || !fs.existsSync(path.join(dir, 'report.pdf'))) return { status: 'failed', why: runRec ? (runRec.failedSteps || []).join('; ') || 'exit ' + runRec.exit : 'not run' };
+function reportStatus(dir, tot, runRec, isAlt) {
+  // the automatic report fails only on the steps up to its PDF; a failure in the reviewer's second look fails the reviewed output only
+  const core = (runRec && runRec.failedSteps || []).filter((f) => /^(load app|address|get roof data|auto-trace|download PDF report\.pdf)/.test(f));
+  const altFail = (runRec && runRec.failedSteps || []).filter((f) => !core.includes(f));
+  const want = isAlt ? 'report-alt.pdf' : 'report.pdf';
+  if (!runRec || core.length || !fs.existsSync(path.join(dir, want)) || (isAlt && altFail.length && !fs.existsSync(path.join(dir, 'totals-alt.json')))) return { status: 'failed', why: runRec ? [...core, ...(isAlt ? altFail : [])].join('; ') || 'no ' + want : 'not run' };
   const log = fs.existsSync(path.join(dir, 'run.log')) ? fs.readFileSync(path.join(dir, 'run.log'), 'utf8') : '';
+  const a0 = tot && tot.audit; if (a0 && a0.reportStatus) return { status: a0.reportStatus.status === 'COMPLETE' ? 'complete' : 'review-required', why: a0.reportStatus.reasons.map((q) => q.text).join('; '), stated: true };
   const gate = /export gate asked: (.*)/.exec(log); const a = tot && tot.audit; const reasons = [];
   if (gate) reasons.push('export gate: ' + gate[1].slice(0, 160));
   if (a) { if ((a.hiddenZones || []).length) reasons.push(a.hiddenZones.length + ' hidden zone(s)'); if (a.inferredSloped > 0.5) reasons.push(Math.round(a.inferredSloped) + ' sq ft estimated'); if ((a.unresolved || []).length) reasons.push(a.unresolved.length + ' unresolved item(s)'); if ((a.verify || []).length) reasons.push(a.verify.length + ' marked for verification'); if ((a.issues || []).length) reasons.push(a.issues.length + ' geometry issue(s)'); }
@@ -43,7 +48,7 @@ for (const p of M.properties) {
   const out = { slug: p.slug, id: p.id, group: p.group, town: p.town, roofType: p.roofType, obstruction: p.obstruction, features: p.features || [], conditions: COND[p.slug] || null, reference: 'none', run: null, versions: {} };
   for (const v2 of ['', '-alt']) {
     const tot = rd(path.join(dir, `totals${v2}.json`)); if (!tot && v2) continue;
-    const st = reportStatus(dir, tot, runRec); if (v2 && st.status !== 'failed') { /* reviewed output: same rules */ }
+    const st = reportStatus(dir, tot, runRec, !!v2); if (v2 && st.status !== 'failed') { /* reviewed output: same rules */ }
     const mr = T && T.measurementReport, ad = T && T.adjusterReport;
     const refStructs = mr && Array.isArray(mr.structures) ? mr.structures.length : 0; const mainOnly = !(refStructs > 1);
     const E = engineNumbers(tot, mainOnly), Eall = engineNumbers(tot, false);
