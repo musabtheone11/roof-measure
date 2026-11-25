@@ -82,7 +82,8 @@ try {
   // the report's own layout check: exact scale, every key accounted for (plan, detail sheet or named as unplaced)
   const L = dlRec.layout; if (L && L.scaleCheck) {
     console.log(`     layout: ${L.scale} (${L.ptPerFt.toFixed(3)} pt/ft${L.rotationDeg ? ', turned ' + Math.round(Math.abs(L.rotationDeg)) + ' deg' : ''}); keys ${L.keys.total}: ${L.keys.overview} on the plan, ${L.keys.detail} on detail sheets, ${L.keys.unplaced.length} named unplaced; ${L.dims} dimension lines; scale bar ${L.bar.inches} in; scale check ${L.scaleCheck.ok ? 'exact' : 'FAILED'} (${L.scaleCheck.segmentFt.toFixed(2)} ft -> ${L.scaleCheck.segmentPt.toFixed(2)} pt, expected ${L.scaleCheck.expectedPt.toFixed(2)})`);
-    if (!L.scaleCheck.ok || L.keys.unaccounted.length) throw new Error('layout self-check failed: ' + JSON.stringify({ scale: L.scaleCheck, unaccounted: L.keys.unaccounted }));
+    const ov = L.textOverlaps || { count: 0, first: [] }; console.log(`     text overlaps: ${ov.count}` + (ov.count ? ' ' + JSON.stringify(ov.first) : ''));
+    if (!L.scaleCheck.ok || L.keys.unaccounted.length || ov.count) throw new Error('layout self-check failed: ' + JSON.stringify({ scale: L.scaleCheck, unaccounted: L.keys.unaccounted, textOverlaps: ov.first }));
   }
   // --alt: the reviewer's second look, through the same controls a person uses (Review roof from other angles)
   if (process.argv.includes('--alt')) {
