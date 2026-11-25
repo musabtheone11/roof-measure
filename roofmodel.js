@@ -63,7 +63,12 @@ var RM = (function () {
     let factor, basis, pitch = null;
     if (e.pitch != null) { pitch = e.pitch; factor = typeFactor(e.type, pitch); basis = 'pitch (set by hand)'; }
     else if (e.factor != null && isFinite(e.factor) && (!e.autoType || e.autoType === e.type)) { factor = e.factor; basis = 'plane'; }
-    else { pitch = adjoiningPitch != null ? adjoiningPitch : defaultPitch; factor = typeFactor(e.type, pitch); basis = adjoiningPitch != null ? 'pitch (adjoining facet)' : 'pitch (default: assumed)'; }
+    else {
+      pitch = adjoiningPitch != null ? adjoiningPitch : defaultPitch;
+      // a sloped line with no pitch on it, no adjoining facet and no job default is an error, never a NaN that prints as a length
+      if ((SLOPE_KIND[e.type] || 'flat') !== 'flat' && !(pitch != null && isFinite(pitch))) throw new Error(`lineMeasure: a ${e.type} line needs a pitch (none on the line, no adjoining facet, no default pitch)`);
+      factor = typeFactor(e.type, pitch); basis = adjoiningPitch != null ? 'pitch (adjoining facet)' : 'pitch (default: assumed)';
+    }
     return { planFt: plan, factor, trueFt: plan * factor, basis, pitch, lengthKind: factor < 1.002 ? 'horizontal' : (basis === 'plane' ? 'sloped (measured plane)' : 'sloped (' + basis + ')') };
   }
 

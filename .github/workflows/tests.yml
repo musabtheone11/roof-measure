@@ -42,3 +42,6 @@ jobs:
       - name: Mixed-pitch, multi-level takeoff (hand-derived expectations)
         run: node takeofftest.mjs
         working-directory: bench
+      - name: Roof summary totals (two-story, two-layer and average pitch net of cut-outs)
+        run: node summarytest.mjs
+        working-directory: bench

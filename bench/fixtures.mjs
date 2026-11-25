@@ -194,4 +194,23 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
   if (offsetKept && !steps.some((e) => Math.abs(Math.abs(e.deg) - 90) < 6)) console.log('note D13: the offset connector is not drawn square (known limitation: the connector is its own boundary chain)');
   out(nearNotch.length === 0, 'D13 the 0.2 m notch is straightened (no vertex within 0.7 m of it)', `${nearNotch.length} vertices near the notch`);
 }
+
+// D15 (brief: "preserve real diagonals"; external geometry review: convex corner cuts are squared without height evidence below a
+// documented length): a house with a genuine 45-degree corner cut of 3 m legs (4.2 m chamfer) and a small cut of 1.2 m legs (1.7 m).
+// The long cut must survive as a diagonal edge; the short one is squared off (documented tolerance AT2.fpChamferFreeM = 2.2 m).
+{
+  const th = 0.2, c = Math.cos(th), sn = Math.sin(th);
+  const house = W({ L: 18, W: 10 });
+  const sc = render([house], rng(62), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false }); const { w, h, px } = sc;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const E = sc.E0 + (x + 0.5) * px, N = sc.N0 - (y + 0.5) * px; const lx = E * c + N * sn, ly = -E * sn + N * c; if (lx + ly > 11 || -lx - ly > 12.8) { const i = y * w + x; sc.mask[i] = 0; sc.dsm[i] = 0; } }
+  const P = property(sc); const r = await runApp(P, ROOT, { quiet: true, hook: altHook(P) });
+  const polys = r.facets.filter((f) => !f.excluded).map((f) => [f.path.map(toM)]); const outline = pc.union(...polys); const ring = outline.map((poly) => poly[0]).sort((a, b) => b.length - a.length)[0] || [];
+  const loc = (p) => [p[0] * c + p[1] * sn, -p[0] * sn + p[1] * c];
+  const edges = ring.map((p, i) => { const q = ring[(i + 1) % ring.length]; const a = loc(p), b = loc(q); const dx = b[0] - a[0], dy = b[1] - a[1]; let ang = Math.atan2(dy, dx); while (ang <= -Math.PI / 2) ang += Math.PI; while (ang > Math.PI / 2) ang -= Math.PI; return { len: Math.hypot(dx, dy), deg: ang * 180 / Math.PI, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; });
+  const diag45 = (e) => Math.abs(Math.abs(e.deg) - 45) < 8;
+  const longCut = edges.filter((e) => diag45(e) && e.mid[0] + e.mid[1] > 9.5).reduce((s, e) => s + e.len, 0);
+  const shortCut = edges.filter((e) => diag45(e) && -e.mid[0] - e.mid[1] > 11.5).reduce((s, e) => s + e.len, 0);
+  out(longCut > 3.4 && longCut < 5.0, 'D15 a genuine 4.2 m corner cut (3 m legs) survives as a diagonal edge', `${longCut.toFixed(2)} m of 45-degree edge at that corner; all edges: ${edges.map((e) => e.len.toFixed(1) + '@' + e.deg.toFixed(0)).join(' ')}`);
+  out(shortCut < 0.5, 'D15 a 1.7 m corner cut (1.2 m legs) is squared off: documented tolerance fpChamferFreeM = 2.2 m (a real corner cut shorter than that is drawn square)', `${shortCut.toFixed(2)} m of 45-degree edge at that corner`);
+}
 process.exit(fail ? 1 : 0);
