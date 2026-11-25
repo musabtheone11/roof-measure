@@ -35,6 +35,7 @@ const state = {
   key: localStorage.getItem('rm.key') || '',
   address: '',
   location: null,          // {lat,lng}
+  locationEpoch: 0, addressRequestEpoch: 0, solarRequestEpoch: 0,
   defaultPitch: 6,
   waste: 10,
   facets: [],              // {id, name, pitch, shape(Polygon), twoStory, twoLayer, excluded}
@@ -180,21 +181,23 @@ function summarize(fs, cs, es) {
   // an inferred or unresolved facet is mostly seen: only its hidden part counts as such when the trace measured that part
   for (const x of fs) { const st = RM.statusOf(x.f); if (st !== 'measured' && x.f.inferredSqft > 0 && x.f.inferredSqft < x.m.sloped && !x.f.edited) { areaByStatus[st] += x.f.inferredSqft; areaByStatus.measured += x.m.sloped - x.f.inferredSqft; } else areaByStatus[st] += x.m.sloped; }
   // a cut-out (skylight, chimney) comes off the facet it sits on: that facet's pitch group and its status
-  const hostOf = (c) => { const p = centroid(c.m.path); const inside = (r) => { let k = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) if ((r[i].lat > p.lat) !== (r[j].lat > p.lat) && p.lng < (r[j].lng - r[i].lng) * (p.lat - r[i].lat) / (r[j].lat - r[i].lat) + r[i].lng) k = !k; return k; }; return fs.find((x) => inside(x.m.path)) || null; };
-  const hosts = cs.map(hostOf);
-  cs.forEach((c, i) => { const hst = hosts[i]; const st = hst ? RM.statusOf(hst.f) : 'measured'; const k = hst && st !== 'measured' && hst.f.inferredSqft > 0 && hst.f.inferredSqft < hst.m.sloped && !hst.f.edited ? 'measured' : st; areaByStatus[k] -= c.m.sloped; });
+  const netAreas = RM.netFacetAreas([...fs, ...cs].map(x => ({ ...x.f, path: x.m.path, plan: x.m.plan, sloped: x.m.sloped })));
+  const hosts = cs.map((c, i) => { const row = netAreas.rows[fs.length + i]; return row.hostIndex == null ? null : fs[row.hostIndex]; });
+  const acceptedCuts = cs.filter((c, i) => hosts[i]);
+  cs.forEach((c, i) => { const hst = hosts[i]; if (!hst) return; const st = RM.statusOf(hst.f); const k = st !== 'measured' && hst.f.inferredSqft > 0 && hst.f.inferredSqft < hst.m.sloped && !hst.f.edited ? 'measured' : st; areaByStatus[k] -= c.m.sloped; });
+  const netAreaIssues = netAreas.unmatchedCutouts.map(x => ({ id: x.row.modelId || x.row.name || 'cutout', reason: x.reason }));
   const lineByStatus = { measured: 0, inferred: 0, unresolved: 0 };
   for (const { e, m } of es) if (!EDGE_TYPES[e.type].notRoof) lineByStatus[RM.statusOf(e)] += m.trueFt;
-  const unresolvedItems = fs.filter((x) => RM.statusOf(x.f) === 'unresolved').length + es.filter((x) => RM.statusOf(x.e) === 'unresolved').length;
+  const unresolvedItems = fs.filter((x) => RM.statusOf(x.f) === 'unresolved').length + es.filter((x) => RM.statusOf(x.e) === 'unresolved').length + netAreaIssues.length;
   // confirmed = seen and measured; estimate = evidence-backed inferred part; neither includes hidden zones
   const roofLineFt = ROOF_LINE_TYPES.reduce((a, k) => a + byType[k].true, 0);
   const sum = (arr, k) => arr.reduce((s, x) => s + x.m[k], 0);
-  const plan = sum(fs, 'plan') - sum(cs, 'plan');
-  const sloped = sum(fs, 'sloped') - sum(cs, 'sloped');
+  const plan = sum(fs, 'plan') - sum(acceptedCuts, 'plan');
+  const sloped = sum(fs, 'sloped') - sum(acceptedCuts, 'sloped');
   const pitchGroups = {};
   for (const x of fs) pitchGroups[x.f.pitch] = (pitchGroups[x.f.pitch] || 0) + x.m.sloped;
   { const big = () => Object.keys(pitchGroups).sort((a, b) => pitchGroups[b] - pitchGroups[a])[0];
-    cs.forEach((c, i) => { const k = hosts[i] ? hosts[i].f.pitch : (pitchGroups[c.f.pitch] != null ? c.f.pitch : big()); if (k != null && pitchGroups[k] != null) pitchGroups[k] -= c.m.sloped; }); }
+    cs.forEach((c, i) => { if (!hosts[i]) return; const k = hosts[i].f.pitch; if (k != null && pitchGroups[k] != null) pitchGroups[k] -= c.m.sloped; }); }
   const pitches = Object.keys(pitchGroups).map(Number).sort((a, b) => a - b);
   let predominant = null, predArea = -1;
   for (const p of pitches) if (pitchGroups[p] > predArea) { predArea = pitchGroups[p]; predominant = p; }
@@ -205,7 +208,7 @@ function summarize(fs, cs, es) {
   // average pitch weighted by the net area of each pitch group (cut-outs already taken off their host's group)
   const groupArea = pitches.reduce((s, p) => s + Math.max(pitchGroups[p], 0), 0);
   const wp = groupArea > 0 ? pitches.reduce((s, p) => s + p * Math.max(pitchGroups[p], 0), 0) / groupArea : state.defaultPitch;
-  return { facets: fs, cutouts: cs, edges: es, plan, sloped, pitched: sloped - flat, flat, twoStory, twoLayer, byType, pitchGroups, pitches, predominant, predArea: Math.max(predArea, 0), facetCount: fs.length, weightedPitch: wp, areaByStatus, lineByStatus, unresolvedItems, complete: unresolvedItems === 0, confirmedSloped: areaByStatus.measured, inferredSloped: areaByStatus.inferred, obstructionFt: byType.obstruction.true, roofLineFt, squares: sloped / 100, squaresWaste: sloped / 100 * (1 + state.waste / 100) };
+  return { facets: fs, cutouts: cs, edges: es, netAreaIssues, plan, sloped, pitched: sloped - flat, flat, twoStory, twoLayer, byType, pitchGroups, pitches, predominant, predArea: Math.max(predArea, 0), facetCount: fs.length, weightedPitch: wp, areaByStatus, lineByStatus, unresolvedItems, complete: unresolvedItems === 0, confirmedSloped: areaByStatus.measured, inferredSloped: areaByStatus.inferred, obstructionFt: byType.obstruction.true, roofLineFt, squares: sloped / 100, squaresWaste: sloped / 100 * (1 + state.waste / 100) };
 }
 // Roofr-style recommended waste. Fitted to Roofr reports: cut edges (hips + valleys + rakes + step flashing) per square.
 // Matches Roofr on every structure checked: 6%, 7%, 10% (flat), 11%, 12% and 33%.
@@ -321,19 +324,46 @@ window.initMap = function initMap() {
 async function goToAddress() {
   const q = $('#address').value.trim();
   if (!q || !map) return;
+  const request = ++state.addressRequestEpoch, epoch = locationGeneration();
   const m = q.match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);
   if (m) { setLocation({ lat: +m[1], lng: +m[3] }, q); return; }
   try {
     const res = await geocoder.geocode({ address: q });
+    if (request !== state.addressRequestEpoch || epoch !== locationGeneration()) return;
     const r = res.results && res.results[0];
     if (!r) throw new Error('No results');
     const loc = { lat: r.geometry.location.lat(), lng: r.geometry.location.lng(), precision: r.geometry.location_type || null, partial: !!r.partial_match };
     setLocation(loc, r.formatted_address);
   } catch (err) {
+    if (request !== state.addressRequestEpoch || epoch !== locationGeneration()) return;
     toast('Address not found: ' + (err.message || err), true);
   }
 }
+function locationGeneration() { return state.locationEpoch || 0; }
+function archiveLocationJob() {
+  if (!state.facets.length && !state.edges.length) return;
+  const job = serialize();
+  // Preserve edits before switching houses; the saved job keeps its original location.
+  state.previousLocationJob = job;
+  try {
+    const jobs = savedProjects();
+    const name = 'Before location change - ' + (state.jobName || state.address || 'Roof') + ' - ' + new Date().toISOString();
+    jobs[name] = job; localStorage.setItem('rm.projects', JSON.stringify(jobs));
+    if (typeof renderSaved === 'function') renderSaved();
+  } catch (_) { /* the in-memory snapshot remains available if browser storage is full */ }
+}
 function setLocation(loc, label) {
+  const moved = state.location && (state.location.lat !== loc.lat || state.location.lng !== loc.lng);
+  if (moved) {
+    archiveLocationJob();
+    state.locationEpoch = locationGeneration() + 1;
+    clearAll();
+    const preview = $('#reportPreview'); if (preview) preview.hidden = true;
+    $('#btnAuto').disabled = true;
+    state.showSolar = true; const solarToggle = $('#chkSolar'); if (solarToggle) solarToggle.checked = true;
+    toast('Location changed. Previous roof edits are preserved; get roof data for this house before tracing.');
+  }
+
   state.location = loc; state.address = label || `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
   $('#address').value = state.address;
   localStorage.setItem('rm.lastLoc', JSON.stringify(loc));
@@ -360,15 +390,20 @@ async function fetchSolar(lat, lng) {
 async function runSolar() {
   if (!state.location) return;
   const out = $('#solarOut');
+  const epoch = locationGeneration(), loc = { ...state.location }, request = ++state.solarRequestEpoch;
+  const current = () => epoch === locationGeneration() && request === state.solarRequestEpoch;
   out.innerHTML = '<span class="muted">Fetching roof model...</span>';
   try {
     const prev = (state.solar && state.solar.name) || (state.trace && state.trace.buildingName) || null;
-    state.solar = await fetchSolar(state.location.lat, state.location.lng);
+    const result = await fetchSolar(loc.lat, loc.lng);
+    if (!current()) return;
+    state.solar = result;
     // another building: what a reviewer approved, confirmed or looked at for the last one does not apply to this one
     if (prev && state.solar && state.solar.name !== prev) { state.altFusion = null; state.acceptedHidden = []; state.altViews = []; state.evidence = []; if (window.rmAltView) { if (window.rmAltView.state.isOpen) window.rmAltView.close(); window.rmAltView.reset(); } }
     drawSolar(); renderSolar(); recompute();
     $('#btnAuto').disabled = false;
   } catch (err) {
+    if (!current()) return;
     out.innerHTML = `<span class="err">${esc(err.message || err)}</span>`;
   }
 }
@@ -381,16 +416,19 @@ function offsetLatLng(lat, lng, meters, bearingDeg) {
 async function scanStructures() {
   if (!state.location) return;
   const btn = $('#btnScan'); btn.disabled = true; btn.textContent = 'Scanning...';
+  const epoch = locationGeneration();
   const { lat, lng } = state.location;
   const mainName = state.solar && state.solar.name;
   const pts = [];
   for (const r of [12, 24, 36]) for (let a = 0; a < 360; a += 45) pts.push(offsetLatLng(lat, lng, r, a));
   const found = {};
   for (let i = 0; i < pts.length; i += 6) {
+    if (epoch !== locationGeneration()) return;
     await Promise.all(pts.slice(i, i + 6).map(async (p) => {
       try { const j = await fetchSolar(p.lat, p.lng); if (j.name && j.name !== mainName) found[j.name] = j; } catch (_) { /* no building near this probe */ }
     }));
   }
+  if (epoch !== locationGeneration()) return;
   state.otherSolar = Object.values(found);
   btn.disabled = false; btn.textContent = 'Scan for other structures';
   drawSolar(); renderSolar(); recompute();
@@ -688,6 +726,7 @@ function baseLabels() {
   return items;
 }
 function recompute() {
+  if (state.deferRecompute) return;
   if (!labels) return;
   labels.setItems(baseLabels());
   renderLists(); renderSummary(); renderSelection();
@@ -835,6 +874,8 @@ function serialize() {
 }
 function restore(d) {
   if (!map) { toast('Load the map first (save your API key), then import.', true); return; }
+  state.deferRecompute = (state.deferRecompute || 0) + 1;
+  try {
   clearAll();
   state.jobName = d.jobName || ''; $('#jobName').value = state.jobName;
   if (d.location) setLocation(d.location, d.address);
@@ -848,6 +889,7 @@ function restore(d) {
   drawSolar(); renderSolar(); $('#btnAuto').disabled = !state.solar;
   recompute();
   if (state.facets.length) { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 80); }
+  } finally { state.deferRecompute--; recompute(); }
 }
 function savedProjects() { return JSON.parse(localStorage.getItem('rm.projects') || '{}'); }
 function renderSaved() {

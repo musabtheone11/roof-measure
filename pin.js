@@ -8,7 +8,7 @@
  * lookups need) and fills the address box from Google's reverse geocoder. Uses globals from app.js: map, geocoder,
  * state, setLocation, setTool, toast, $.
  */
-const pin = { marker: null, picking: false, busy: false };
+const pin = { marker: null, picking: false, busy: false, requestId: 0 };
 
 function pinSetMarker(loc) {
   if (!(typeof map !== "undefined" && map) || !loc) return;
@@ -31,19 +31,21 @@ async function reverseAddress(ll) {
 }
 
 async function lockHouse(latLng, opts = {}) {
-  if (!latLng || pin.busy) return;
+  if (!latLng) return;
+  const request = ++pin.requestId; const epoch = typeof locationGeneration === 'function' ? locationGeneration() : 0;
   pin.busy = true; pinStopPicking();
   const loc = { lat: typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat, lng: typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng };
   toast('Locking in this house...');
   try {
     const addr = await reverseAddress(loc);
+    if (request !== pin.requestId || (typeof locationGeneration === 'function' && epoch !== locationGeneration())) return;
     const label = addr || `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
     const view = opts.keepView && (typeof map !== "undefined" && map) ? { c: map.getCenter(), z: map.getZoom() } : null;
     setLocation(loc, label);                      // also resets Solar / permits / commercial for the new house
     if (view) { map.setCenter(view.c); map.setZoom(view.z); }
     pinSetMarker(loc);
     toast(addr ? `Locked: ${addr}` : 'Locked at this point (no street address found here)');
-  } finally { pin.busy = false; }
+  } finally { if (request === pin.requestId) pin.busy = false; }
 }
 
 // ------------------------------------------------------------------ pick mode

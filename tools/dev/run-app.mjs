@@ -2,6 +2,7 @@
 //   Key=<google key> node tools/dev/run-app.mjs --address "123 Main St, City, ST" --out .devcache/runs/name [--root <app dir>] [--port 8090] [--alt] [--estimate [--xm "deck=membrane,lossType="] [--est-name estimate]]
 //   Key=<google key> node tools/dev/run-app.mjs --job <saved job .json> --out .devcache/runs/name      (a saved / exported job, loaded the way Import JSON loads it)
 //   --offline --job <illustrative.json>: test-only shape adapter; no Maps, imagery or API validation
+//   --materials enables the optional material sheet before Preview/Print/Download, preserving parity.
 //   --strict fails the run on a layout self-check finding (acceptance runs); without it the finding is a WARN line (benchmark runs)
 //   --alt also runs the reviewer's second look (3D views, dated imagery, configuration check, carry) and writes report-alt.pdf
 // Every run exercises the report flow a person uses: Preview report, Print report, Download report. The three must carry
@@ -74,6 +75,10 @@ try {
   });
   const fit = async () => { await page.evaluate(() => { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); ((state.trace && state.trace.hiddenZones) || []).forEach((z) => z.path.forEach((p) => b.extend(p))); map.fitBounds(b, 60); }); await page.waitForTimeout(4000); };
   let data = await snapshot('');
+  if (process.argv.includes('--materials')) {
+    await page.evaluate(() => { const c = document.getElementById('chkPdfMaterials'); for (let p = c; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; if (p.hidden) p.hidden = false; } });
+    await page.check('#chkPdfMaterials');
+  }
   // the report flow a person uses: Preview, Print and Download must all carry the same bytes
   // buttons live inside collapsed panels: open the panels first (what a person does by hand)
   const clickBtn = async (id) => { await page.evaluate((id) => { const b = document.getElementById(id); for (let p = b; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; if (p.hidden) p.hidden = false; } b.scrollIntoView({ block: 'center' }); }, id); await page.click('#' + id, { timeout: 15000 }); };
@@ -161,7 +166,7 @@ try {
     console.log(`     estimate: ${est.items.length} lines, line items ${est.lineItemTotal.toFixed(2)}, tax ${est.tax.toFixed(2)}, total ${est.rcv.toFixed(2)}`);
   }
   const t = data.totals; console.log(`${address || path.basename(arg('job', ''))}: ${Math.round(t.slopedSqft)} sqft, ${t.facetCount} facets, predominant ${t.predominant}/12, ${t.structures.length} structure(s)`);
-} catch (e) { code = 1; try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
+} catch (e) { code = 1; console.error('FAIL run: ' + scrub(e.message)); try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
 fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
 if (dialogs.length) console.log('export gate asked: ' + dialogs.join(' | ').replace(/\n+/g, ' '));
 await browser.close(); srv.close(); process.exit(code);

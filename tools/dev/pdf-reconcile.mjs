@@ -36,6 +36,19 @@ export function parseReportText(text) {
     for (const m of l.matchAll(/\b([EKRHVSWTPU]\d+)\s{2,}([A-Za-z][A-Za-z ]*?)\s{2,}(\d+)\s{2,}([\d,]+\.\d{2})(?: est\.)?\s{2,}([\d,]+\.\d{2})/g)) { const t = Object.entries(TYPES).find(([lab]) => m[2].toLowerCase().endsWith(lab.toLowerCase())); for (let q = 0; q < +m[3]; q++) out.edges.push({ key: m[1], type: t ? t[1] : null, ft: num(m[4]), est: / est\./.test(m[0]) }); }
     for (const m of l.matchAll(/\b(D\d+)\s{2,}(.+?)\s{2,}(\d+' \d+")\s{2,}(Visible|Inferred|Unresolved|Partial)/g)) out.refs.push({ key: m[1], ftIn: ftIn(m[3]), state: m[4] });
   }
+  const summary = text.slice(text.indexOf('Measurement summary'));
+  if (text.includes('Measurement summary')) {
+    out.information = { lines: {} };
+    const area = summary.match(/(?:Net sloped area|Subtotal incl\. estimates|Supported sloped subtotal)\s{2,}([\d,]+\.\d{2})/);
+    const parts = summary.match(/Measured\/modelled subtotal\s{2,}([\d,]+\.\d{2})\s{2,}Inferred estimate area\s{2,}([\d,]+\.\d{2})/);
+    if (area) out.information.area = num(area[1]);
+    if (parts) { out.information.measured = num(parts[1]); out.information.inferred = num(parts[2]); }
+    const linear = summary.split('Linear measurement totals')[1]?.split('Pitch distribution')[0] || '';
+    for (const m of linear.matchAll(/\b(Eave|Valley|Hip|Ridge|Rake|Wall flashing|Step flashing|Transition|Parapet wall|Unspecified)\s{2,}(\d+' \d+")/g)) {
+      const type = m[1] === 'Parapet wall' ? 'parapet' : TYPES[m[1]];
+      out.information.lines[type] = ftIn(m[2]);
+    }
+  }
   return out;
 }
 // ---- the model: the app's own numbers (totals.json from the runner) plus the saved job (source document values)
@@ -60,6 +73,19 @@ export function reconcile(P, M) {
   else if (P.band.confirmed != null) { chk('supported subtotal squares', eq2(P.band.squares, r2(M.measured / 100)), r2(M.measured / 100), P.band.squares); chk('confirmed area (measured planes only)', eq2(P.band.confirmed, r2(M.measured)), r2(M.measured), P.band.confirmed); if (P.band.confirmedPlusEstimate != null) chk('confirmed + estimate = net', eq2(P.band.confirmedPlusEstimate, r2(M.net)), r2(M.net), P.band.confirmedPlusEstimate); }
   else { chk('net sloped area', eq2(P.band.net, r2(M.net)), r2(M.net), P.band.net); chk('net squares', eq2(P.band.squares, r2(M.net / 100)), r2(M.net / 100), P.band.squares); }
   if (M.kind !== 'source') {
+    if (P.information) {
+      const eligible = M.facets.filter(f => f.status !== 'unresolved' && !f.unsupported);
+      const expectedArea = eligible.length === M.facets.length ? M.net : eligible.reduce((a, f) => a + f.sloped, 0);
+      chk('summary eligible sloped area', eq2(P.information.area, r2(expectedArea)), r2(expectedArea), P.information.area);
+      chk('summary measured subtotal', eq2(P.information.measured, r2(M.measured)), r2(M.measured), P.information.measured);
+      chk('summary inferred subtotal', eq2(P.information.inferred, r2(M.estimated)), r2(M.estimated), P.information.inferred);
+      for (const type of ['eave', 'valley', 'hip', 'ridge', 'rake', 'wall', 'step', 'transition', 'parapet', 'unspecified']) {
+        const edges = M.edges.filter(e => e.type === type);
+        if (!edges.length && M.status === 'REVIEW REQUIRED') chk('summary absent ' + type + ' scope stays blank', P.information.lines[type] == null, 'blank', P.information.lines[type]);
+        else if (edges.some(e => e.status === 'unresolved')) chk('summary unresolved ' + type + ' stays blank', P.information.lines[type] == null, 'blank', P.information.lines[type]);
+        else { const expected = edges.reduce((a, e) => a + e.trueFt, 0); chk('summary ' + type + ' feet/inches', P.information.lines[type] != null && Math.abs(P.information.lines[type] - expected) <= 1 / 24 + 1e-6, expected, P.information.lines[type]); }
+      }
+    }
     const tot = P.takeoff.find((r) => r.name === 'Total') || (P.takeoff.length === 1 ? P.takeoff[0] : null);
     if (P.buildings?.length) { for (const S of M.structures) { const fs = M.facets.filter(f => f.structure === S.index); const measured = fs.filter(f=>f.status==='measured').reduce((a,f)=>a+f.sloped,0); const inferred = fs.filter(f=>f.status==='inferred').reduce((a,f)=>a+f.sloped,0); chk(`building ${S.index} supported subtotals`, P.buildings.some(b=>eq2(b.verified,r2(measured))&&eq2(b.inferred,r2(inferred))), [r2(measured),r2(inferred)], P.buildings); } }
     else if (tot) for (const t of ['eave', 'rake', 'hip', 'ridge']) chk(`takeoff ${t} ft`, eq2(tot[t], r2(M.byType[t] ? M.byType[t].trueFt : 0)), r2(M.byType[t] ? M.byType[t].trueFt : 0), tot[t]); else chk('takeoff row found', false, 'a Total row or one building row', P.takeoff.length + ' rows');

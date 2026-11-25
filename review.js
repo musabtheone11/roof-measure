@@ -236,7 +236,7 @@ function reviewReportStatus(r) {
   const evidenceAudit = illustrative ? null : RM.auditEvidence(job, reviewEvidenceContext(job));
   const result = RM.reportStatus({ evidenceAudit, unclassifiedFt: r.audit.unclassifiedFt, failed: tr.failed, facets: state.facets.length, hiddenZones: r.unresolved.filter((u) => u.kind === 'zone'), hiddenUpperSqft: t.hiddenUpperKnown === false ? null : t.hiddenUpperSloped,
     inferredSqft: t.inferredSloped, unresolved: r.unresolved.filter((u) => u.kind !== 'zone'), verify: r.verify, geometryErrors: r.errors, reconcileOk: r.reconcile.ok,
-    imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, newerRecords: tr.newerRecords, extra: typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : [] });
+    imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, newerRecords: tr.newerRecords, extra: [...(typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : []), ...(t.netAreaIssues || []).map(x => ({ code: 'cutout-scope', id: x.id, text: x.id + ': ' + x.reason, needs: 'Locate the cutout within one supported facet at the correct roof level and structure, and verify its quantity.' }))] });
   if (illustrative && result.status === 'COMPLETE') result.status = 'ILLUSTRATIVE';
   return result;
 }
@@ -244,5 +244,6 @@ function reviewReportStatus(r) {
 function reviewGate() {
   if (!state.facets.length && !(state.trace && state.trace.failed)) return true;
   const st = reviewReportStatus(); if (st.status === 'COMPLETE' || st.status === 'ILLUSTRATIVE') return true;
-  return window.__rmNoConfirm ? true : confirm('REVIEW REQUIRED before you export:\n\n- ' + st.reasons.map((q) => q.text).join('\n- ') + '\n\nThe report states this on its first page with the evidence each item needs. Open "5. Review before export" (and "Review roof from other angles") to resolve them, or press OK to export a REVIEW REQUIRED report.');
+  const reasons = st.reasons.length > 12 ? [...new Map(st.reasons.map(q => [q.code, q.text])).values()].slice(0, 8).concat(st.reasons.length + ' review findings are keyed to the plan in the report evidence notes.') : st.reasons.map(q => q.text);
+  return window.__rmNoConfirm ? true : confirm('REVIEW REQUIRED before you export:\n\n- ' + reasons.join('\n- ') + '\n\nThe report states this on its first page with the evidence each item needs. Open "5. Review before export" (and "Review roof from other angles") to resolve them, or press OK to export a REVIEW REQUIRED report.');
 }

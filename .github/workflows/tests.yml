@@ -55,4 +55,13 @@ jobs:
           node geometrytest.mjs
           node planfirsttest.mjs
           node stale-report-test.mjs
+          node net-area-test.mjs
+          node report-information-test.mjs
+          node location-lifecycle-test.mjs
+          node registrationtest.mjs
+          node registration-stress.mjs
+          node trace-race-test.mjs
+          node spatial-test.mjs
+          node evidence-notes-test.mjs
+          node batch-update-test.mjs
         working-directory: bench

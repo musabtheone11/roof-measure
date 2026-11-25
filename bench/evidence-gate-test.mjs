@@ -38,4 +38,7 @@ assert(inferredAudit.issues.some(x=>x.code==='inferred-quantity'));
 assert(!inferredAudit.issues.some(x=>x.code==='quantity-evidence'));
 assert.equal(RM.reportStatus({facets:1,evidenceAudit:inferredAudit}).status,'REVIEW REQUIRED');
 assert.equal(RM.reportStatus({facets:1,evidenceAudit:inferredAudit}).reasons.find(x=>x.code==='inferred-quantity').id, 'F1', 'status retains stable evidence IDs for schedule cross-references');
-console.log('Evidence gate: 20 checks passed');
+const cutJob = structuredClone(job); cutJob.facets.push({id:'C1',excluded:true,path:job.facets[0].path,pitch:6});
+assert(RM.auditEvidence(cutJob,ctx).issues.some(x=>x.id==='C1'&&x.code==='quantity-evidence'),'cutouts require their own evidence');
+assert.notEqual(RM.evidenceRevision(job.facets[0],'area',job), RM.evidenceRevision(cutJob.facets[0],'area',cutJob),'changing cutouts invalidates host net area evidence');
+console.log('Evidence gate: 22 checks passed');

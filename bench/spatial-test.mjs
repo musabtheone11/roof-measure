@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {spatialScore} from './spatial.mjs';
+const square=[[0,0],[10,0],[10,10],[0,10],[0,0]];
+const gt=[{poly:[square]}];
+assert.equal(spatialScore(gt,[{poly:square}]).outlineIoU,1);
+const wrong=[[20,0],[30,0],[30,10],[20,10]];
+const score=spatialScore(gt,[{poly:wrong}]);
+assert.equal(score.outlineIoU,0,'equal area wrong location must fail');
+assert(score.missingPlanSqft>1000 && score.extraPlanSqft>1000);
+const partial=[[5,0],[15,0],[15,10],[5,10]];
+assert(Math.abs(spatialScore(gt,[{poly:partial}]).outlineIoU-1/3)<1e-12);
+console.log('Spatial scorer: exact, equal-area wrong outline, and shifted overlap pass');

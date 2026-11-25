@@ -58,4 +58,26 @@ ILLUSTRATIVE SUBTOTAL           NET SQUARES
  Main house                688.71                 219.13            6 / 12
 `);
 ok('review parser keeps supported subtotal separate from inferred building area', partial.band.confirmed === 1026.02 && partial.buildings[0].verified === 688.71 && partial.buildings[0].inferred === 219.13, partial);
+const summaryBlock = `\fMeasurement summary
+Net sloped area                 1,714.73
+Measured/modelled subtotal      1,714.73       Inferred estimate area      0.00
+Linear measurement totals
+Eave       184' 0"       Valley         0' 0"
+Hip         84' 0"       Ridge         36' 0"
+Rake        33' 9"       Wall flashing  0' 0"
+Step flashing  0' 0"     Transition     0' 0"
+Parapet wall   0' 0"     Unspecified    0' 0"
+Pitch distribution
+`;
+const summaryGood = reconcile(parseReportText(text + summaryBlock), modelFromRun(totalsOf(job), job));
+ok('measurement summary independently reconciles area and all linear categories', summaryGood.ok, summaryGood.checks.filter(c => !c.ok));
+const summaryBad = reconcile(parseReportText(text + summaryBlock.replace('1,714.73', '1,700.00')), modelFromRun(totalsOf(job), job));
+ok('a corrupted summary total is caught even when page one and schedules match', summaryBad.checks.some(c => !c.ok && c.name === 'summary eligible sloped area'), summaryBad.checks.filter(c => !c.ok));
+const reviewModel = { ...modelFromRun(totalsOf(job), job), status: 'REVIEW REQUIRED' };
+const reviewText = text.replace('ILLUSTRATIVE', 'REVIEW REQUIRED');
+const blankAbsent = summaryBlock.replace(/(Valley|Wall flashing|Step flashing|Transition|Parapet wall|Unspecified)(\s+)0' 0"/g, '$1$2');
+const missingScope = reconcile(parseReportText(reviewText + blankAbsent), reviewModel);
+ok('review summary leaves absent edge categories blank instead of asserting zero', missingScope.ok, missingScope.checks.filter(c => !c.ok));
+const inventedZeros = reconcile(parseReportText(reviewText + summaryBlock), reviewModel);
+ok('review summary rejects zeros for edge categories outside the measured scope', inventedZeros.checks.some(c => !c.ok && c.name === 'summary absent valley scope stays blank'), inventedZeros.checks.filter(c => !c.ok));
 process.exit(fail ? 1 : 0);

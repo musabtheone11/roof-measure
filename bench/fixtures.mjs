@@ -145,7 +145,14 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
 // D10 (brief: "detached structure"): a shed 20 m from the house is its own structure with its own subtotal, never merged into the house
 {
   const house = W({ L: 18, W: 10 }), shed = W({ cx: 0, cy: 20, th: 0.2, L: 7, W: 5, kind: 'gable', s: 0.4, sEnd: 0.4, eaveZ: 2.6 });
-  const sc = render([house, shed], rng(41), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false }); const P = property(sc); const r = await runApp(P, ROOT, { quiet: true, hook: altHook(P) });
+  const sc = render([house, shed], rng(41), { clutter: false, trees: 0, noise: 0.02, blur: 1, hard: false });
+  // Real buildingInsights describes the main building, not an enclosing box around
+  // two detached roofs. Keep both in the rasters but give the selector that evidence.
+  const mainBox = Uint8Array.from(sc.mask, (v, i) => v && sc.N0 - Math.floor(i / sc.w) * sc.px < 10 ? 1 : 0);
+  const ambiguous = property(sc); let ambiguousRejected = false;
+  try { await runApp(ambiguous, ROOT, { quiet: true, hook: altHook(ambiguous) }); } catch (e) { ambiguousRejected = /does not support|ambiguous/.test(e.message); }
+  out(ambiguousRejected, 'D10 a synthetic source box centred between detached roofs is refused without target evidence');
+  const P = property(sc, { boxFrom: mainBox }); const r = await runApp(P, ROOT, { quiet: true, hook: altHook(P) });
   const byS = {}; for (const f of r.facets) { const k = f.structure || 1; byS[k] = (byS[k] || 0) + sloped(f); }
   const keys = Object.keys(byS).map(Number).sort(); const tHouse = 180 * Math.sqrt(1.25), tShed = 35 * Math.sqrt(1 + 0.16);
   out(keys.length === 2, 'D10 two structures traced', `structures ${JSON.stringify(byS)}`);

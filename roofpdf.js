@@ -38,6 +38,10 @@ function rpModel() {
   const fr = RM.frame(paths); if (!fr) return null;
   const ft = (v) => { const p = fr.xy(v); return [p[0] * RM.FT, p[1] * RM.FT]; };
   const facets = t.facetsAll.map((x) => ({ id: x.f.name, f: x.f, m: x.m, xy: x.m.path.map(ft), status: RM.statusOf(x.f), structure: structureOf(t, x.f.id) || 1 }));
+  // Cutouts are hosted once in the shared geometry kernel; every PDF area view uses
+  // these net facet values rather than subtracting an unrelated roof-wide allowance.
+  const netAreas = RM.netFacetAreas(facets.map((F) => ({ ...F.f, path: F.m.path, plan: F.m.plan, sloped: F.m.sloped, status: F.status })));
+  facets.forEach((F, i) => { F.m = { ...F.m, plan: netAreas.rows[i].netPlan, sloped: netAreas.rows[i].netSloped }; });
   // roof lines carry key numbers and are counted; an obstruction boundary (visible roof stops at tree canopy) is neither
   const lines = t.edges.filter((x) => !EDGE_TYPES[x.e.type].notRoof).map((x, i) => ({ key: String(i + 1).padStart(2, '0'), n: i + 1, e: x.e, m: x.m, xy: x.m.path.map(ft), status: RM.statusOf(x.e), type: x.e.type, ref: x.e.ref || null, displayedFt: x.e.displayedFt == null ? null : +x.e.displayedFt }));
   const obLines = t.edges.filter((x) => EDGE_TYPES[x.e.type].notRoof).map((x, i) => ({ id: 'OB' + (i + 1), e: x.e, m: x.m, xy: x.m.path.map(ft) }));
@@ -84,7 +88,11 @@ function rpModel() {
     const unsupported = (item, fallback, quantity) => global || audit.issues.some((q) => q.code !== 'inferred-quantity' && q.id === (item.modelId || item.name || fallback) && (q.quantity === quantity || q.quantity === 'geometry'));
     for (const F of facets) {
       F.pitchUnsupported = unsupported(F.f, F.id, 'pitch');
-      F.areaUnsupported = F.pitchUnsupported || unsupported(F.f, F.id, 'area');
+      const facetIndex = facets.indexOf(F);
+      const unsupportedCutout = netAreas.rows[facetIndex].cutoutIndices.some(index => {
+        const cut = facets[index]; return ['geometry', 'pitch', 'area'].some(quantity => unsupported(cut.f, cut.id, quantity));
+      });
+      F.areaUnsupported = F.pitchUnsupported || unsupported(F.f, F.id, 'area') || unsupportedCutout;
       if (F.areaUnsupported) F.status = 'unresolved';
       else if (audit.quantities.some(q => q.id === (F.f.modelId || F.id) && q.status === 'inferred')) F.status = 'inferred';
     }
@@ -103,7 +111,20 @@ function rpModel() {
     }
     M.evidenceAudit = audit;
   }
-  M.keys = rpKeys(M); return M;
+  area.confirmed = 0; area.estimate = 0; area.unresolvedTraced = 0;
+  for (const F of facets.filter((F) => !F.f.excluded)) {
+    const amount = F.m.sloped;
+    if (F.status === 'measured') area.confirmed += amount;
+    else if (F.status === 'inferred') { const part = F.f.inferredSqft > 0 && !F.f.edited ? Math.min(amount, F.f.inferredSqft) : amount; area.estimate += part; area.confirmed += amount - part; }
+    else area.unresolvedTraced += amount;
+  }
+  for (const B of structs) {
+    const fs = facets.filter((F) => F.structure === B.index && !F.f.excluded);
+    B.confirmed = fs.filter((F) => F.status === 'measured').reduce((sum, F) => sum + F.m.sloped, 0);
+    B.estimate = fs.filter((F) => F.status === 'inferred').reduce((sum, F) => sum + F.m.sloped, 0);
+  }
+  if (!netAreas.ok) { for (const F of facets.filter((F) => !F.f.excluded)) { F.status = 'unresolved'; F.areaUnsupported = true; } area.confirmed = 0; area.estimate = 0; area.fullKnown = false; for (const B of structs) { B.confirmed = 0; B.estimate = 0; } M.review = true; M.statusLabel = 'REVIEW REQUIRED'; M.status.status = 'REVIEW REQUIRED'; M.status.reasons.push({ code: 'cutout-scope', text: 'Cutout geometry could not be assigned to one supported roof facet.', needs: 'Resolve excluded polygons and their host facet before using net measurements.' }); }
+  M.selectedWaste = +state.waste; M.keys = rpKeys(M); return M;
 }
 // a descriptive sheet title from the geometry (the handoff examples carry their own)
 function rpTitle(M) {
@@ -590,17 +611,31 @@ function rpSheetOverview(doc, M, hero, n, total) {
   rpFootnote(doc, y, basis[0], basis[1]);
 }
 // what still needs a field check: review zones, unresolved items, verification marks, and the status reasons
+function rpCompactIds(values) {
+  const ids = [...new Set(values.map(String))]; const groups = new Map(); const plain = [];
+  for (const id of ids) { const m = /^(.*?)(\d+)$/.exec(id); if (!m) { plain.push(id); continue; } const prefix = m[1]; if (!groups.has(prefix)) groups.set(prefix, []); groups.get(prefix).push({ id, n: +m[2] }); }
+  const out = [...plain];
+  for (const list of groups.values()) { list.sort((a, b) => a.n - b.n); for (let i = 0; i < list.length;) { let j = i; while (j + 1 < list.length && list[j + 1].n === list[j].n + 1) j++; out.push(j - i > 1 ? list[i].id + '-' + list[j].id : list.slice(i, j + 1).map(x => x.id).join(', ')); i = j + 1; } }
+  return out.join(', ');
+}
 function rpReviewItems(M) {
   const out = []; const seen = new Set();
   for (const Z of M.zones) { out.push({ key: Z.id, title: Z.label || `Hidden section${Z.facetName ? ' beside ' + Z.facetName : ''}`, action: Z.action || (Z.upperSqft != null ? `Up to ${rpNum(Z.upperSqft)} ft² of roof may continue under the canopy. Measure the edge on site or on an image without the canopy.` : 'Locate the edges and confirm the extent on site.') }); seen.add(Z.id); }
   const byNote = new Map(); if (!(M.src && M.src.zones && M.src.zones.length)) for (const F of M.facets) if (F.status === 'unresolved' && !F.f.excluded) { const k = F.f.missing || F.f.note || ''; if (!byNote.has(k)) byNote.set(k, []); byNote.get(k).push(F); }
   for (const [k, Fs] of byNote) out.push({ key: Fs.map((F) => F.id).join(', '), title: Fs[0].f.label || 'Roof plane not supported', action: k || 'Measure the footprint and pitch. Confirm inclusion in scope.' });
   if (M.rv) for (const v of M.rv.verify) out.push({ key: v.label.split(' ')[0], title: 'Marked for verification', action: v.note || `Seen on ${v.source}${v.date ? ' (' + v.date + ')' : ''}; confirm the measurement on site.` });
+  const groups = new Map();
   for (const r of M.status.reasons) if (!['hidden', 'unresolved', 'verify', 'estimate'].includes(r.code)) {
-    const line = M.lines.find(L => L.e.modelId === r.id);
-    const facet = M.facets.find(F => F.f.modelId === r.id);
-    const key = line ? `${r.id} / plan ${line.key}` : facet ? `${r.id} / facet ${facet.id}` : (r.id || '•');
-    out.push({ key, title: r.text, action: r.needs });
+    if (r.id && r.id !== 'roof' && r.quantity) { const key = r.code + ':' + r.quantity; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(r); continue; }
+    out.push({ key: r.id || '•', title: r.text, action: r.needs });
+  }
+  for (const rows of groups.values()) {
+    const first = rows[0]; const ids = rows.map(r => r.id);
+    const planKeys = M.lines.filter(L => ids.includes(L.e.modelId)).map(L => L.key);
+    const facetKeys = M.facets.filter(F => ids.includes(F.f.modelId)).map(F => F.id);
+    const lookup = [planKeys.length ? 'plan keys ' + rpCompactIds(planKeys) : '', facetKeys.length ? 'facets ' + rpCompactIds(facetKeys) : ''].filter(Boolean).join('; ');
+    const labels = { 'quantity-evidence': 'Missing or unresolved evidence', 'stale-evidence': 'Evidence needs rechecking after an edit', 'inferred-quantity': 'Evidence-backed estimate', 'unsupported-quantity': 'Unsupported quantity', 'non-roof-boundary': 'Canopy or shadow is not a roof boundary' };
+    out.push({ key: first.quantity, title: (labels[first.code] || first.code) + ': ' + rpCompactIds(ids), action: 'Affected ' + (lookup || 'model items') + '. ' + first.needs.replace(/and the affected .* quantity\./, 'and each affected quantity.') });
   }
   return out;
 }
@@ -823,13 +858,22 @@ function rpSheetEvidence(doc, M, n, total) {
   return 1 + added;
 }
 // material order quantities (optional sheet): the catalog of report.js at the job's waste
+// Coordinate projection can leave an exact nominal boundary a few millionths of
+// a foot above its integer. Only purchase rounding absorbs 0.0001 source unit
+// (ft or ft²); measured net values remain unrounded. Larger overruns still round up.
+function rpPurchaseUnits(base, coverage = 1, waste = 0) {
+  return Math.max(0, Math.ceil((base * (1 + waste / 100) - 0.0001) / coverage));
+}
 function rpSheetMaterials(doc, M, n, total) {
   rpHeader(doc, M, 'Materials', 'Material order quantities', `${M.line1}  /  Estimates from the net measurements`, n, total);
-  const t = M.t, bt = t.byType; let y = 150; const bases = { pitched: t.pitched, starter: bt.eave.true + bt.rake.true, iw: bt.eave.true + bt.valley.true + bt.wall.true + bt.step.true, cap: bt.hip.true + bt.ridge.true };
+  const t = M.t, bt = t.byType; let y = 150; const bases = { pitched: t.pitched, starter: bt.eave.true + bt.rake.true, otherDrip: bt.eave.true + bt.rake.true, otherValley: bt.valley.true, iw: bt.eave.true + bt.valley.true + bt.wall.true + bt.step.true, cap: bt.hip.true + bt.ridge.true };
   const cols = typeof matColumns === 'function' ? matColumns(t.recWaste) : [0, 10, 12, 15]; const rows = [];
-  for (const g of MATERIAL_CATALOG) { const base = bases[g.base]; rows.push([g.group, '', ...cols.map((w) => (g.baseUnit === 'sqft' ? rpNum(Math.ceil(base * (1 + w / 100))) + ' sqft' : Math.ceil(base * (1 + w / 100)) + ' ft'))]); for (const [name, cov] of g.items) rows.push(['   ' + name, g.unit, ...cols.map((w) => String(Math.ceil(base * (1 + w / 100) / cov - 1e-9)))]); }
+  for (const g of MATERIAL_CATALOG) { const base = bases[g.base]; rows.push([g.group, '', ...cols.map((w) => (g.baseUnit === 'sqft' ? rpNum(rpPurchaseUnits(base, 1, w)) + ' sqft' : rpPurchaseUnits(base, 1, w) + ' ft'))]); for (const [name, cov] of g.items) rows.push(['   ' + name, g.unit, ...cols.map((w) => String(rpPurchaseUnits(base, cov, w)))]); }
+  rows.push(['Other materials', '', ...cols.map(() => '')]);
+  rows.push(['   Drip edge / nominal 10 ft stick', 'sticks', ...cols.map((w) => String(rpPurchaseUnits(bases.otherDrip, 10, w)))]);
+  rows.push(['   Valley metal / nominal 8 ft piece', 'pieces', ...cols.map((w) => String(rpPurchaseUnits(bases.otherValley, 8, w)))]);
   y = rpTableD(doc, RP.L, y, [230, 50, ...cols.map(() => (548 - 280) / cols.length)], ['Product', 'Unit', ...cols.map((w) => `Waste ${w}%`)], rows, { rowh: 13.5, size: 8, headsz: 7.8, num: cols.map((_, i) => i + 2) }) + 10;
-  rpText(doc, `Order quantities are estimates from the net measurements plus the waste shown; they are not measurements. Based on the pitched area (flat area excluded). Suggested waste for this roof: ${t.recWaste}%.`, RP.L, y, { size: 8.4, color: GR(0.3), maxWidth: 548 });
+  rpText(doc, `Nominal coverage; confirm manufacturer coverage, laps and installation requirements before ordering. Order quantities are estimates from the net measurements plus the waste shown; they are not measurements. Based on the pitched area (flat area excluded). Suggested waste for this roof: ${t.recWaste}%.`, RP.L, y, { size: 8.4, color: GR(0.3), maxWidth: 548 });
 }
 
 // Plan-first report: keep the roof drawing dominant and all schedules on following sheets.
@@ -879,6 +923,69 @@ function rpSheetMeasurementSchedules(doc, M, S, spill, n, total) {
   rpText(doc, 'Imagery: ' + M.imagery.source + ' / ' + M.imagery.label + '. ' + (M.review ? 'Order quantities withheld pending review.' : 'Waste and purchasing allowances are separate from these net measurements.'), RP.L, 712, { size: 8, maxWidth: 548 });
 }
 
+// Information categories mirror common measurement reports; the drawing/layout stays ours.
+// Pure projection from the canonical snapshot, with incomplete quantities kept separate.
+function rpInformation(M) {
+  const facets = M.facets.filter((F) => !F.f.excluded);
+  const usable = facets.filter((F) => F.status !== 'unresolved' && !F.areaUnsupported && !F.f.areaUnsupported && !F.f.pitchUnknown);
+  const complete = usable.length === facets.length && !M.zones.length;
+  const groups = new Map();
+  let measured = 0, inferred = 0, net = 0, projected = 0, twoStory = 0, twoLayer = 0, unspecifiedProjected = 0;
+  for (const F of facets) {
+    if (F.f.pitchUnknown || F.pitchUnsupported) unspecifiedProjected += F.m.plan;
+    if (!usable.includes(F)) continue;
+    const pitch = F.m.basis === 'fitted' ? F.m.slope12 : F.f.pitch;
+    if (F.status === 'inferred') inferred += F.m.sloped; else measured += F.m.sloped;
+    net += F.m.sloped; projected += F.m.plan;
+    if (F.f.twoStory) twoStory += F.m.sloped;
+    if (F.f.twoLayer) twoLayer += F.m.sloped;
+    if (Number.isFinite(pitch)) groups.set(pitch, (groups.get(pitch) || 0) + F.m.sloped);
+  }
+  const pitches = [...groups].sort((a, b) => a[0] - b[0]);
+  const dominant = pitches.slice().sort((a, b) => b[1] - a[1])[0] || [null, null];
+  const types = ['eave', 'valley', 'hip', 'ridge', 'rake', 'wall', 'step', 'transition', 'parapet', 'unspecified'];
+  const lines = Object.fromEntries(types.map((type) => { const ls = M.lines.filter((L) => L.type === type); return [type, { value: ls.some((L) => L.status === 'unresolved') || (!ls.length && (M.review || !complete)) ? null : ls.reduce((a, L) => a + L.m.trueFt, 0), inferred: ls.some((L) => L.status === 'inferred') }]; }));
+  const combine = (a, b) => ({ value: lines[a].value == null || lines[b].value == null ? null : lines[a].value + lines[b].value, inferred: lines[a].inferred || lines[b].inferred });
+  const directions = facets.map((F) => {
+    const supported = F.status !== 'unresolved' && !F.f.pitchUnknown && !F.pitchUnsupported && !F.areaUnsupported;
+    const p = F.f.plane; const a = Number.isFinite(F.f.azimuth) ? F.f.azimuth : p && Math.hypot(p[0], p[1]) >= 0.03 ? Math.atan2(-p[0], -p[1]) * 180 / Math.PI : null;
+    const flat = F.f.pitch === 0 || p && Math.hypot(p[0], p[1]) < 0.03;
+    const azimuth = supported && !flat && a != null ? (a % 360 + 360) % 360 : null;
+    return { id: F.id, pitch: F.pitchUnsupported || F.f.pitchUnknown ? null : F.m.basis === 'fitted' ? F.m.slope12 : F.f.pitch, azimuth, facing: azimuth == null ? (supported && flat ? 'Flat / no direction' : '') : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(azimuth / 45) % 8] };
+  });
+  const chosen = Number.isFinite(M.selectedWaste) ? M.selectedWaste : 10;
+  const recommended = Number.isFinite(M.t.recWaste) ? M.t.recWaste : null;
+  const waste = [...new Set([0, 10, 12, 15, 17, 20, chosen, recommended].filter((x) => x != null))].sort((a, b) => a - b).map((percent) => ({ percent, selected: percent === chosen, recommended: percent === recommended, area: M.review || !complete ? null : net * (1 + percent / 100), squares: M.review || !complete ? null : net * (1 + percent / 100) / 100 }));
+  return { complete, measured: usable.length ? measured : null, inferred: usable.length ? inferred : null, estimated: usable.some((F) => F.status === 'inferred'), directions, net: usable.length ? net : null, projected: usable.length ? projected : null, flat: usable.length ? groups.get(0) || 0 : null, pitched: usable.length ? net - (groups.get(0) || 0) : null, facetCount: facets.length, supportedFacetCount: usable.length, predominant: dominant[0], predominantArea: dominant[1], unspecifiedProjected: M.kind !== 'illustrative' && facets.some((F) => F.areaUnsupported) ? null : unspecifiedProjected, twoStory: complete ? twoStory : null, twoLayer: complete ? twoLayer : null, pitches, lines, combined: { hipRidge: combine('hip', 'ridge'), eaveRake: combine('eave', 'rake') }, waste };
+}
+function rpSheetInformation(doc, M, n, total) {
+  const I = rpInformation(M); let added = 0, y = 150;
+  const header = () => rpHeader(doc, M, 'Measurement summary', 'Measurement summary' + (added ? ' (continued)' : ''), M.kind === 'illustrative' ? 'Illustrative quantities / no property measurement' : I.complete ? 'Net measurements / allowances separate' : 'Supported subtotals / incomplete scope', n + added, total);
+  const room = (height) => { if (y + height > RP.FOOT - 24) { doc.addPage('letter', 'portrait'); added++; header(); y = 150; } };
+  const table = (title, widths, head, rows, num) => { room(rows.length <= 10 ? 52 + rows.length * 15 : 52); rpTitleBar(doc, y, title); y += 11;
+    let rest = rows.slice(); do { const cap = Math.max(1, Math.floor((RP.FOOT - 30 - y - 19) / 15)); const chunk = rest.slice(0, cap); y = rpTableD(doc, RP.L, y, widths, head, chunk, { rowh: 15, size: 8.3, headsz: 7.8, num }); rest = rest.slice(cap); if (rest.length) { y = RP.FOOT; room(52); rpTitleBar(doc, y, title + ' (continued)'); y += 11; } } while (rest.length); y += 22; };
+  const val = (x) => x == null ? '' : rpNum(x, 2);
+  header();
+  table('Area summary' + (I.complete ? '' : ' / supported subtotal'), [157, 104, 183, 104], ['Quantity', 'ft²', 'Quantity', 'Value'], [
+    [I.estimated ? 'Subtotal incl. estimates' : I.complete ? 'Net sloped area' : 'Supported sloped subtotal', val(I.net), 'Projected horizontal area', val(I.projected)],
+    ['Measured/modelled subtotal', val(I.measured), 'Inferred estimate area', val(I.inferred)],
+    ['Pitched roof area', val(I.pitched), 'Flat roof area', val(I.flat)],
+    ['Predominant pitch area', val(I.predominantArea), 'Predominant pitch', rpPitch(I.predominant)],
+    ['Two-story net area', val(I.twoStory), 'Two-layer net area', val(I.twoLayer)],
+    ['Unspecified pitch (projected)', val(I.unspecifiedProjected), 'Facets / supported', I.facetCount + ' / ' + I.supportedFacetCount],
+  ], [1, 3]);
+  const edge = (x) => x.value == null ? '' : rpFtIn(x.value) + (x.inferred ? ' est.' : '');
+  const ls = Object.entries(I.lines); const rows = [];
+  for (let k = 0; k < ls.length; k += 2) rows.push([EDGE_TYPES[ls[k][0]].label, edge(ls[k][1]), EDGE_TYPES[ls[k + 1][0]].label, edge(ls[k + 1][1])]);
+  rows.push(['Hips + ridges', edge(I.combined.hipRidge), 'Eaves + rakes', edge(I.combined.eaveRake)]);
+  table('Linear measurement totals', [157, 104, 183, 104], ['Edge category', 'True length', 'Edge category', 'True length'], rows, [1, 3]);
+  table('Pitch distribution / net area', [124, 142, 142, 140], ['Pitch', 'Area ft²', 'Squares', 'Scope'], I.pitches.map(([pitch, area]) => [rpPitch(pitch), val(area), rpNum(area / 100, 2), I.estimated ? 'Includes estimates' : I.complete ? 'Net scope' : 'Supported subtotal']), [1, 2]);
+  table('Facet orientation / downhill bearing from true north', [78, 126, 172, 172], ['Facet', 'Pitch', 'Azimuth', 'Facing'], I.directions.map((D) => [D.id, rpPitch(D.pitch), D.azimuth == null ? '' : rpNum(D.azimuth, 1) + '°', D.facing]), [1, 2]);
+  table('Waste scenarios / separate from net measurements', [78, 160, 155, 155], ['Waste', 'Scenario', 'Area with waste ft²', 'Squares with waste'], I.waste.map((W) => [W.percent + '%', [W.selected ? 'Selected' : '', W.recommended ? 'Recommended' : '', M.review ? 'On hold' : M.kind === 'illustrative' ? 'Illustrative' : 'Allowance'].filter(Boolean).join(' / '), val(W.area), val(W.squares)]), [0, 2, 3]);
+  room(35); rpText(doc, (I.estimated ? 'Area subtotals include inferred estimates; see keyed facet schedule. ' : '') + 'Unknown values stay blank. Unspecified-pitch area is projected, not a supported sloped area. Two-story and two-layer values follow recorded facet flags. Waste scenarios are allowances, never net measurements.' + (M.review ? ' Order-ready quantities withheld until evidence review closes.' : ''), RP.L, y, { size: 8, maxWidth: 548 });
+  return 1 + added;
+}
+
 // ------------------------------------------------------------------ build
 async function rpBuild(opts = {}) {
   if (!window.jspdf) throw new Error('PDF library did not load; check the internet connection');
@@ -898,11 +1005,13 @@ async function rpBuild(opts = {}) {
     while (((sp.edges && sp.edges.length) || (sp.facets && sp.facets.length)) && extraSched < 8) { rpSheetSchedules(probe, M, S, sp, 0, 0); extraSched++; } }
   const hasEvidence = M.review || M.views.length > 0 || M.evidence.length > 0 || !!M.alt;
   const evidencePages = hasEvidence ? rpSheetEvidence(probe, M, 0, 0) : 0;
-  const total = 2 + wins.length + extraSched + evidencePages + (opts.materials && !M.review ? 1 : 0);
+  const informationPages = rpSheetInformation(probe, M, 0, 0);
+  const total = 2 + wins.length + extraSched + informationPages + evidencePages + (opts.materials && !M.review ? 1 : 0);
   ctx.detail = wins.length === 1 ? 'sheet 3' : wins.length > 1 ? `sheets 3-${2 + wins.length}` : '';
   let n = 1; rpSheetPlanFirst(doc, M, hero, n, total, ctx); doc.addPage('letter', 'portrait'); n++; rpSheetMeasurementSchedules(doc, M, S, ctx.spill, n, total);
   wins.forEach((w, i) => { doc.addPage('letter', 'portrait'); n++; rpSheetDetail(doc, M, w, i + 1, wins.length, n, total, unplaced); });
   for (let i = 0; i < extraSched; i++) { doc.addPage('letter', 'portrait'); n++; rpSheetSchedules(doc, M, S, ctx.spill, n, total); }
+  doc.addPage('letter', 'portrait'); n++; n += rpSheetInformation(doc, M, n, total) - 1;
   if (hasEvidence) { doc.addPage('letter', 'portrait'); n++; n += rpSheetEvidence(doc, M, n, total) - 1; }
   if (opts.materials && !M.review) { doc.addPage('letter', 'portrait'); n++; rpSheetMaterials(doc, M, n, total); }
   doc.setProperties({ title: `${M.line1} - roof measurement`, author: 'Diversity Contracting | Roof Measure', subject: 'US Letter roof overview, takeoff and scaled measurement plan', creator: 'Roof Measure' });
