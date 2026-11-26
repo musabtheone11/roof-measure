@@ -10,7 +10,7 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
    - **Lines**: ridge, hip, valley, eave, rake, step flashing, headwall. Hips, valleys and rakes are converted from plan length to actual length using the pitch.
    - Corner snapping, live length readout while drawing, drag-to-edit corners, right-click a corner to delete it.
 3. **Totals**: roof square feet, squares, squares with waste, linear footage per line type.
-4. **Report in Roofr's format** (same pages, tables, wording and brand bundle counts), without a logo.
+4. **Plan-first report** with an original grayscale Diversity Contracting layout, vector plan and keyed measurement schedules.
 5. **Save / export**: save roofs in the browser, export CSV or JSON, import JSON.
 
 ## The report
@@ -19,7 +19,15 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
 
 1. **Roof plan** (sheet 1): a slim header (black-and-white logo, "Roof Measurement Report", address, imagery and report dates, status: COMPLETE, REVIEW REQUIRED, SOURCE TAKEOFF or ILLUSTRATIVE), one summary strip (net sloped area or confirmed area, squares, predominant pitch, eave / rake / ridge / hip / valley / flashing totals in feet and inches; a zero prints as "none seen" unless the whole roof was measured), then the scaled, north-up vector plan filling the rest of the sheet. Exterior edges heavy, interior lines lighter, one grayscale style per type (eave solid, rake long dash, ridge solid, hip dash, valley dot, flashing dash-dot); estimated lines dashed and lighter, unsupported lines stippled, hidden zones and unsupported planes hatched, canopy edges faint and dotted (never part of an outline). Each line carries its key and true length beside it (`E3 20'-4"`); where a label would collide it becomes a keyed callout on a leader; small facet and zone IDs. A legend, scale bar and north arrow sit in a band under the plan; the aerial is added as a small reference inset only when a corner of the drawing is empty.
 2. **Takeoff** (sheet 2): the buildings (numbered; detached buildings on their own rows), other line totals, net measurements before waste and ordering quantities side by side, edge lengths by type (key, type, ft-in, ft, building) and facet areas and pitch, items for field review, and the imagery source and date. Every key and facet ID in the tables is on the plan and every ID on the plan is a table row (checked on every build). A small 3D illustration from the same planes is added only when the elevations support it: omitted, with the reason printed, when heights would come from the pitch alone, a plane has no height, neighbouring planes disagree by more than 1 ft at a shared corner off a drawn step or wall, a face folds in the view, or the roof is simple enough that the plan says it all. *3D illustration when the elevations support it* (panel 6) turns it off; *3D view of the traced roof* shows the same model in the app with a turn slider and says whether the report will print it.
-3. **Plan detail** sheets only when a key finds no room on sheet 1 even as a callout, **Takeoff (continued)** only when the tables outgrow sheet 2, **Evidence used** for measured jobs (views and sources checked and what each settled), and optional **Material order quantities**.
+3. **Plan detail** sheets only when a key finds no room on sheet 1 even as a callout, **Takeoff (continued)** only when the tables outgrow sheet 2.
+4. **Measurement summary**: area classes (net, measured, inferred, pitched, flat, projected, two-story, two-layer), linear totals by category, pitch distribution by nominal pitch, facet orientation (downhill bearing), and waste scenarios kept apart from the net measurements. Unknown values stay blank; waste and order quantities are withheld while the report needs review or part of the roof is unseen.
+5. **Evidence used** for measured jobs (views and sources checked and what each settled), and optional **Material order quantities** (purchase rounding only; net measurements stay unrounded).
+
+Every printed quantity carries provenance. An auto-trace records, for each facet geometry / pitch / area and each line geometry / type / length it measured, the dated Google Solar layers it came from and how it was derived, bound to the current geometry (an edit makes it stale). Inferred continuations stay estimates; unresolved items and undated imagery get none, so their quantities print blank. Jobs saved before this get the same provenance on load only for output still exactly as the engine produced it. The building selection is never self-certified: until a person confirms it in the review panel the report stays REVIEW REQUIRED and order quantities are withheld; the georeferenced scale is recorded from the raster registration check.
+
+Preview, Print and Download use the same signature-cached PDF. A model edit during generation rejects the result; saved preview actions and delayed downloads also check the signature. Direct vector PDF generation checks the model revision across asynchronous image loading.
+
+Jobs now save as version 4 with persistent `modelId` values and optional per-quantity `measurementEvidence`. `RM.auditEvidence` requires dated source, basis, measured status and an `RM.evidenceRevision(item, quantity)` binding for facet geometry/pitch/area and edge geometry/type/length. The review panel records each quantity separately and captures dated structure/scale confirmation in `trace.scopeEvidence`, bound to the current scope geometry. Changing that scope invalidates the confirmation. Missing/stale evidence triggers REVIEW REQUIRED; unsupported real-job quantities print blank. Legacy job flags alone do not establish provenance. Illustrative fixtures remain explicitly illustrative. See [validation and coverage](docs/PLAN_FIRST_VALIDATION.md).
 
 Incomplete measurements are explicit: measured edges solid, evidence-backed continuations dashed, unresolved lines stippled, hidden or unresolved zones hatched. Unsupported dimensions, pitches and areas stay blank (never zero). A REVIEW REQUIRED report says what has been checked, how it was checked, and what still needs field review; a partial sketch is drawn when elevations are missing; every synthetic model is labelled illustrative.
 
@@ -200,3 +208,40 @@ Check pitch with the **Street View** and **Google Earth 3D** links in the Proper
 - `autocomplete.js` - address suggestions while typing (Google Places, with Esri as a fallback)
 - `styles.css` - screen and print styles
 - `serve.ps1` / `Start Roof Measure (local server).bat` - optional local server
+
+### Local API verification
+
+`node tools/dev/check-apis.mjs` reads `GOOGLE_MAPS_KEY` and `APINEX_API_KEY` from the process environment. It checks Google Geocoding/Solar and makes the authenticated APInex `GET /v1/models` request. It prints statuses and discovered model IDs, never credentials. APINEX also powers the server-side image-review runtime described below; no secret is shipped in public JavaScript. A missing key is recorded as not run. Do not place credentials in tracked files.
+
+For report UI checks without a key, `node tools/dev/run-app.mjs --offline --job <illustrative-job.json> --out <directory>` uses a test-only geometry adapter. This verifies PDF delivery/layout, not Google imagery, geocoding, orbit rendering or numerical accuracy on real properties.
+
+On Node 24 behind an environment HTTP proxy, use `node --use-env-proxy tools/dev/check-apis.mjs`.
+
+## Server-backed AI image review
+
+The **AI roof tracing & image review** panel opens an editable source-image plan.
+The Node runtime calls verified APINEX models for image quality, outline, structure,
+blind independent tracing, and disputed-region adjudication. Geometry and measurements
+are calculated locally on the server. Explicit image consent, verified overhead scale,
+and supported pitch are required for their respective operations; AI results remain
+REVIEW REQUIRED. Uploaded-image reviews export correction/provenance JSON and stay
+separate from the existing map job and PDF until geographic placement is verified.
+
+Run Node 24 with `APINEX_API_KEY` in the environment, `npm ci --prefix bench`,
+and `npm start`. Open the server's port 3000 and the AI image review panel.
+Static GitHub Pages cannot host this secret-backed API. See [runtime setup](server/README.md)
+and [provider verification and measured limitations](docs/API_VERIFICATION.md).
+
+`npm run test:runtime` and `node bench/runtime-agents-test.mjs` test deterministic
+geometry and real local HTTP orchestration without paid requests.
+
+The image-review workspace also opens local PDFs (selected page only), rotates pages,
+reopens hash-matched review JSON, and exports a branded source-image review PDF.
+Page/source changes clear calibration and consent. Printed dimensions remain
+source-reported annotations until independently verified. Source review PDFs do
+not invent geographic placement, north, or purchasing quantities.
+
+The private single-process container preview is described in
+[private preview deployment](docs/PRIVATE_PREVIEW_DEPLOYMENT.md). The ongoing
+[supervision ledger](docs/ENHANCEMENT_SUPERVISION.md) distinguishes accepted fixes
+from remaining defects and access blockers.

@@ -28,8 +28,9 @@ ok('pitch group 12/12 is net of the cut-out; flat group is untouched', near(S.pi
 ok('average pitch is weighted by net area: 12 x 106.07 / 206.07 = 6.18', near(S.weightedPitch, 12 * bNet / (100 + bNet), 0.001), S.weightedPitch);
 ok('predominant pitch is the larger net group (12/12)', S.predominant === 12 && near(S.predArea, bNet), [S.predominant, S.predArea]);
 ok('a flat-only roof keeps the default pitch as its average', near(summarize([A], [], []).weightedPitch, 0) || true, summarize([A], [], []).weightedPitch);
-// a cut-out that sits on no facet comes off the biggest pitch group (and the total), never off the two-story figure
+// A cut-out without a valid host remains unresolved and cannot be subtracted from another roof.
 const D = F({ name: 'D', path: rect(50, 50, 5, 5), pitch: 6, excluded: true });
 const S2 = summarize([A, B], [D], []);
 ok('a cut-out hosted by no facet leaves the two-story area alone', near(S2.twoStory, 100 * r2), S2.twoStory);
+ok('unhosted cut-out is withheld and explicitly flagged', near(S2.sloped,100+100*r2) && S2.netAreaIssues.length===1 && !S2.complete, S2);
 console.log(fail ? `${fail} FAILED` : 'all ok'); process.exit(fail ? 1 : 0);

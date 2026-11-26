@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Roof Measure - Diversity Roofing</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="ai-trace.css">
 </head>
 <body>
 <div id="app">
@@ -140,9 +141,10 @@
             <button id="btnApplyPitch" class="ghost small" title="Set every facet to the default pitch">Apply to all facets</button>
           </div>
         </div>
-        <p class="muted">Pick a tool, click the roof corners, double-click (or press Enter) to finish. Points snap to existing corners. Right-click or Backspace removes the last point. Esc cancels. In <b>Select</b> mode, drag corners to adjust and right-click a corner to delete it. Facets that touch are grouped into one structure; a detached shed or garage becomes Structure #2. Mark skylights or chimneys as <b>Exclude</b> on the facet to subtract them.</p>
+        <p class="muted">Pick a tool, click the roof corners, double-click (or press Enter) to finish. Points snap to existing corners. Hold Alt to place a precise point without snapping. Right-click or Backspace removes the last point. Esc cancels. In <b>Select</b> mode, drag corners to adjust and right-click a corner to delete it. Facets that touch are grouped into one structure; a detached shed or garage becomes Structure #2. Mark skylights or chimneys as <b>Exclude</b> on the facet to subtract them.</p>
         <div class="field">
           <label class="chk"><input type="checkbox" id="chkFacetEdges" checked> Show facet edge lengths</label>
+          <label class="chk"><input type="checkbox" id="chkAllLabels"> Show overlapping measurement labels</label>
         </div>
         <div id="selection" class="out" hidden></div>
         <h4>Facets</h4>
@@ -184,6 +186,11 @@
           </div>
         </details>
       </div>
+    </details>
+
+    <details class="panel" id="panelAITrace">
+      <summary>AI roof tracing &amp; image review</summary>
+      <div class="body"><p class="muted">Trace an authorized image with independent AI proposals, review disagreements, and correct the geometry. Real dimensions require a calibrated overhead image.</p><button id="btnOpenAITrace" class="primary">Open AI image review</button></div>
     </details>
 
     <!-- EXPORT -->
@@ -383,7 +390,7 @@
     </details>
 
     <footer class="muted small">
-      Measurements come from orthorectified satellite imagery and are typically within a few percent of field measurements. Verify pitch, penetrations, and layers on site.
+      Automatic roof proposals require review. Verify the source date, roof geometry, scale, pitch, penetrations, and layers before using quantities.
       <span id="deployStamp" title="When this copy of the page was published (from the page's Last-Modified header); hard-refresh (Ctrl/Cmd+Shift+R) if it looks old"></span>
     </footer>
   </aside>
@@ -460,12 +467,14 @@
 <script src="xactimate.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="vendor/jspdf/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js"></script>
 <script src="drone.js"></script>
 <script src="leadopen.js"></script>
 <script src="leads.js"></script>
 <script src="cashpath.js"></script>
+<script src="ai-report.js"></script>
+<script src="ai-trace.js"></script>
 <script>(function () { var el = document.getElementById('deployStamp'); var t = new Date(document.lastModified); if (el && !isNaN(t)) el.textContent = ' Site updated ' + t.toUTCString().replace(/:\d\d GMT$/, ' UTC') + '.'; })();</script>
 </body>
 </html>

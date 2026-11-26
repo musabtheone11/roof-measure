@@ -1,0 +1,31 @@
+import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
+const src=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const grab=n=>{const m=src.match(new RegExp('^(?:async )?function '+n+'\\([^]*?^\\}','m'));if(!m)throw Error(n);return m[0];};
+const els=new Map();const $=id=>{if(!els.has(id))els.set(id,{value:'',innerHTML:'',disabled:false,hidden:false});return els.get(id);};
+const storage=new Map();let clears=0;
+const state={location:{lat:1,lng:1},locationEpoch:0,addressRequestEpoch:0,solarRequestEpoch:0,address:'old',jobName:'edits',facets:[{path:[{lat:1,lng:1}]}],edges:[],solar:{name:'old'},trace:{},otherSolar:[]};
+const ctx={state,$,localStorage:{setItem:(k,v)=>storage.set(k,v)},map:{setCenter(){},setZoom(){}},savedProjects:()=>JSON.parse(storage.get('rm.projects')||'{}'),serialize:()=>structuredClone({address:state.address,location:state.location,facets:state.facets,edges:state.edges}),renderSaved(){},clearAll(){clears++;Object.assign(state,{facets:[],edges:[],solar:null,otherSolar:[],trace:null});},toast(){},drawSolar(){},renderSolar(){},recompute(){},window:{},RM:{scale:()=>({kx:100000,ky:100000})},esc:x=>x};
+vm.createContext(ctx);vm.runInContext(['locationGeneration','archiveLocationJob','setLocation','assertSolarSelection','runSolar','goToAddress'].map(grab).join('\n'),ctx);
+ctx.setLocation({lat:2,lng:2},'new');assert.equal(clears,1);assert.equal(state.solar,null);assert.equal(state.facets.length,0);assert.equal($('#btnAuto').disabled,true);assert.equal($('#reportPreview').hidden,true);
+const saved=Object.values(JSON.parse(storage.get('rm.projects')))[0];assert.deepEqual(saved.facets,[{path:[{lat:1,lng:1}]}]);assert.deepEqual(saved.location,{lat:1,lng:1});
+ctx.setLocation({lat:2,lng:2},'same');assert.equal(clears,1,'same point does not erase a roof');
+let release;ctx.fetchSolar=()=>new Promise(r=>release=r);const pending=ctx.runSolar();ctx.setLocation({lat:3,lng:3},'third');release({name:'old-response'});await pending;assert.equal(state.solar,null,'old API result cannot follow pin');
+const requests=[];ctx.fetchSolar=()=>new Promise(r=>requests.push(r));const a=ctx.runSolar(),b=ctx.runSolar();requests[1]({name:'newest'});await b;requests[0]({name:'older'});await a;assert.equal(state.solar.name,'newest','newest same-location API request wins');
+let geocode;ctx.geocoder={geocode:()=>new Promise(r=>geocode=r)};$('#address').value='old address request';const addr=ctx.goToAddress();ctx.setLocation({lat:4,lng:4},'fourth');geocode({results:[{geometry:{location:{lat:()=>99,lng:()=>99}},formatted_address:'stale'}]});await addr;assert.equal(state.location.lat,4,'late geocoder cannot move pin back');
+const pinSrc=fs.readFileSync(new URL('../pin.js',import.meta.url),'utf8');const lock=pinSrc.match(/^async function lockHouse\([^]*?^\}/m)[0];
+ctx.pin={busy:false,requestId:0};ctx.pinStopPicking=()=>{};ctx.pinSetMarker=()=>{};const pins=[];ctx.reverseAddress=()=>new Promise(r=>pins.push(r));vm.runInContext(lock,ctx);
+const p1=ctx.lockHouse({lat:5,lng:5}),p2=ctx.lockHouse({lat:6,lng:6});pins[1]('sixth');await p2;pins[0]('fifth');await p1;assert.equal(state.location.lat,6,'latest pin lock wins even when reverse geocoder completes out of order');
+for(let round=0;round<1000;round++) {
+ const pendingPins=[];ctx.reverseAddress=()=>new Promise(r=>pendingPins.push(r));
+ const base=20+round/100000;
+ const calls=[0,1,2].map(i=>ctx.lockHouse({lat:base+i/1000000,lng:1}));
+ const order=round%2?[1,2,0]:[2,0,1];for(const i of order)pendingPins[i]('Synthetic pin '+i);
+ await Promise.all(calls);assert.equal(state.location.lat,base+2/1000000);
+ let resolveOld;ctx.fetchSolar=()=>new Promise(r=>resolveOld=r);const old=ctx.runSolar();
+ ctx.setLocation({lat:base+3/1000000,lng:1},'Synthetic new selection');resolveOld({name:'stale'});await old;assert.equal(state.solar,null);
+}
+const record={boundingBox:{sw:{latitude:1,longitude:1},ne:{latitude:1.0001,longitude:1.0001}}};
+assert.throws(()=>ctx.assertSolarSelection(record,{lat:2,lng:2,selectedByPin:true}),/different building/);
+assert.doesNotThrow(()=>ctx.assertSolarSelection(record,{lat:1.00005,lng:1.00005,selectedByPin:true}));
+console.log('2,000 randomized-order pin/API lifecycle cases pass');
+console.log('Location lifecycle: preserved edits, cleared old roof, stale API/geocoder and reordered pin requests pass');

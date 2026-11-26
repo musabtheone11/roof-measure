@@ -1,0 +1,26 @@
+// Real APINEX known-answer vision evaluation. Only repository synthetic fixtures are sent.
+// node --use-env-proxy tools/dev/runtime-vision-benchmark.mjs [output-directory]
+import fs from 'node:fs';import path from 'node:path';import{fileURLToPath}from'node:url';
+import{compareProposals}from'../../server/geometry.mjs';import{validateResponse,parseAgentJSON}from'../../server/contracts.mjs';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'fixtures/runtime-vision'),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json')));
+const out=path.resolve(process.argv[2]||'.devcache/runtime-vision');fs.mkdirSync(out,{recursive:true});
+const key=process.env.APINEX_API_KEY;if(!key)throw Error('APINEX_API_KEY is required');
+const rosterResponse=await fetch('https://api.apinex.bond/v1/models',{headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(30000)});if(!rosterResponse.ok)throw Error('Roster request failed: '+rosterResponse.status);const roster=await rosterResponse.json();
+const selected=(process.env.RUNTIME_VISION_MODELS||'claude-opus-5.5,gpt-6.2-astra').split(',').filter(id=>roster.data?.some(m=>m.id===id));
+const maxRequests=Number(process.env.RUNTIME_VISION_MAX_REQUESTS||8),budgetUsd=Number(process.env.RUNTIME_VISION_BUDGET_USD||.25);
+if(!Number.isInteger(maxRequests)||maxRequests<1||maxRequests>20||!Number.isFinite(budgetUsd)||budgetUsd<=0||budgetUsd>1)throw Error('Invalid benchmark budget: 1–20 requests and 0 < USD <= 1 required');
+if(selected.length===0)throw Error('No selected model is present in the authenticated roster');
+const results=[];let billed=0;
+const cases=process.env.RUNTIME_VISION_CASE?manifest.cases.filter(c=>c.id===process.env.RUNTIME_VISION_CASE):manifest.cases;
+if(!cases.length)throw Error('Unknown benchmark case');
+for(const c of cases)for(const model of selected){
+ if(billed>=budgetUsd||results.length>=maxRequests)throw Error('Evaluation spending or request limit reached');
+ const started=Date.now();const row={case:c.id,split:c.split,tags:c.tags,model,referenceKind:manifest.referenceKind};
+ const prompt='Identify the main gray roof, excluding detached neighboring rectangles. Return ONLY strict JSON {"buildings":[{"id":"B1","target":true,"vertices":[[x,y],...],"status":"inferred" or "unresolved","evidence":"visible evidence and missing boundary explanation"}],"notes":["limitations"]}. Image is640x480; coordinates in full-source pixels. Never assume hidden edges or scale. For obstruction or oblique perspective mark review limitations. No confidence number or physical measurements. At most12vertices.';
+ try{const response=await fetch('https://api.apinex.bond/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model,...(process.env.RUNTIME_JSON_MODE==='1'?{response_format:{type:'json_object'}}:{}),messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:'data:image/png;base64,'+fs.readFileSync(path.join(root,c.id+'.png')).toString('base64')}}]}],max_tokens:900,stream:false}),signal:AbortSignal.timeout(45000)});
+ row.httpStatus=response.status;row.rateLimit={limit:response.headers.get('x-ratelimit-limit'),remaining:response.headers.get('x-ratelimit-remaining'),retryAfter:response.headers.get('retry-after')};
+ if(!response.ok){row.errorBody=(await response.text()).slice(0,2000);row.status='failed';row.reason=response.status===429?'rate-limited':'upstream failure';}
+ else{const body=await response.json();row.usage=body.usage||null;row.costSource=Number.isFinite(body.usage?.cost_tokens)?'reported-debit':!model.startsWith('free/')&&Number.isFinite(body.usage?.total_tokens)?'published-rate-estimate':'unknown';row.costUsd=Number.isFinite(body.usage?.cost_tokens)?body.usage.cost_tokens/1e6:!model.startsWith('free/')&&Number.isFinite(body.usage?.total_tokens)?body.usage.total_tokens*.5/1e6:null;billed+=row.costUsd??0;row.response=body.choices?.[0]?.message?.content;if(body.choices?.[0]?.finish_reason==='length')throw Error('Model response was truncated');const parsed=validateResponse('outline',parseAgentJSON(row.response),{width:640,height:480});row.proposal=parsed;const target=parsed.buildings.find(b=>b.target);if(!target)throw Error('No target roof proposed');row.metrics=compareProposals({outline:c.outline},{outline:target.vertices},{width:640,height:480,view:c.view});row.status='responded';row.reviewRequired=true;row.diagnosticThreshold=(!c.obstructed&&c.view==='orthographic')?row.metrics.iou>=.95&&row.metrics.boundaryDistancePixels?.mean<=3:null;row.physicalAccuracy='not evaluated';}
+ }catch(e){row.status='failed';row.reason=e.name==='ContractError'?'schema-invalid':e.name==='TimeoutError'?'timeout':String(e.message).slice(0,200);}
+ row.latencyMs=Date.now()-started;results.push(row);fs.writeFileSync(path.join(out,'results.json'),JSON.stringify({manifest,jsonMode:process.env.RUNTIME_JSON_MODE==='1',models:selected,results,billedUsd:billed,reportedCostCalls:results.filter(r=>r.costUsd!=null).length},null,2));console.log(JSON.stringify({case:row.case,model,status:row.status,iou:row.metrics?.iou,latencyMs:row.latencyMs}));if(row.httpStatus===429)throw Error('Rate limited; stopped without retries; inspect Retry-After in artifact');
+}

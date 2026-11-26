@@ -89,8 +89,14 @@ export async function runApp(prop, engineDir = ROOT, opt = {}) {
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(engineDir, f), 'utf8'), ctx, { filename: path.join(engineDir, f) });
-  // the app keys its raster cache by building + radius; engines differ by a metre in how they round the radius
-  const entry = { layers: prop.layers, maskT: prop.maskT, dsmT: prop.dsmT, rgbT: prop.rgbT }; ctx.__layerCache = {}; for (let d = -2; d <= 2; d++) ctx.__layerCache[prop.main.name + '|' + (prop.radius + d)] = entry;
+  // Current app caches include the selected-record provenance; frozen engines retain building/radius keys.
+  // Engines differ by a metre in how they round the radius.
+  const entry = { layers: prop.layers, maskT: prop.maskT, dsmT: prop.dsmT, rgbT: prop.rgbT }; ctx.__layerCache = {};
+  for (let d = -2; d <= 2; d++) {
+    const radius = prop.radius + d;
+    const key = typeof ctx.rmLayerRequestIdentity === 'function' ? ctx.rmLayerRequestIdentity(prop.main, radius, prop.main.center.latitude, prop.main.center.longitude, null) : prop.main.name + '|' + radius;
+    ctx.__layerCache[key] = { ...entry, requestIdentity: key };
+  }
   if (opt.hook) opt.hook(ctx);          // debugging: wrap engine globals before the trace runs
   const t0 = Date.now();
   const extra = opt.traceOpts ? ', ' + JSON.stringify(opt.traceOpts).slice(1, -1) : '';   // e.g. { altProbe: { quality: 'HIGH' } } to run the second-dataset check

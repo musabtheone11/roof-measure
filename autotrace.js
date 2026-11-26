@@ -17,36 +17,205 @@ async function solarDataLayers(lat, lng, radius, quality) {
   if (!r.ok) { let m = 'HTTP ' + r.status; try { const j = await r.json(); m = (j.error && j.error.message) || m; } catch (_) { /* ignore */ } throw new Error('Data layers: ' + m); }
   return r.json();
 }
-async function loadTiff(url, cacheName) {
+// Cache provenance is part of the source, not a date copied from buildingInsights.
+// Request snapshots invalidate when the selected record changes; immutable raster
+// names are bound to the actual flight and asset IDs, and bytes are hash checked.
+function rmLayerRequestIdentity(main, radius, lat, lng, quality) {
+  return JSON.stringify({ version: 2, building: main && main.name || null, recordDate: main && main.imageryDate || null, recordQuality: main && main.imageryQuality || null, latitude: lat, longitude: lng, radiusMeters: radius, quality: quality || 'best', pixelSizeMeters: 0.1 });
+}
+async function rmCacheDigest(value) {
+  if (typeof crypto === 'undefined' || !crypto.subtle) throw new Error('Verified raster cache requires SHA-256 support');
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash), x => x.toString(16).padStart(2, '0')).join('');
+}
+function rmLayerSourceRecord(layers) {
+  const d = layers && layers.imageryDate, q = layers && layers.imageryQuality;
+  if (!d || !Number.isInteger(d.year) || !Number.isInteger(d.month) || !Number.isInteger(d.day) || !['HIGH', 'MEDIUM', 'LOW'].includes(q)) throw new Error('Raster flight metadata is incomplete');
+  const check = new Date(Date.UTC(d.year, d.month - 1, d.day));
+  if (check.getUTCFullYear() !== d.year || check.getUTCMonth() + 1 !== d.month || check.getUTCDate() !== d.day) throw new Error('Raster flight date is invalid');
+  const asset = (url) => { const u = new URL(url); const id = u.searchParams.get('id'); if (!id) throw new Error('Raster asset identity is missing'); return u.origin + u.pathname + '?id=' + encodeURIComponent(id); };
+  return { imageryDate: { year: d.year, month: d.month, day: d.day }, imageryQuality: q, assets: { mask: asset(layers.maskUrl), dsm: asset(layers.dsmUrl), rgb: layers.rgbUrl ? asset(layers.rgbUrl) : null } };
+}
+async function rmLayerCacheNames(source) {
+  const identity = JSON.stringify(source), hash = await rmCacheDigest(identity), stem = '_cache_v2_' + hash;
+  return { identity, mask: stem + '_mask.tif', dsm: stem + '_dsm.tif', rgb: source.assets.rgb ? stem + '_rgb.tif' : null };
+}
+async function rmReadLayerCache(requestIdentity) {
+  if (location.hostname !== 'localhost') return null;
+  try {
+    const index = '_cache_v2_request_' + await rmCacheDigest(requestIdentity) + '.json';
+    const r = await fetch('/reports/' + index); if (!r.ok) return null; const meta = await r.json();
+    if (meta.version !== 2 || meta.requestIdentity !== requestIdentity || !meta.source || !meta.digests) return null;
+    // Reconstruct and validate the source fields rather than trusting filenames
+    // supplied by stale metadata. No API credentials are retained in this record.
+    const source = rmLayerSourceRecord({ ...meta.source, maskUrl: meta.source.assets && meta.source.assets.mask, dsmUrl: meta.source.assets && meta.source.assets.dsm, rgbUrl: meta.source.assets && meta.source.assets.rgb });
+    if (JSON.stringify(source) !== JSON.stringify(meta.source)) return null;
+    const names = await rmLayerCacheNames(source);
+    const read = async (kind) => {
+      if (!names[kind]) return null;
+      if (!/^[0-9a-f]{64}$/.test(meta.digests[kind] || '')) throw new Error('Raster digest is missing');
+      return loadTiff(null, names[kind], { diskOnly: true, expectedDigest: meta.digests[kind] });
+    };
+    const [maskT, dsmT, rgbT] = await Promise.all([read('mask'), read('dsm'), read('rgb')]);
+    return { requestIdentity, sourceIdentity: names.identity, layers: { imageryDate: source.imageryDate, imageryQuality: source.imageryQuality, fromDiskCache: true }, maskT, dsmT, rgbT };
+  } catch (_) { return null; } // an unverifiable cache is a miss, never a new flight
+}
+async function rmLoadLayerSet(main, lat, lng, radius, quality) {
+  const requestIdentity = rmLayerRequestIdentity(main, radius, lat, lng, quality);
+  const disk = await rmReadLayerCache(requestIdentity); if (disk) return disk;
+  const layers = await solarDataLayers(lat, lng, radius, quality);
+  if (!layers.maskUrl || !layers.dsmUrl) throw new Error('Data layers did not include a mask and DSM');
+  let source = null, names = null;
+  if (location.hostname === 'localhost') { try { source = rmLayerSourceRecord(layers); names = await rmLayerCacheNames(source); } catch (_) { /* unknown provenance: fetch without disk reuse */ } }
+  // Fresh source metadata cannot reuse bytes from legacy building/radius names,
+  // or even a content-addressed file without its verified digest record.
+  const [maskT, dsmT, rgbT] = await Promise.all([
+    loadTiff(layers.maskUrl, names && names.mask, { fresh: true }),
+    loadTiff(layers.dsmUrl, names && names.dsm, { fresh: true }),
+    layers.rgbUrl ? loadTiff(layers.rgbUrl, names && names.rgb, { fresh: true }).catch(() => null) : null,
+  ]);
+  if (names && source && (!source.assets.rgb || rgbT)) {
+    try {
+      const meta = { version: 2, requestIdentity, source, digests: { mask: maskT.cacheDigest, dsm: dsmT.cacheDigest, rgb: rgbT && rgbT.cacheDigest } };
+      const index = '_cache_v2_request_' + await rmCacheDigest(requestIdentity) + '.json';
+      await fetch('/save?name=' + encodeURIComponent(index), { method: 'POST', body: JSON.stringify(meta) });
+    } catch (_) { /* downloaded layers remain usable; cache does not establish evidence */ }
+  }
+  return { requestIdentity, sourceIdentity: names && names.identity, layers, maskT, dsmT, rgbT };
+}
+
+async function loadTiff(url, cacheName, opts = {}) {
   let buf = null;
   // local development only: keep downloaded rasters on disk so reloading the page does not re-buy the same data
   const devCache = cacheName && location.hostname === 'localhost';
-  if (devCache) { try { const c = await fetch('/reports/' + encodeURIComponent(cacheName)); if (c.ok) buf = await c.arrayBuffer(); } catch (_) { /* not cached */ } }
+  if (devCache && !opts.fresh) { try { const c = await fetch('/reports/' + encodeURIComponent(cacheName)); if (c.ok) buf = await c.arrayBuffer(); } catch (_) { /* not cached */ } }
+  if (buf && opts.expectedDigest && await rmCacheDigest(buf) !== opts.expectedDigest) throw new Error('Cached raster bytes do not match source metadata');
   if (!buf) {
+    if (opts.diskOnly || !url) throw new Error('Verified raster cache is unavailable');
     const r = await fetch(url + '&key=' + encodeURIComponent(state.key));
     if (!r.ok) throw new Error('GeoTIFF download failed (' + r.status + ')');
     buf = await r.arrayBuffer();
     if (devCache) { try { await fetch('/save?name=' + encodeURIComponent(cacheName), { method: 'POST', body: buf }); } catch (_) { /* best effort */ } }
   }
+  const cacheDigest = devCache ? await rmCacheDigest(buf) : null;
   const tiff = await GeoTIFF.fromArrayBuffer(buf);
   const img = await tiff.getImage();
   const ras = await img.readRasters(); const data = ras[0];
   const w = img.getWidth(), h = img.getHeight();
   const [ox, oy] = img.getOrigin(); const [rx, ry] = img.getResolution();
   const keys = img.getGeoKeys ? (img.getGeoKeys() || {}) : {};
-  const epsg = keys.ProjectedCSTypeGeoKey || keys.GeographicTypeGeoKey || 4326;
-  const sy = ry > 0 ? -ry : ry;                               // rows run southward: model y decreases as the row index grows
-  let toLL;
-  if (epsg === 4326 || Math.abs(ox) <= 360) toLL = (x, y) => ({ lng: ox + x * rx, lat: oy + y * sy });
+  // CRS metadata wins over coordinate magnitude. A projected grid can legitimately
+  // have an easting near zero, and a positive signed row step is a south-up grid.
+  const epsg = keys.ProjectedCSTypeGeoKey || keys.GeographicTypeGeoKey;
+  if (!epsg) throw new Error('GeoTIFF has no supported coordinate reference system');
+  const dir = img.getFileDirectory ? img.getFileDirectory() : (img.fileDirectory || {});
+  const matrix = dir.ModelTransformation; const tie = dir.ModelTiepoint;
+  const pointOffset = keys.GTRasterTypeGeoKey === 2 ? -0.5 : 0;
+  const project = matrix && matrix.length >= 16
+    ? (x, y) => [matrix[0] * x + matrix[1] * y + matrix[3], matrix[4] * x + matrix[5] * y + matrix[7]]
+    : (x, y) => tie && tie.length >= 6 ? [tie[3] + (x - tie[0]) * rx, tie[4] + (y - tie[1]) * ry] : [ox + x * rx, oy + y * ry];
+  let convert;
+  if (epsg === 4326) convert = (p) => ({ lng: p[0], lat: p[1] });
   else {
     let def = null;
     if (epsg >= 32601 && epsg <= 32660) def = `+proj=utm +zone=${epsg - 32600} +datum=WGS84 +units=m +no_defs`;
     else if (epsg >= 32701 && epsg <= 32760) def = `+proj=utm +zone=${epsg - 32700} +south +datum=WGS84 +units=m +no_defs`;
     else if (epsg === 3857) def = 'EPSG:3857';
     if (!def) throw new Error('Unsupported GeoTIFF projection EPSG:' + epsg);
-    toLL = (x, y) => { const p = proj4(def, 'EPSG:4326', [ox + x * rx, oy + y * sy]); return { lng: p[0], lat: p[1] }; };
+    convert = (p) => { const q = proj4(def, 'EPSG:4326', p); return { lng: q[0], lat: q[1] }; };
   }
-  return { data, bands: ras.length >= 3 ? [ras[0], ras[1], ras[2]] : null, w, h, toLL, rx, ry, epsg };
+  const toLL = (x, y) => convert(project(x + pointOffset, y + pointOffset));
+  return { data, bands: ras.length >= 3 ? [ras[0], ras[1], ras[2]] : null, w, h, toLL, rx, ry, epsg, cacheDigest };
+
+}
+
+// Equal dimensions do not establish registration. Every layer must describe the
+// same pixel corners before its array indices may be used with another layer.
+function rmAssertSameGrid(a, b, label) {
+  if (!a || !b || a.w !== b.w || a.h !== b.h) throw new Error(label + ' raster sizes differ');
+  const c = a.toLL(a.w / 2, a.h / 2), k = RM.scale(c.lat);
+  for (const x of [0, a.w / 2, a.w]) for (const y of [0, a.h / 2, a.h]) {
+    const p = a.toLL(x, y), q = b.toLL(x, y);
+    if (!Number.isFinite(p.lat + p.lng + q.lat + q.lng) || Math.hypot((p.lng - q.lng) * k.kx, (p.lat - q.lat) * k.ky) > 0.02)
+      throw new Error(label + ' rasters are not georeferenced to the same grid; review the source registration');
+  }
+  return true;
+}
+
+// The tracing solver uses an east/north lattice. Preserve already aligned arrays
+// exactly; rotate/shear a registered source set once rather than dropping affine
+// cross terms at every subsequent pixel lookup. The 5 cm residual ceiling is half
+// a 10 cm source pixel; stronger curvature needs a supported warp, not a guess.
+function rmPrepareTraceLayers(maskT, dsmT, rgbT, ref) {
+  rmAssertSameGrid(maskT, dsmT, 'Mask and DSM');
+  if (rgbT) rmAssertSameGrid(maskT, rgbT, 'Mask and aerial');
+  const ll0 = maskT.toLL(0, 0), e0 = (ll0.lng - ref.lng) * ref.kx, n0 = (ll0.lat - ref.lat) * ref.ky;
+  const llx = maskT.toLL(maskT.w, 0), lly = maskT.toLL(0, maskT.h);
+  const ax = (llx.lng - ll0.lng) * ref.kx / maskT.w, ay = (llx.lat - ll0.lat) * ref.ky / maskT.w;
+  const bx = (lly.lng - ll0.lng) * ref.kx / maskT.h, by = (lly.lat - ll0.lat) * ref.ky / maskT.h;
+  const det = ax * by - ay * bx;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-10) throw new Error('Raster transform is singular');
+  let residualM = 0;
+  for (const x of [0, maskT.w / 2, maskT.w]) for (const y of [0, maskT.h / 2, maskT.h]) {
+    const p = maskT.toLL(x, y);
+    residualM = Math.max(residualM, Math.hypot((p.lng - ref.lng) * ref.kx - e0 - ax * x - bx * y, (p.lat - ref.lat) * ref.ky - n0 - ay * x - by * y));
+  }
+  if (residualM > 0.05) throw new Error('Raster transform is not affine within half a source pixel; review registration');
+  const registration = { resampled: false, sourceCRS: maskT.epsg || null, sourceSize: [maskT.w, maskT.h], sourceOriginEN: [e0, n0], sourceAxesEN: [[ax, ay], [bx, by]], residualM, toleranceM: 0.05 };
+  if (ax > 0 && by < 0 && Math.abs(ay * maskT.w) < 1e-5 && Math.abs(bx * maskT.h) < 1e-5)
+    return { maskT, dsmT, rgbT, registration };
+  const corners = [[0, 0], [maskT.w, 0], [0, maskT.h], [maskT.w, maskT.h]].map(([x, y]) => [e0 + ax * x + bx * y, n0 + ay * x + by * y]);
+  const E0 = Math.min(...corners.map(p => p[0])), N0 = Math.max(...corners.map(p => p[1]));
+  const sx = Math.hypot(ax, ay), sy = Math.hypot(bx, by);
+  const w = Math.ceil((Math.max(...corners.map(p => p[0])) - E0) / sx), h = Math.ceil((N0 - Math.min(...corners.map(p => p[1]))) / sy);
+  if (!(w > 0 && h > 0 && w * h <= 16000000)) throw new Error('Reprojected raster size is unsupported');
+  const mask = new Uint8Array(w * h), dsm = new Float32Array(w * h).fill(-9999);
+  const bands = rgbT ? rgbT.bands.map(() => new Uint8Array(w * h)) : null;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const e = E0 + (x + 0.5) * sx - e0, n = N0 - (y + 0.5) * sy - n0;
+    const px = (e * by - bx * n) / det, py = (ax * n - ay * e) / det;
+    const nx = Math.floor(px), ny = Math.floor(py); if (nx < 0 || ny < 0 || nx >= maskT.w || ny >= maskT.h) continue;
+    const i = y * w + x, j = ny * maskT.w + nx; mask[i] = maskT.data[j] > 0 ? 1 : 0;
+    if (bands) for (let b = 0; b < bands.length; b++) bands[b][i] = rgbT.bands[b][j];
+    // Bilinear height interpolation at pixel centres; invalid neighbours cannot
+    // invent elevations. The nearest valid source sample is the edge fallback.
+    const u = px - 0.5, v = py - 0.5, x0 = Math.floor(u), y0 = Math.floor(v), dx = u - x0, dy = v - y0;
+    let z = 0, valid = x0 >= 0 && y0 >= 0 && x0 + 1 < maskT.w && y0 + 1 < maskT.h;
+    if (valid) for (let oy = 0; oy <= 1; oy++) for (let ox = 0; ox <= 1; ox++) {
+      const q = dsmT.data[(y0 + oy) * maskT.w + x0 + ox]; if (!(q > -1000) || !Number.isFinite(q)) valid = false;
+      z += q * (ox ? dx : 1 - dx) * (oy ? dy : 1 - dy);
+    }
+    dsm[i] = valid ? z : dsmT.data[j];
+    if (!(dsm[i] > -1000)) mask[i] = 0;
+  }
+  const toLL = (x, y) => ({ lng: ref.lng + (E0 + x * sx) / ref.kx, lat: ref.lat + (N0 - y * sy) / ref.ky });
+  const base = { w, h, toLL, rx: sx, ry: -sy, epsg: 4326 };
+  registration.resampled = true; registration.targetSize = [w, h]; registration.targetOriginEN = [E0, N0]; registration.targetPixelM = [sx, sy];
+  return { maskT: { ...base, data: mask }, dsmT: { ...base, data: dsm }, rgbT: bands ? { ...base, data: bands[0], bands } : null, registration };
+}
+
+// Select by the requested roof and independent Solar segment witnesses before
+// size. A larger neighbouring roof must never win just because it is larger.
+function rmChooseMaskComponent(pieces, w, h, geo, pinPx, centrePx, witnessPx) {
+  const inside = (pc, p) => p && Number.isFinite(p[0] + p[1]) && p[0] >= 0 && p[1] >= 0 && p[0] < w && p[1] < h && !!pc.member[Math.floor(p[1]) * w + Math.floor(p[0])];
+  const distance = (pc, p) => {
+    if (!p || !Number.isFinite(p[0] + p[1])) return Infinity;
+    let d = Infinity;
+    for (let i = 0; i < pc.member.length; i++) if (pc.member[i]) { const x = i % w, y = (i - x) / w;
+      d = Math.min(d, Math.hypot(geo.E(x + 0.5) - geo.E(p[0]), geo.N(y + 0.5) - geo.N(p[1]))); }
+    return d;
+  };
+  const rows = pieces.map(pc => ({ pc, pin: inside(pc, pinPx), centre: inside(pc, centrePx), witnesses: (witnessPx || []).filter(p => inside(pc, p)).length, distanceM: distance(pc, centrePx) }));
+  rows.sort((a, b) => Number(b.pin) - Number(a.pin) || Number(b.centre) - Number(a.centre) || b.witnesses - a.witnesses || a.distanceM - b.distanceM || b.pc.n - a.pc.n);
+  const best = rows[0];
+  if (!best) throw new Error('No supported building mask at the selected roof');
+  if (!best.pin && !best.centre && !best.witnesses && best.distanceM > 2.5)
+    throw new Error('The building mask does not support the selected roof; review the building and imagery registration instead of tracing a neighbour');
+  const next = rows[1];
+  if (next && !best.pin && !best.centre && best.witnesses === next.witnesses && !best.witnesses && Math.abs(next.distanceM - best.distanceM) < 0.5)
+    throw new Error('The selected roof is ambiguous between mask pieces; select and verify the building before tracing');
+  return { component: best.pc, evidence: { method: best.pin ? 'mask contains selected pin' : best.centre ? 'mask contains Solar building centre' : best.witnesses ? 'Solar roof-segment centres support mask piece' : 'unique mask boundary within 2.5 m of Solar centre', witnessCount: best.witnesses, distanceM: best.distanceM } };
 }
 
 // ------------------------------------------------------------------ raster helpers
@@ -396,24 +565,15 @@ async function traceBuildingV1(resp, tif, mask, comp, geo, opts) {
 // The other Solar dataset is fetched for the same centre and radius, put on the current grid, checked against the roof the
 // current dataset can see, and - only when the reviewer approved it - used for the pixels the current dataset has under canopy.
 async function altLoadLayers(quality, lat, lng, radius) {
-  const cache = (window.__altCache = window.__altCache || {}); const key = [quality, lat.toFixed(6), lng.toFixed(6), radius].join('|');
-  if (cache[key]) return cache[key];
-  const safe = 'alt_' + quality + '_' + String((state.solar && state.solar.name) || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius;
-  const nm = (k) => '_cache_' + safe + '_' + k; const local = location.hostname === 'localhost';
-  let layers = null, mT = null, dT = null, rT = null;
-  if (local) { try { const meta = await fetch('/reports/' + nm('meta.json')); if (meta.ok) { layers = await meta.json(); mT = await loadTiff('unused', nm('mask.tif')); dT = await loadTiff('unused', nm('dsm.tif')); rT = await loadTiff('unused', nm('rgb.tif')); } } catch (_) { mT = null; } }
-  if (!mT || !dT) {
-    const full = await solarDataLayers(lat, lng, radius, quality);
-    if (!full.maskUrl || !full.dsmUrl) throw new Error('That dataset has no mask and height model');
-    [mT, dT] = await Promise.all([loadTiff(full.maskUrl, nm('mask.tif')), loadTiff(full.dsmUrl, nm('dsm.tif'))]);
-    try { rT = full.rgbUrl ? await loadTiff(full.rgbUrl, nm('rgb.tif')) : null; } catch (_) { rT = null; }
-    layers = { imageryDate: full.imageryDate, imageryQuality: full.imageryQuality };
-    if (local) { try { await fetch('/save?name=' + encodeURIComponent(nm('meta.json')), { method: 'POST', body: JSON.stringify(layers) }); } catch (_) { /* best effort */ } }
-  }
-  return (cache[key] = { layers, maskT: mT, dsmT: dT, rgbT: rT && rT.bands ? rT : null });
+  const main = state.solar || null;
+  const key = rmLayerRequestIdentity(main, radius, lat, lng, quality), cache = (window.__altCache = window.__altCache || {});
+  if (cache[key] && cache[key].requestIdentity === key) return cache[key];
+  return (cache[key] = await rmLoadLayerSet(main, lat, lng, radius, quality));
 }
 // nearest-pixel copy of another raster set onto the current grid (the two Solar datasets normally share one grid already)
 function altResample(A, cur, w, h) {
+  rmAssertSameGrid(A.maskT, A.dsmT, 'Alternate mask and DSM');
+  if (A.rgbT) rmAssertSameGrid(A.maskT, A.rgbT, 'Alternate mask and aerial');
   const src = A.dsmT; const o = src.toLL(0, 0), ex = src.toLL(src.w, 0), ey = src.toLL(0, src.h);
   const ax = (ex.lng - o.lng) / src.w, ay = (ex.lat - o.lat) / src.w, bx = (ey.lng - o.lng) / src.h, by = (ey.lat - o.lat) / src.h, det = ax * by - bx * ay;
   const dsm = new Float32Array(w * h).fill(-9999), mask = new Uint8Array(w * h), valid = new Uint8Array(w * h);
@@ -548,6 +708,10 @@ function rmNoBuilding(layers, main) {
 async function autoTraceRoof(opts = {}) {
   if (!state.solar) throw new Error('Get roof data first');
   const main = state.solar;
+  if (typeof assertSolarSelection === 'function') assertSolarSelection(main, state.location);
+  const locationEpoch = state.locationEpoch || 0;
+  const traceRequest = window.__rmTraceRequest = (window.__rmTraceRequest || 0) + 1;
+  const assertCurrent = () => { if ((state.locationEpoch || 0) !== locationEpoch || state.solar !== main || window.__rmTraceRequest !== traceRequest) throw new Error('The selected location changed while tracing. Get roof data for the current pin and trace again.'); };
   // a second dated dataset: opts.altProbe only checks it; state.altFusion (set after the reviewer approved it) uses it
   const opts0 = opts;
   // an approval belongs to one building: it never follows the user to the next address
@@ -561,28 +725,11 @@ async function autoTraceRoof(opts = {}) {
   const halfDiag = Math.hypot((bb.ne.longitude - bb.sw.longitude) * kx, (bb.ne.latitude - bb.sw.latitude) * ky) / 2;
   const radius = Math.min(100, Math.max(15, Math.ceil(halfDiag + 12)));
   if (!opts.quiet) toast('Downloading roof height model...');
-  // cache the downloaded rasters per building in this session: re-tracing (or re-printing) the same roof costs nothing extra
-  const cacheKey = main.name + '|' + radius;
+  // Cache the selected record snapshot in this session; a changed record cannot inherit another flight.
+  const cacheKey = rmLayerRequestIdentity(main, radius, cLat, cLng, null);
   const cache = (window.__layerCache = window.__layerCache || {});
   let cached = cache[cacheKey];
-  if (!cached) {
-    const safe = String(main.name || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius;
-    const mName = '_cache_' + safe + '_mask.tif', dName = '_cache_' + safe + '_dsm.tif';
-    let mT = null, dT = null, layers = null;
-    if (location.hostname === 'localhost') {
-      try { const ok = (await fetch('/reports/' + mName)).ok && (await fetch('/reports/' + dName)).ok && (await fetch('/reports/_cache_' + safe + '_rgb.tif')).ok; if (ok) { mT = await loadTiff('unused', mName); dT = await loadTiff('unused', dName); layers = { imageryDate: main.imageryDate, fromDiskCache: true }; } } catch (_) { mT = null; }
-    }
-    if (!mT) {
-      layers = await solarDataLayers(cLat, cLng, radius);
-      if (!layers.maskUrl || !layers.dsmUrl) throw new Error('Data layers did not include a mask and DSM');
-      [mT, dT] = await Promise.all([loadTiff(layers.maskUrl, mName), loadTiff(layers.dsmUrl, dName)]);
-    }
-    // aerial colour layer of the same flight (same grid as the height model): vegetation test + the report's aerial view
-    let rT = null; const rName = '_cache_' + safe + '_rgb.tif';
-    try { rT = layers.rgbUrl ? await loadTiff(layers.rgbUrl, rName) : (location.hostname === 'localhost' && (await fetch('/reports/' + rName)).ok ? await loadTiff('unused', rName) : null); } catch (_) { rT = null; }
-    cached = cache[cacheKey] = { layers, maskT: mT, dsmT: dT, rgbT: rT };
-  }
-  if (cached.rgbT === undefined && cached.layers && cached.layers.rgbUrl) { try { cached.rgbT = await loadTiff(cached.layers.rgbUrl, '_cache_' + String(main.name || 'b').replace(/[^A-Za-z0-9]/g, '_') + '_' + radius + '_rgb.tif'); } catch (_) { cached.rgbT = null; } }
+  if (!cached || cached.requestIdentity !== cacheKey) cached = cache[cacheKey] = await rmLoadLayerSet(main, cLat, cLng, radius, null);
   let { layers, maskT, dsmT } = cached; let rgbT = cached.rgbT && cached.rgbT.bands && cached.rgbT.w === dsmT.w && cached.rgbT.h === dsmT.h ? cached.rgbT : null;
   // Google's building record can come from a newer flight than the best (high quality) layers. When the selected building
   // has no outline in those layers (built after that flight), trace from the flight the record itself comes from. It is
@@ -600,9 +747,12 @@ async function autoTraceRoof(opts = {}) {
       }
     } }
 
+  const registered = rmPrepareTraceLayers(maskT, dsmT, rgbT, { lat: cLat, lng: cLng, kx, ky });
+  maskT = registered.maskT; dsmT = registered.dsmT; rgbT = registered.rgbT;
   // hidden zones a reviewer confirmed from another source are passed to the tracer as points in its metre frame
   opts = { ...opts, rgb: rgbT ? rgbT.bands : null, acceptHidden: (state.acceptedHidden || []).map((p) => [(p.lng - cLng) * kx, (p.lat - cLat) * ky]) };
-  if (maskT.w !== dsmT.w || maskT.h !== dsmT.h) throw new Error('Mask and DSM sizes differ');
+  rmAssertSameGrid(maskT, dsmT, 'Mask and DSM');
+  if (rgbT) rmAssertSameGrid(maskT, rgbT, 'Mask and aerial');
   const w = maskT.w, h = maskT.h;
   let mask = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) mask[i] = maskT.data[i] > 0 ? 1 : 0;
   let dsmUse = dsmT, altInfo = null;
@@ -624,26 +774,26 @@ async function autoTraceRoof(opts = {}) {
   const clipped = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) { const N = geo.N(y + 0.5); if (N < bN0 || N > bN1) continue; for (let x = 0; x < w; x++) { const i = y * w + x; if (!mask[i]) continue; const E = geo.E(x + 0.5); if (E >= bE0 && E <= bE1) clipped[i] = 1; } }
   // the main building is the mask piece that fills Google's building box best (the box centre can fall outside an L-shaped house)
-  let sx = -1, sy = -1;
+  let sx = -1, sy = -1, selection = null;
   {
     let pieces = allComponents(clipped, w, h);
-    const cx0 = (geo.X(0) || w / 2), cy0 = (geo.Y(0) || h / 2);
-    if (!pieces.length) {
-      // Google's building box missed the mask (box from older imagery): take the nearest roof piece instead
-      const near = allComponents(mask, w, h).filter((pc) => pc.n * geo.pxM2 >= 20 && Math.hypot(pc.cx - cx0, pc.cy - cy0) * Math.sqrt(geo.pxM2) < 20);
-      for (const pc of near) for (let i = 0; i < w * h; i++) if (pc.member[i]) clipped[i] = 1;
-      pieces = near;
-    }
+    const x0 = geo.X(0), y0 = geo.Y(0);
+    const cx0 = Number.isFinite(x0) ? x0 : w / 2, cy0 = Number.isFinite(y0) ? y0 : h / 2;
+    // If the dated building box has no roof, a nearby component is not evidence
+    // for this structure. Leave the case unresolved rather than choosing a neighbour.
     if (!pieces.length) throw new Error(rmNoBuilding(layers, main));
-    let best = null, bestScore = -Infinity;
-    for (const pc of pieces) { const d = Math.hypot(pc.cx - cx0, pc.cy - cy0) * Math.sqrt(geo.pxM2); const score = pc.n * geo.pxM2 - d * 2; if (score > bestScore) { bestScore = score; best = pc; } }
+    const loc = state.location;
+    const pinPx = loc ? [geo.X((loc.lng - cLng) * kx), geo.Y((loc.lat - cLat) * ky)] : null;
+    const witnesses = ((main.solarPotential && main.solarPotential.roofSegmentStats) || []).filter(s => s.center).map(s => [geo.X((s.center.longitude - cLng) * kx), geo.Y((s.center.latitude - cLat) * ky)]);
+    const selected = rmChooseMaskComponent(pieces, w, h, geo, pinPx, [cx0, cy0], witnesses); const best = selected.component;
+    selection = selected.evidence;
     for (let i = 0; i < w * h; i++) if (best.member[i]) { sx = i % w; sy = (i - sx) / w; break; }
   }
   const mainFlood = floodComponent(clipped, w, h, sx, sy);
   if (!mainFlood.n) throw new Error(rmNoBuilding(layers, main));
   let msx = 0, msy = 0, mminx = w, mmaxx = 0, mminy = h, mmaxy = 0;
   for (let j = 0; j < w * h; j++) if (mainFlood.out[j]) { const px = j % w, py = (j - px) / w; msx += px; msy += py; if (px < mminx) mminx = px; if (px > mmaxx) mmaxx = px; if (py < mminy) mminy = py; if (py > mmaxy) mmaxy = py; }
-  const mainComp = { member: mainFlood.out, n: mainFlood.n, cx: msx / mainFlood.n, cy: msy / mainFlood.n, bbox: [mminx, mminy, mmaxx, mmaxy] };
+  const mainComp = { member: mainFlood.out, n: mainFlood.n, cx: msx / mainFlood.n, cy: msy / mainFlood.n, bbox: [mminx, mminy, mmaxx, mmaxy], selection };
   // everything else in the mask (minus the main building) is a candidate outbuilding
   const rest = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) rest[i] = mask[i] && !mainComp.member[i] ? 1 : 0;
   const comps = allComponents(rest, w, h);
@@ -657,7 +807,7 @@ async function autoTraceRoof(opts = {}) {
     const d = A.layers.imageryDate; const date = d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : null;
     const srcName = 'Google Solar API, ' + String(A.layers.imageryQuality || altReq.quality).toLowerCase() + ' quality';
     altInfo = { quality: A.layers.imageryQuality || altReq.quality, date, source: srcName, label: srcName + (date ? ', flown ' + date : ''), check: chk, used: false, soft: String(A.layers.imageryQuality || altReq.quality).toUpperCase() !== 'HIGH' };
-    if (opts.altProbe) return { alt: altInfo, hiddenZones: (r1.obstruction && r1.obstruction.hiddenZones) || [] };
+    if (opts.altProbe) { assertCurrent(); return { alt: altInfo, hiddenZones: (r1.obstruction && r1.obstruction.hiddenZones) || [] }; }
     if (chk.ok && altReq.approved) {
       // carry the other dataset in only where the current one has canopy (plus its blurred rim); everything else stays as flown
       const sh = chk.shiftPx[1] * w + chk.shiftPx[0]; const zone = altDilate(r1.treeMask, w, h, Math.round(1.2 / Math.sqrt(geo.pxM2))); const mg = Math.max(Math.abs(chk.shiftPx[0]), Math.abs(chk.shiftPx[1])) + 1;
@@ -696,12 +846,17 @@ async function autoTraceRoof(opts = {}) {
   // The other dataset was copied in around the canopy, but did it show any roof the trace image hides? If it resolved
   // less than 1 m2 (the same tree is over the same corner, say), the sketch must not be built on it: trace again without it.
   if (altInfo && altInfo.used) { const resolved = results.reduce((a, r) => a + (r.res.altResolvedPx || 0), 0) * geo.pxM2;
-    if (resolved < 1) { const info2 = await autoTraceRoof({ ...opts0, noAlt: true }); const na = { ...altInfo, used: false, reasons: ['The other dataset shows none of the roof this one has under tree canopy, so nothing was carried in.'] }; info2.alt = na; if (state.trace) state.trace.alt = na; return info2; } }
-  // load into the app
-  for (const f of state.facets) f.shape.setMap(null); for (const e of state.edges) e.shape.setMap(null);
-  state.facets = []; state.edges = []; state.selected = null;
+    if (resolved < 1) { assertCurrent(); const info2 = await autoTraceRoof({ ...opts0, noAlt: true }); if ((state.locationEpoch || 0) !== locationEpoch || state.solar !== main || window.__rmTraceRequest !== traceRequest + 1) throw new Error('The selected location changed while tracing'); const na = { ...altInfo, used: false, reasons: ['The other dataset shows none of the roof this one has under tree canopy, so nothing was carried in.'] }; info2.alt = na; if (state.trace) state.trace.alt = na; return info2; } }
+  const newerRecords = await rmNewerRecords(layerChoice && layerChoice.used === 'record' ? null : main).catch(() => null);
+  assertCurrent();
+  // One synchronous mutation batch: do not rebuild all structures and labels for
+  // every one of hundreds of new lines. Geometry is unchanged by this display batch.
   let fi = 0, mainSqft = 0;
   const hiddenZones = [];
+  state.deferRecompute = (state.deferRecompute || 0) + 1;
+  try {
+  for (const f of state.facets) f.shape.setMap(null); for (const e of state.edges) e.shape.setMap(null);
+  state.facets = []; state.edges = []; state.selected = null;
   results.forEach(({ res }, idx) => {
     const base = fi;
     if (res.obstruction && res.obstruction.hiddenZones) for (const z of res.obstruction.hiddenZones) hiddenZones.push({ ...z, id: 'Z' + (hiddenZones.length + 1), structure: idx + 1, facetName: z.facet != null ? 'F' + (base + z.facet + 1) : null });
@@ -712,14 +867,19 @@ async function autoTraceRoof(opts = {}) {
     }
     for (const e of res.edges) addEdge(e.type, e.path, null, '', e.factor != null ? { factor: e.factor, basis: e.basis, status: e.status, autoType: e.type, obscuredFt: e.obscuredFt, structure: idx + 1, evidence: e.evidence, missing: e.missing, paired: e.paired, confirmedBy: e.confirmedBy ? { source: e.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, altFt: e.altFt } : { structure: idx + 1 });
   });
+  } finally { state.deferRecompute--; }
   state.otherSolar = results.slice(1).map((r) => r.resp).filter(Boolean);
+  // Reference Solar-plane labels otherwise obscure the newly traced geometry.
+  // This only changes visibility; the user can turn the reference layer back on.
+  state.showSolar = false; const solarToggle = typeof $ === 'function' ? $('#chkSolar') : null; if (solarToggle) solarToggle.checked = false;
   if (typeof drawSolar === 'function') drawSolar();
   if (altInfo && altInfo.used) altInfo.usedSqft = results.reduce((a, r) => a + r.res.facets.reduce((q, f) => q + (f.altSqft || 0), 0), 0);
   const info = { structures: results.length, facets: fi, edges: state.edges.length, mainSqft: Math.round(mainSqft), unassignedPct: mainRes.unassignedPct, planes: mainRes.planes, datum: mainRes.datum, radius, imageryDate: layers.imageryDate, size: `${w}x${h}`, obstruction: mainRes.obstruction || null, hiddenZones, repairs: mainRes.repairs || [], plot: mainRes.plot || null, alt: altInfo };
   // what the trace was made from, for the review panel, the audit trail and the report
   state.trace = { engine: 'v2.1', tracedAt: new Date().toISOString(), imageryDate: (layers || {}).imageryDate || main.imageryDate || null, imageryQuality: (layers || {}).imageryQuality || main.imageryQuality || null, source: 'Google Solar API height model (DSM) and building mask, 0.1 m per pixel', hasRgb: !!rgbT, noiseSigmaM: mainRes.noiseSigma || null,
-    layerChoice, newerRecords: await rmNewerRecords(layerChoice && layerChoice.used === 'record' ? null : main).catch(() => null), addressCheck: rmAddressCheck(results[0] && results[0].res, kx, ky, cLat, cLng), obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { method: 'largest mask piece inside the Google building box nearest its centre', planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
+    layerChoice, registration: registered.registration, newerRecords, addressCheck: rmAddressCheck(results[0] && results[0].res, kx, ky, cLat, cLng), obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { ...mainComp.selection, planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
     raw: results.map(({ res }, idx) => ({ structure: idx + 1, facets: res.facets.map((f) => ({ pitch: f.pitch, slope: f.slope, status: f.status, path: f.path, rawPath: f.rawPath || null })), edges: res.edges.map((e) => ({ type: e.type, factor: e.factor, status: e.status, path: e.path })) })) };
+  rmAttachTraceEvidence();
   recompute();   // after state.trace is set: labels, hatching and the review panel read the hidden zones from it
   if (!opts.quiet) toast(`Auto-traced ${fi} facets, ${state.edges.length} lines, ${results.length} structure${results.length === 1 ? '' : 's'}`);
   return info;
@@ -759,4 +919,36 @@ async function batchTest(n = 50, box = { latMin: 30.17, latMax: 30.42, lngMin: -
   }
   window.__batchDone = true;
   return results;
+}
+
+// Provenance of every auto-traced quantity, recorded once the whole trace is in the model. Each quantity carries the
+// dated georeferenced source it came from and how it was derived, bound to the current geometry by its evidence
+// revision (a later edit makes it stale, never silently valid). Only what the engine actually measured is recorded as
+// measured; an inferred continuation stays inferred; an unresolved item gets no provenance at all. Undated imagery
+// gives no provenance (the audit then withholds the quantity). The building selection is left to a person.
+function rmTraceIsoDate(d) { if (!d) return null; if (typeof d === 'string') return /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : null; return d.year ? `${d.year}-${String(d.month || 1).padStart(2, '0')}-${String(d.day || 1).padStart(2, '0')}` : null; }
+// backfill (a job saved before provenance existed): only items still exactly as the engine produced them (same path,
+// status, type / pitch as the trace's stored raw output, no hand edit) get the engine's provenance; anything else stays
+// unresolved until a person records evidence for it
+function rmAttachTraceEvidence(opts = {}) {
+  const tr = state.trace; if (!tr) return 0;
+  const raw = opts.backfill ? (tr.raw || []).flatMap((r) => [...(r.facets || []).map((f) => ({ ...f, kind: 'facet' })), ...(r.edges || []).map((e) => ({ ...e, kind: 'edge' }))]) : null;
+  if (opts.backfill && !raw.length) return 0;
+  const samePath = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((p, i) => Math.abs(p.lat - b[i].lat) < 1e-9 && Math.abs(p.lng - b[i].lng) < 1e-9);
+  const asEngine = (x, item, kind) => !opts.backfill || (!x.measurementEvidence && !x.edited && raw.some((r) => r.kind === kind && r.status === RM.statusOf(x) && samePath(r.path, item.path) && (kind === 'edge' ? r.type === x.type : r.pitch === x.pitch))); const date = rmTraceIsoDate(tr.imageryDate); if (!date || typeof serialize !== 'function' || !RM.evidenceRevision) return 0;
+  const source = 'Google Solar API GeoTIFF layers (10 cm height model, building mask)'; const job = serialize(); let n = 0;
+  const rec = (live, item, quantity, status, basis) => { if (status === 'unresolved') return; live.measurementEvidence = { ...(live.measurementEvidence || {}), [quantity]: { source, date, basis, status, revision: RM.evidenceRevision(item, quantity, job), auto: true } }; n++; };
+  for (const f of state.facets) { if (!f.auto) continue; const item = (job.facets || []).find((x) => x.modelId === f.modelId); if (!item || !asEngine(f, item, 'facet')) continue; const st = RM.statusOf(f);
+    const fit = f.rms != null ? `plane fitted to the height model, rms ${f.rms.toFixed(3)} m` : 'plane fitted to the height model';
+    rec(f, item, 'geometry', st, st === 'inferred' ? 'outline continued from adjoining measured planes (estimate)' : 'outline from the building mask and plane segmentation');
+    rec(f, item, 'pitch', f.slope != null ? st : 'unresolved', st === 'inferred' ? fit + ' (estimate)' : fit);
+    rec(f, item, 'area', f.slope != null ? st : 'unresolved', 'traced outline with the fitted slope' + (st === 'inferred' ? ' (estimate)' : '')); }
+  for (const e of state.edges) { if (e.autoType == null) continue; const item = (job.edges || []).find((x) => x.modelId === e.modelId); if (!item || !asEngine(e, item, 'edge')) continue; const st = RM.statusOf(e);
+    rec(e, item, 'geometry', st, 'boundary or intersection of fitted roof planes' + (st === 'inferred' ? ' (estimate)' : ''));
+    rec(e, item, 'type', st, 'classified from the adjoining plane slopes and heights');
+    rec(e, item, 'length', st, 'true length from the traced path and the adjoining fitted slope' + (st === 'inferred' ? ' (estimate)' : '')); }
+  // scale: the layers are georeferenced and were checked against one affine grid (residual within tolerance)
+  const reg = tr.registration; if (reg && Number.isFinite(reg.residualM) && reg.residualM <= (reg.toleranceM || 0.05) && typeof reviewScopeRevision === 'function' && !(tr.scopeEvidence && tr.scopeEvidence.selectionVerified))
+    tr.scopeEvidence = { source, date, basis: `georeferenced raster grid; affine residual ${reg.residualM.toFixed(3)} m within ${(reg.toleranceM || 0.05).toFixed(2)} m`, selectionVerified: false, scaleVerified: true, revision: reviewScopeRevision(job), auto: true };
+  return n;
 }
