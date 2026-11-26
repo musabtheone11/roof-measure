@@ -84,6 +84,7 @@ jobs:
           node map-label-test.mjs
           node --test target-intent-test.mjs
           node roof-invariants.mjs
+          node canopy-ambiguity.mjs
         working-directory: bench
       - name: Server-side AI geometry and orchestration contracts
         run: |
