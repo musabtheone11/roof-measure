@@ -108,10 +108,10 @@ function endpointError(a, b) {
     Math.max(distance(start,last),distance(end,first)));
 }
 
-function evaluate(f, context) {
+export function evaluate(f, context, options = renderOptions) {
   const th=f.rotationDeg*Math.PI/180, pitch=f.riseIn12/12;
   const wing={cx:0,cy:0,th,L:f.lengthM,W:f.widthM,kind:f.kind,s:pitch,sEnd:pitch,eaveZ:3};
-  const scene=render([wing],rng(f.seed),renderOptions);
+  const scene=render([wing],rng(f.seed),options);
   const bytes=createHash('sha256');
   for (const data of [scene.dsm,scene.mask,...scene.rgb]) bytes.update(Buffer.from(data.buffer,data.byteOffset,data.byteLength));
   const rasterSha256=bytes.digest('hex');
@@ -151,7 +151,7 @@ function distribution(values) {
   return {n,median:rounded((sorted[Math.floor((n-1)/2)]+sorted[Math.floor(n/2)])/2),
     p95:sorted[Math.ceil(.95*n)-1],worst:sorted.at(-1)};
 }
-function summary(scenes) {
+export function summary(scenes) {
   const matches=scenes.flatMap(s=>s.edgeMatches);
   const count=key=>scenes.reduce((sum,s)=>sum+s[key].length,0);
   return {scenes:scenes.length,traceErrors:scenes.filter(s=>s.error).length,matchedEdges:matches.length,
@@ -162,20 +162,22 @@ function summary(scenes) {
     perEdgeType:Object.fromEntries(['eave','ridge','hip','rake'].map(t=>[t,distribution(matches.filter(m=>m.expectedType===t).map(m=>m.absoluteErrorFt))]))};
 }
 
-const baselineEngine=engine(baseline), currentEngine=engine();
-const reports={};
-for (const [name,version] of Object.entries({baseline:baselineEngine,integrated:currentEngine})) {
-  const scenes=fixtures.map(f => evaluate(f,version.context));
-  reports[name]={sourceSha256:version.sources,summary:summary(scenes),scenes};
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const baselineEngine=engine(baseline), currentEngine=engine();
+  const reports={};
+  for (const [name,version] of Object.entries({baseline:baselineEngine,integrated:currentEngine})) {
+    const scenes=fixtures.map(f => evaluate(f,version.context));
+    reports[name]={sourceSha256:version.sources,summary:summary(scenes),scenes};
+  }
+  assert.deepEqual(reports.baseline.scenes.map(s=>s.rasterSha256), reports.integrated.scenes.map(s=>s.rasterSha256));
+  const report={schema:1,scope:'Eight fixed synthetic, single-structure, unobstructed gable/hip roofs. No field accuracy, typing of valleys, wrong-building selection or untouched real holdout tested.',
+    provenance:'Independent closed-form 3D vertices and source-local edges, seeded repository renderer, 0.1 m pixels; no customer data.',
+    baseline,integratedHead:git(['rev-parse','HEAD']).trim(),fixtures,renderOptions,
+    fixtureSha256:hash(JSON.stringify({fixtures,renderOptions,endpointToleranceM,minimumFacetIou})),
+    method:{endpointToleranceM,minimumFacetIou,matching:'One-to-one greedy minimum of the worse of two reversible endpoint distances. Four raster pixels distinguish correspondences; type is scored after assignment. Facets maximize planar polygon IoU above 0.50.',
+      length:'Sum emitted polyline segment lengths using the exact fitted edge factor via summarizeEngine(...,true). Includes matched, finite lines regardless of type; misses and extra lines are listed separately.',
+      quantiles:'Median midpoint, nearest-rank p95, maximum. Absolute feet for individual edges and absolute percentage for whole-roof sloped area. Internal diagnostics only.'},reports};
+  const output=process.argv[2] || path.join(root,'docs/evaluation/edge-validation.json');
+  fs.writeFileSync(output,JSON.stringify(report,null,2)+'\n');
+  console.log(JSON.stringify(Object.fromEntries(Object.entries(reports).map(([k,v])=>[k,v.summary])),null,2));
 }
-assert.deepEqual(reports.baseline.scenes.map(s=>s.rasterSha256), reports.integrated.scenes.map(s=>s.rasterSha256));
-const report={schema:1,scope:'Eight fixed synthetic, single-structure, unobstructed gable/hip roofs. No field accuracy, typing of valleys, wrong-building selection or untouched real holdout tested.',
-  provenance:'Independent closed-form 3D vertices and source-local edges, seeded repository renderer, 0.1 m pixels; no customer data.',
-  baseline,integratedHead:git(['rev-parse','HEAD']).trim(),fixtures,renderOptions,
-  fixtureSha256:hash(JSON.stringify({fixtures,renderOptions,endpointToleranceM,minimumFacetIou})),
-  method:{endpointToleranceM,minimumFacetIou,matching:'One-to-one greedy minimum of the worse of two reversible endpoint distances. Four raster pixels distinguish correspondences; type is scored after assignment. Facets maximize planar polygon IoU above 0.50.',
-    length:'Sum emitted polyline segment lengths using the exact fitted edge factor via summarizeEngine(...,true). Includes matched, finite lines regardless of type; misses and extra lines are listed separately.',
-    quantiles:'Median midpoint, nearest-rank p95, maximum. Absolute feet for individual edges and absolute percentage for whole-roof sloped area. Internal diagnostics only.'},reports};
-const output=process.argv[2] || path.join(root,'docs/evaluation/edge-validation.json');
-fs.writeFileSync(output,JSON.stringify(report,null,2)+'\n');
-console.log(JSON.stringify(Object.fromEntries(Object.entries(reports).map(([k,v])=>[k,v.summary])),null,2));
