@@ -37,6 +37,19 @@ test('a roof with the provider centre cannot substitute for an unsupported expli
     {E:x => x, N:y => -y}, [5,5], [10,5], [[9,4]], true), /pin/i);
 });
 
+test('late trace failure leaves the new roof and its controls intact', async () => {
+  const state={solar:{name:'old'},facets:[],trace:null}, button={};
+  let epoch=1, fail;
+  const c=vm.createContext({state,$:()=>button,locationGeneration:()=>epoch,
+    autoTraceRoof:()=>new Promise((_resolve,reject)=>{fail=reject;}),
+    toast(){assert.fail('A stale trace failure reached the new job');}});
+  vm.runInContext(fn(source('app.js'),'runAutoTrace'),c);
+  const pending=c.runAutoTrace();
+  epoch++;state.solar=null;
+  fail(new Error('old flight unavailable'));await pending;
+  assert.equal(state.trace,null);assert.equal(button.disabled,true);
+});
+
 test('alternate aerial fetch finishing after relocation cannot register a source on the new job', async () => {
   let epoch = 1, release;
   const AV = {tiers: [{id:'spring',source:'Synthetic flight',quality:'HIGH'}],src:{}};

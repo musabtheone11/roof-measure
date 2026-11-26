@@ -14,7 +14,7 @@ export async function startPrivatePreview({port=3000,host='127.0.0.1',username=p
  const runtimePort=runtime.address().port;
  const gateway=http.createServer((req,res)=>{
   const send=(status,body,headers={})=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers});res.end(JSON.stringify(body));};
-  if(req.url==='/healthz'&&req.method==='GET')return send(200,{status:'ready',mode:'private-preview',storage:'transient-memory'});
+  if(req.url==='/healthz'&&req.method==='GET')return send(200,{status:'ready',mode:'private-preview',storage:runtime.storageMode||'transient-memory',revision:process.env.ROOF_REVISION||null});
   if(origin&&req.headers.host!==origin.host)return send(400,{error:'Preview host does not match PUBLIC_ORIGIN.'});
   const secure=!!req.socket.encrypted||(trustProxy&&String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https');
   if(origin?.protocol==='https:'&&!secure)return send(426,{error:'Use the HTTPS preview URL.'});

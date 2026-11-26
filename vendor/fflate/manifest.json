@@ -1,0 +1,8 @@
+{
+  "package": "fflate",
+  "version": "0.8.2",
+  "source": "https://registry.npmjs.org/fflate/-/fflate-0.8.2.tgz",
+  "integrity": "sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==",
+  "file": "package/esm/browser.js",
+  "sha256": "8cc1f687e0159e977addb6b85e274dbd11e622cf151f4fcb7b85d49622ea43e7"
+}

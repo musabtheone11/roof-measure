@@ -1,0 +1,104 @@
+{
+  "fixture": "simple-gable",
+  "split": "synthetic development",
+  "sampleCount": 1,
+  "scope": "Saved local authenticated evaluation; no field measurement or inference during audit.",
+  "sha256": {
+    "simple-gable.png": "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101",
+    "manifest.json": "d9bc27e0548b022ad32807dec51dcd6b14aa89a5da490a90ef9274c12cbca9d8",
+    "review.json": "8aec4cf538afa98e1c7673cfbc7645e3f2051c4a47eb7f986acea976af1c680e",
+    "review.pdf": "11b24a8da1a3f148dfcec0faf55baad5651521e3c18f947b605862063c44f1e9",
+    "trial.json": "76f65badcce328e98a43e1705d560948b4368e9386e6c6b6fca327af2d8fc696"
+  },
+  "truth": {
+    "boundsPx": [
+      100,
+      100,
+      500,
+      350
+    ],
+    "areaPx2": 100000,
+    "perimeterPx": 1300,
+    "scale": null,
+    "pitch": null
+  },
+  "thresholds": {
+    "outlineIoU": 0.95,
+    "meanBoundaryPixels": 3
+  },
+  "boundaryMethod": "Symmetric perimeter-weighted midpoint distances to the exact rectangle boundary, sampled every 0.25 px or less.",
+  "independentComparisons": {
+    "outline": {
+      "model": "free/qwen-3.8-max",
+      "boundsPx": [
+        101,
+        95,
+        499,
+        345
+      ],
+      "areaPx2": 99500,
+      "signedAreaErrorPct": -0.5,
+      "intersectionPx2": 97510,
+      "iou": 0.95607412,
+      "symmetricMeanBoundaryPx": 3.45218,
+      "maxCornerDistancePx": 5.09902,
+      "passesIoU": true,
+      "passesMeanBoundary": false
+    },
+    "independent": {
+      "model": "free/gpt-6-luna",
+      "boundsPx": [
+        102,
+        95,
+        498,
+        348
+      ],
+      "areaPx2": 100188,
+      "signedAreaErrorPct": 0.188,
+      "intersectionPx2": 98208,
+      "iou": 0.96301236,
+      "symmetricMeanBoundaryPx": 2.90468,
+      "maxCornerDistancePx": 5.0,
+      "passesIoU": true,
+      "passesMeanBoundary": true
+    }
+  },
+  "modelToModelIoUDiagnostic": 0.9832353408549181,
+  "provider": {
+    "requests": 6,
+    "completedRoles": 5,
+    "billedUsd": 0,
+    "unknownBillingRequests": 0,
+    "invalidSchemaAttempts": 1
+  },
+  "review": {
+    "revision": 7,
+    "snapshotAndCanonicalGeometryAgree": true,
+    "geometryValid": false,
+    "facetCount": 2,
+    "edgeCount": 6,
+    "outsideOutlinePx2": 500,
+    "issueCounts": {
+      "outside-outline": 1,
+      "edge-outside-roof": 5,
+      "scale-unresolved": 1,
+      "pitch-unresolved": 2,
+      "edge-unresolved": 1,
+      "edge-classification-unresolved": 1
+    },
+    "allPhysicalAreasAndLengthsWithheld": true,
+    "status": "REVIEW REQUIRED"
+  },
+  "pdf": {
+    "pages": 3,
+    "eachPageMatchesRevisionAndReviewStatus": true,
+    "sourceFingerprintMatches": true,
+    "scheduleIdsMatch": true,
+    "physicalScheduleCellsBlank": true
+  },
+  "limitations": [
+    "No verified field scale, roof pitch, or ground truth edge classifications.",
+    "The fixture includes a shadow. The adjudicator endorsed its diagonal tonal boundary as an interior roof edge; that classification lacks structural evidence.",
+    "The raw trial file was written at the provider stage. PDF and revision checks above come directly from the two saved browser downloads."
+  ]
+}

@@ -76,6 +76,12 @@ function validateEdges(proposal,metadata,outline,facets){
 export function validateProposal(proposal,metadata={}){
  proposal=proposal&&typeof proposal==='object'?proposal:{};
  const outline=validatePolygon(proposal.outline,metadata),issues=[...outline.issues],facets=[];
+ // This workspace accepts simple rings. A hole on an imported model cannot become roof area.
+ const hasExclusion=shape=>shape && (shape.excluded===true || ['holes','cutouts','openings','exclusions'].some(key=>
+   shape[key]!=null && !(Array.isArray(shape[key]) && shape[key].length===0)));
+ if(hasExclusion(proposal)||hasExclusion(proposal.outline)||(Array.isArray(proposal.facets)&&proposal.facets.some(hasExclusion))){
+   issues.push(issue('unresolved-cutout','This source model contains openings or exclusions. Reconcile the net roof scope before using physical quantities.',['outline']));
+ }
  if(metadata.targetPixel!=null&&outline.ok&&!containsPoint(metadata.targetPixel,clean(outline.polygon)))issues.push(issue('target-mismatch','The proposed roof does not contain the selected target point',['outline']));
  const sourceFacets=proposal.facets||[]; if(!Array.isArray(sourceFacets)||sourceFacets.length>300||sourceFacets.reduce((n,f)=>n+polygonOf(f).length,0)>4096)return{ok:false,issues:[...issues,issue('geometry-budget','Roof geometry exceeds the bounded validation budget')],outline:outline.polygon,facets:[],topology:{overlapPixels2:null,gapPixels2:null,outsidePixels2:null,sharedBoundaries:[]}};
  const ids=new Set();for(const[f,i]of(sourceFacets.map((f,i)=>[f&&typeof f==='object'?f:{},i]))){const id=f.id||`F${i+1}`;if(typeof id!=='string'||!id.length||ids.has(id))issues.push(issue('duplicate-id','Facet IDs must be unique nonempty strings',[id]));ids.add(id);const v=validatePolygon(f,metadata,id);facets.push({...f,id,polygon:v.polygon});issues.push(...v.issues);}
@@ -120,7 +126,7 @@ export function measurementTransform(metadata={}){
   }
  }
  const raw=metadata.calibration; const c=raw&&{...raw,a:raw.a||raw.start,b:raw.b||raw.end,distance:raw.distance??raw.lengthFt,unit:raw.unit||(raw.lengthFt!=null?'ft':null)};
- const validEndpoint=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&p[0]>=0&&p[1]>=0&&(!metadata.width||p[0]<=metadata.width)&&(!metadata.height||p[1]<=metadata.height);
+ const validEndpoint=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&p[0]>=0&&p[1]>=0&&Number.isFinite(metadata.width)&&Number.isFinite(metadata.height)&&metadata.width>0&&metadata.height>0&&p[0]<=metadata.width&&p[1]<=metadata.height;
  if(c?.verified===true&&c.source&&dated(c.date)&&validEndpoint(c.a)&&validEndpoint(c.b)&&Number.isFinite(c.distance)&&c.distance>0&&['m','ft'].includes(c.unit)){const pixels=dist(c.a,c.b);if(pixels>0){const factor=c.distance*(c.unit==='ft'?.3048:1)/pixels;return{ok:true,basis:c,point:p=>[p[0]*factor,p[1]*factor]};}}
  return{ok:false,reason:'No verified spatial metadata or independent user calibration; physical quantities withheld.'};
 }

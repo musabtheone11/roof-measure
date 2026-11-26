@@ -75,7 +75,13 @@
     const total = (key, value) => { if (!physical || value == null) return null; if (!facets.length || facets.some(f => f[key] == null)) fail('A roof total includes unsupported facet quantities.'); return number(value, facets.reduce((n, f) => n + f[key], 0), 'roof total'); };
     const annotations = model.annotations || payload.originalAI?.structure?.annotations || [];
     if (!Array.isArray(annotations) || annotations.length > 300) fail('Too many source annotations for one review.');
-    const annotationRows = annotations.map((a, i) => ({ key: 'A' + (i + 1), id: String(a.id || ''), kind: String(a.kind || 'annotation'), text: String(a.text || ''), status: 'SOURCE-REPORTED / UNVERIFIED' }));
+    const annotationRows = annotations.map((a, i) => {
+      const region = a.region?.length ? ring(a.region, 3) : [];
+      const xs = region.map(point => point[0]), ys = region.map(point => point[1]);
+      return { key: 'A' + (i + 1), id: String(a.id || ''), kind: String(a.kind || 'annotation'),
+        text: String(a.text || ''), status: 'SOURCE-REPORTED / UNVERIFIED',
+        bounds: region.length ? [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] : null };
+    });
     const issues = [...(m.issues || []), ...(payload.originalAI?.quality?.issues || []), ...(payload.originalAI?.adjudication?.decisions || [])].map(q => typeof q === 'string' ? q : String(q.text || q.message || q.reason || q.code || 'Review required') + (q.ids?.length ? ' [' + q.ids.join(', ') + ']' : ''));
     const reviewRecords = [...model.facets.map(f => ({ item: f, kind: 'Facet' })), ...model.edges.map(e => ({ item: e, kind: 'Edge' }))].filter(q => q.item.geometryReview && typeof q.item.geometryReview === 'object').map(({ item, kind }) => {
       const r = item.geometryReview, bounded = value => String(value ?? '').slice(0, 10000);
@@ -111,7 +117,16 @@
     const line = (yy) => { doc.setDrawColor(150); doc.setLineWidth(.5); doc.line(L, yy, R, yy); };
     const header = title => { if (logo) doc.addImage(logo, 'PNG', 32, 20, 92, 45); else text('DIVERSITY CONTRACTING', 32, 38, 10, true); text('SOURCE IMAGE REVIEW', 144, 32, 8, true); text('REVIEW REQUIRED', R, 32, 8, true, null, 'right'); text('Revision ' + prepared.revision, 144, 48, 9, true); text('Source date: ' + (prepared.metadata.date || 'not recorded'), R, 48, 8, false, null, 'right'); line(76); text(title, L, 108, 21, true); y = 132; };
     const next = title => { doc.addPage('letter', 'portrait'); page++; header(title); };
-    const paragraph = (value, size = 8.5) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(size); const lines = doc.splitTextToSize(String(value), 548); for (const row of lines) { if (y + size * 1.3 > FOOT - 20) next('Review notes (continued)'); y = text(row, L, y, size); } y += 7; };
+    const paragraph = (value, size = 8.5, gap = 7) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(size);
+      const lines = doc.splitTextToSize(String(value), 548);
+      if (lines.length <= 4 && y + lines.length * size * 1.3 > FOOT - 20) next('Review notes (continued)');
+      for (const row of lines) {
+        if (y + size * 1.3 > FOOT - 20) next('Review notes (continued)');
+        y = text(row, L, y, size);
+      }
+      y += gap;
+    };
     const section = title => { if (y + 35 > FOOT - 20) next('Review schedules (continued)'); y = text(title, L, y, 12, true) + 4; };
     const table = (title, widths, headings, rows) => {
       section(title);
@@ -169,10 +184,28 @@
     paragraph('Source: ' + (prepared.metadata.source || 'not recorded') + '. Source date: ' + (prepared.metadata.date || 'not recorded') + '. Purpose: ' + (prepared.metadata.purpose || 'image') + '; page ' + (prepared.metadata.sourcePage || 1) + '; rotation ' + (prepared.metadata.rotation || 0) + ' degrees.');
     paragraph('Image: ' + prepared.metadata.width + ' × ' + prepared.metadata.height + ' pixels. Fingerprint: ' + (prepared.metadata.imageFingerprint?.sha256 || 'not provided') + '. Current model revision: ' + prepared.revision + '.');
     paragraph(prepared.physical ? 'Physical basis: ' + (prepared.metadata.georef?.source || prepared.metadata.calibration?.source || 'recorded calibration') + '. This does not certify the roof outline, pitch or source statements.' : 'Physical quantities withheld: ' + (prepared.restricted ? 'perspective, oblique or uncalibrated source orientation.' : !prepared.geometryOK ? 'geometry validation requires correction.' : prepared.metadata.georef?.verified ? 'georeferenced quantities require the geographic validation/report path; this PDF validates image calibration only.' : 'no usable verified image calibration.'));
-    if (prepared.annotations.length) { section('Source-reported annotations / never verified takeoff'); for (const a of prepared.annotations) { paragraph(a.key + (a.id ? ' / ' + a.id : '') + ' / ' + a.kind + ' / ' + a.status, 8.5); paragraph(a.text); } }
+    if (prepared.physical && prepared.metadata.calibration) {
+      const c = prepared.metadata.calibration;
+      paragraph('Horizontal reference segment ' + (c.a || c.start).join(', ') + ' to ' + (c.b || c.end).join(', ') +
+        ' px, ' + (c.distance ?? c.lengthFt) + ' ' + (c.unit || 'ft') + '. Calibration date ' + (c.date || 'unknown') + '.');
+    }
+    const pitched = prepared.facets.filter(f => f.pitch);
+    if (pitched.length) {
+      section('Pitch evidence');
+      for (const f of pitched) paragraph(modelId(f) + ' / ' + f.pitch.source);
+    }
+    if (prepared.annotations.length) {
+      section('Source-reported annotations / never verified takeoff');
+      for (const a of prepared.annotations) {
+        paragraph(a.key + (a.id ? ' / ' + a.id : '') + ' / ' + a.kind + ' / ' + a.status, 8.5);
+        paragraph('Source page ' + (prepared.metadata.sourcePage || 1) + (a.bounds
+          ? ', image region from (' + a.bounds.slice(0, 2).join(', ') + ') to (' + a.bounds.slice(2).join(', ') + ') px.' : ', image region unavailable.'));
+        paragraph(a.text);
+      }
+    }
     if (prepared.reviewRecords.length) { section('User boundary reviews / not independent certification'); for (const r of prepared.reviewRecords) { paragraph(r.kind + ' / ' + r.id + ' / ' + r.status, 8.5); paragraph('Source: ' + (r.source || 'not recorded') + '; date: ' + (r.date || 'not recorded') + '. ' + r.note); } }
     if (prepared.issues.length) { section('Review findings'); prepared.issues.forEach(q => paragraph(q)); }
-    if (prepared.corrections.length) { section('Current revision correction history'); prepared.corrections.forEach(q => paragraph(q)); }
+    if (prepared.corrections.length) { section('Current revision correction history'); prepared.corrections.forEach(q => paragraph(q, 8.5, 3)); }
     paragraph('Prior reviews retained in the saved JSON: ' + prepared.previousReviews + '. This PDF contains current-revision quantities only. Preserve the review JSON and original image for the complete audit.');
     const pages = doc.getNumberOfPages();
     for (let i = 1; i <= pages; i++) { doc.setPage(i); page = i; line(748); text('DIVERSITY CONTRACTING / SOURCE IMAGE REVIEW', L, 764, 7, true); text(i + ' of ' + pages, R, 764, 7, true, null, 'right'); }

@@ -4,7 +4,10 @@ const docker=(...args)=>execFileSync('docker',['--host=unix:///var/run/docker.so
 try{docker('run','-d','--rm','--name',name,'--init','--read-only','--tmpfs','/tmp','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','128','--memory','768m','-p','127.0.0.1::3000','-e','PREVIEW_AUTH_USERNAME','-e','PREVIEW_AUTH_PASSWORD','-e','PUBLIC_ORIGIN=http://127.0.0.1:3000','roof-measure-private-preview:review');const url='http://'+docker('port',name,'3000/tcp');const headers={Host:'127.0.0.1:3000',Authorization:'Basic '+Buffer.from(env.PREVIEW_AUTH_USERNAME+':'+env.PREVIEW_AUTH_PASSWORD).toString('base64')};
 // Native HTTP preserves exact Host; fetch does not consistently honor it.
 const http=await import('node:http');const request=(path,auth=true,body)=>new Promise((resolve,reject)=>{const r=http.request(url+path,{method:body?'POST':'GET',headers:{...headers,...(!auth?{Authorization:''}:{}),...(body?{'Content-Type':'application/json'}:{}),...(checks.cookie?{cookie:checks.cookie,'x-roof-csrf':checks.csrf}:{})}},s=>{let text='';s.on('data',c=>text+=c);s.on('end',()=>resolve({status:s.statusCode,headers:s.headers,text}));});r.on('error',reject);r.end(body?JSON.stringify(body):undefined);});
-for(let i=0;i<40;i++){try{if((await request('/healthz',false)).status===200)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+for(let i=0;i<80;i++){try{if((await request('/healthz',false)).status===200)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+const health=JSON.parse((await request('/healthz',false)).text);
+assert.equal(health.storage,'sqlite');
+if(process.env.ROOF_REVISION)assert.equal(health.revision,process.env.ROOF_REVISION);
 assert.equal((await request('/',false)).status,401);assert.equal((await request('/')).status,200);let r=await request('/api/ai/config');assert.equal(r.status,200);const config=JSON.parse(r.text);assert.equal(config.available,false);checks.cookie=r.headers['set-cookie'][0].split(';')[0];checks.csrf=config.csrfToken;
 for(const p of ['/server/main.mjs','/.env','/.devcache/private','/bench/package.json'])assert.equal((await request(p)).status,403);
 for(const p of ['/pdf-import.mjs','/vendor/pdfjs/pdf.mjs','/vendor/pdfjs/pdf.worker.mjs']){r=await request(p);assert.equal(r.status,200);assert.match(r.headers['content-type'],/javascript/);}

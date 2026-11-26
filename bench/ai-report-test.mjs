@@ -10,7 +10,8 @@ export function fixture(overrides = {}) {
     { id: 'P2', polygon: [[100, 240], [500, 240], [500, 360], [100, 360]], status: 'inferred', pitch }],
   edges: [{ id: 'top', type: 'eave', points: [[100, 120], [500, 120]], status: 'inferred' }, { id: 'ridge', type: 'ridge', points: [[100, 240], [500, 240]], status: 'inferred' },
     { id: 'internal', type: 'unspecified', points: [[200, 180], [400, 180]], status: 'unresolved' }],
-  annotations: [{ id: 'printed', kind: 'dimension', text: '40 ft printed on source; not independently verified', status: 'measured' }] };
+  annotations: [{ id: 'printed', kind: 'dimension', text: '40 ft printed on source; not independently verified', status: 'measured',
+    region: [[120, 90], [186, 90], [186, 108], [120, 108]] }] };
   const metadata = { width: 640, height: 480, source: 'Synthetic report fixture', date: '2026-11-25', view: 'orthographic', purpose: 'roof-sketch', sourcePage: 1, rotation: 0,
     calibration: { start: [100, 120], end: [500, 120], lengthFt: 40, source: 'Independent analytic calibration', date: '2026-11-25', verified: true } };
   Object.assign(metadata, overrides.metadata || {});
@@ -34,6 +35,7 @@ assert.equal(report.edges[0].sloped, null);
 assert.equal(report.status, 'SOURCE IMAGE REVIEW');
 assert.equal(report.annotations[0].status, 'SOURCE-REPORTED / UNVERIFIED');
 assert.equal(report.annotations[0].text, p.model.annotations[0].text);
+assert.deepEqual(report.annotations[0].bounds, [120, 90, 186, 108]);
 assert.equal(prepareAIReviewReport(fixture({ unknownPitch: true })).sloped, null);
 for (const data of [fixture({ perspective: true }), fixture({ metadata: { sourceRestrictions: {perspective:true,reasons:['Prior source warning']} } }), fixture({ metadata: { view: 'oblique' } }), fixture({ metadata: { calibration: null } })]) {
   const r = prepareAIReviewReport(data); assert.equal(r.projected, null); assert.equal(r.sloped, null); assert(r.edges.every(e => e.horizontal === null));

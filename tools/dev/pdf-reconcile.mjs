@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const RM = createRequire(import.meta.url)('../../roofmodel.js');
 
@@ -16,6 +17,8 @@ const ftIn = (s) => { const m = String(s).match(/(\d+)' (\d+)"/); return m ? +m[
 
 // ---- the PDF text -> numbers
 export function parseReportText(text) {
+  // Some table extractors expand the spaces inside a single printed pitch.
+  text = text.replace(/\b(\d+(?:\.\d+)?)[ \t]+\/[ \t]+12\b/g, '$1 / 12');
   const pages = text.split('\f'); const p1 = pages[0] || ''; const lines = text.split('\n'); const out = { status: null, band: {}, takeoff: [], buildings: [], blankBuildings: [], other: {}, facets: [], facetPitches: {}, edges: [], blankFacets: [], blankEdges: [], refs: [] };
   const st = p1.match(/\b(REVIEW REQUIRED|SOURCE TAKEOFF|ILLUSTRATIVE|COMPLETE)\b/); out.status = st ? st[1] : null;
   const p1l = p1.split('\n');
@@ -37,7 +40,7 @@ export function parseReportText(text) {
     const endOf = label => header.indexOf(label) + label.length;
     const verifiedEnd = endOf(header.includes('Illustrative ft²') ? 'Illustrative ft²' : 'Verified ft²');
     const inferredEnd = endOf('Inferred ft²');
-    const block = buildingPage.slice(buildingHead.index + header.length).split('Edge schedule')[0];
+    const block = buildingPage.slice(buildingHead.index + header.length).split(/^\s*Edge[ \t]+schedule[ \t]*\r?$/m)[0];
     for (const line of block.split('\n')) {
       const name = /^\s*([A-Za-z][A-Za-z0-9 +\-']*?)(?:\s{2,}|$)/.exec(line)?.[1]?.trim();
       if (!name) continue;
@@ -205,10 +208,14 @@ export function reconcile(P, M) {
 }
 export function reconcileRun(dir) {
   const pdf = path.join(dir, 'report.pdf'); const tot = JSON.parse(fs.readFileSync(path.join(dir, 'totals.json'), 'utf8')); const roofFile = path.join(dir, 'roof.json'); const roof = fs.existsSync(roofFile) ? JSON.parse(fs.readFileSync(roofFile, 'utf8')) : null;
-  const r = spawnSync('pdftotext', ['-layout', pdf, '-'], { encoding: 'utf8', maxBuffer: 64 << 20 }); if (r.status !== 0) throw new Error('pdftotext failed: ' + (r.stderr || r.error));
+  // Xpdf's reading-order heuristics split adjacent columns into unrelated rows in
+  // -layout mode. Its table mode and Poppler's physical layout keep schedule rows intact.
+  const version = spawnSync('pdftotext', ['-v'], { encoding: 'utf8' });
+  const layout = /xpdfreader\.com/i.test((version.stderr || '') + (version.stdout || '')) ? '-table' : '-layout';
+  const r = spawnSync('pdftotext', ['-enc', 'UTF-8', layout, pdf, '-'], { encoding: 'utf8', maxBuffer: 64 << 20 }); if (r.status !== 0) throw new Error('pdftotext failed: ' + (r.stderr || r.error));
   return reconcile(parseReportText(r.stdout), modelFromRun(tot, roof));
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const dir = process.argv[2]; if (!dir) { console.error('usage: node tools/dev/pdf-reconcile.mjs <run dir>'); process.exit(2); }
   const res = reconcileRun(dir); for (const c of res.checks) console.log(`${c.ok ? 'ok  ' : 'FAIL'} ${c.name}: printed ${JSON.stringify(c.printed)} vs model ${JSON.stringify(c.expected)}${c.note ? ' ' + c.note : ''}`);
   console.log(`${res.ok ? 'RECONCILED' : 'MISMATCH'}: ${res.checks.filter((c) => c.ok).length} of ${res.checks.length} checks agree`); process.exit(res.ok ? 0 : 1);

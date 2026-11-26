@@ -6,6 +6,22 @@ on:
   pull_request:
 
 jobs:
+  preview-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ROOF_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ROOF_REVISION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build pinned private preview image and check its authenticated runtime
+        run: |
+          docker build --build-arg ROOF_REVISION="$ROOF_REVISION" -t roof-measure-private-preview:review .
+          node tools/dev/preview-container-test.mjs
   engine:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -66,6 +82,8 @@ jobs:
           node batch-update-test.mjs
           node layer-cache-test.mjs
           node map-label-test.mjs
+          node --test target-intent-test.mjs
+          node roof-invariants.mjs
         working-directory: bench
       - name: Server-side AI geometry and orchestration contracts
         run: |
@@ -76,6 +94,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Bounded specialist dispatch and recovery
+        run: python tools/dev/test_specialist_sweep.py
       - name: Install pinned browser test dependencies
         run: |
           npm ci --ignore-scripts
@@ -92,6 +112,9 @@ jobs:
           node tools/dev/ai-boundary-review-test.mjs
           node tools/dev/pdf-ui-test.mjs
           node tools/dev/ai-report-test.mjs
+          node tools/dev/source-review-delivery-test.mjs
+          node tools/dev/source-review-recovery-test.mjs
+          node tools/dev/map-pointer-test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

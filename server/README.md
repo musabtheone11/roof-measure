@@ -6,15 +6,16 @@ It leaves the production Pages deployment unchanged.
 
 Requires Node 24 and `npm ci --prefix bench` for deterministic geometry dependencies.
 Set `APINEX_API_KEY` in the process environment, then run `npm start`.
-For an authenticated cloud preview use `HOST=0.0.0.0 PORT=3000 npm start` and the
-configured HTTP preview URL. Do not expose an unauthenticated public port with a
-shared API key. Production hosting needs account authentication and durable job storage.
+For an authenticated cloud preview use `npm run start:private-preview` and the
+private HTTPS ingress and volume settings in [deployment](../docs/PRIVATE_PREVIEW_DEPLOYMENT.md).
+Keep the basic Node runtime bound to loopback.
 
-The preview uses owner-bound in-memory jobs, same-origin CSRF protection, a maximum
+The preview journals owner-bound jobs in SQLite, with same-origin CSRF protection, a maximum
 of two simultaneous roof jobs, request/token/dollar ceilings, and 15-minute job expiry.
 Images are sent externally only when explicitly authorized for that uploaded image.
-Existing customer jobs are never submitted automatically. Jobs are transient; download
-the correction/provenance JSON to preserve your work.
+Existing customer jobs are never submitted automatically. The journal recovers admitted
+jobs across process restarts on the same volume. Download the revision and its
+source bundle to retain corrections beyond the job expiry.
 
 AI geometry is a proposal and always remains REVIEW REQUIRED. Agreement between two
 models is a disagreement check, not independent evidence or calibrated confidence.

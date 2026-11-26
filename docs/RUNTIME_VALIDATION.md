@@ -172,3 +172,26 @@ The shared Cloud Browser visibly opened the private workspace at
 `http://127.0.0.1:3000/` and its image-review dialog. That route exists only inside
 the managed environment; it is not an externally published URL. Vercel team access
 still returned HTTP 403. Production was not released.
+## Manually traced source workflow on Windows
+
+An operator can upload an authorized image, trace its outline, and add individual visible facets and edges. Each new facet and edge starts unresolved. The operator supplies a boundary note, classifies an edge, verifies a horizontal reference, and records the source and uncertainty of each known pitch. Editing a confirmed edge invalidates its review. Undo and redo recalculate the current revision. Selecting a new source clears the preceding property's audit from the active export.
+
+**Test oracle.** The browser draws a 200 by 100 pixel rectangle. A 200 pixel segment represents 20 ft. Projected area is 200 ft², a 5/12 pitch gives 216.67 ft² sloped, and the top edge measures 20.00 ft horizontally. Tests check the downloadable JSON, printed PDF values, and ZIP archive against those expectations. The saved review PDF carries a review-required label. The ZIP contains the reviewed raster, JSON and PDF. A Python reader checks CRCs, fixed member names, revision and the SHA-256 of the raster. An uploaded PDF contributes its selected rendered page to the bundle.
+
+**Browsers exercised.** Headless installed Chrome 158.0.8127.38 and Edge 158.0.4370.33 on Windows downloaded the synthetic report through the visible controls. The test reopens the job, verifies measured values after review, then removes, undoes, redoes and changes a reviewed shape. The new edit clears redo history and invalidates the old physical edge length. The two-source regression on handoff commit `4806a129` included one unrelated property's audit in the second export. The revised job had zero unrelated histories. All inputs are invented.
+
+**Visual and numerical evidence.** The plan, schedules and review notes in the saved example were rendered and inspected. The six calibrated, unknown-scale, perspective, missing-outline, unresolved-facet and previously restricted examples also pass independent PDF text, page-boundary and vector checks. The source editor does not establish geographic north, true sloped edge length, or a final purchase quantity. A known pitch alone cannot resolve an unreviewed facet boundary.
+
+![Rendered pages of the synthetic manual review](validation/source-review-pages.png)
+
+**Recovery.** After refresh, reselect the same normalized image or original PDF page and rotation, then choose **Recover analysis**. The tab retains a nonce, an image fingerprint and limited source settings. The server checks ownership. Its admitted raster hash and settings must match before the client polls the existing job. Recovery withholds physical calibration pending human re-entry. **Cancel saved request** records a cancellation even if upload admission has not finished. A call already dispatched can incur charges. Receipt expiry or loss of the browser session can prevent recovery.
+
+Run the checks from the repository root with the pinned browser dependencies and PDF tools from CI. Set `CHROMIUM_PATH` to an installed desktop browser to exercise that client.
+
+```sh
+node tools/dev/source-review-delivery-test.mjs
+node tools/dev/source-review-recovery-test.mjs
+node tools/dev/ai-report-test.mjs
+```
+
+Three independent synthetic map jobs also passed the original **Preview**, **Print** and **Download** buttons in desktop Chrome using the offline map adapter. The simple gable reconciled 31 of 31 checks, mixed-pitch house and garage 44 of 44, and tree-obstructed review 43 of 43. Each generated five sheets, with identical PDF bytes across its three actions, zero reported text overlaps and every key placed. The comparison checks physical PDF text using Poppler layout or Xpdf table mode. The offline map supplies no evidence of property selection or field accuracy.

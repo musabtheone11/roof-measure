@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import{validatePolygon,validateProposal,measureProposal,compareProposals,transformPoint,invertAffine,cropToSource,analyzeRoofModel}from'./geometry.mjs';
 const rect=(x,y,w,h)=>[[x,y],[x+w,y],[x+w,y+h],[x,y+h]];
 const meta={width:100,height:100,view:'orthographic',calibration:{verified:true,start:[0,0],end:[10,0],lengthFt:10,source:'Field tape',date:'2026-11-25'}};
@@ -79,3 +80,15 @@ const unresolvedFacet=structuredClone(model);unresolvedFacet.facets[0].status='u
 for(const status of['inferred','user-provided','unresolved']){const proposal={...model,edges:[{id:'EA',type:'eave',status,points:[[0,0],[20,0]]}]};const m=measureProposal(proposal,meta);assert.equal(m.edges[0].status,status);assert(m.edges[0].lengthPixels>0);if(status==='unresolved'){assert.equal(m.edges[0].horizontalLengthM,null);assert(m.issues.some(i=>i.code==='edge-unresolved'));}else assert(m.edges[0].horizontalLengthM>0);}
 const unknownLine=measureProposal({...model,edges:[{id:'unknown',type:'unspecified',status:'inferred',points:[[2,5],[8,5]]}]},meta);assert.equal(unknownLine.edges[0].horizontalLengthM,null);assert(unknownLine.edges[0].lengthPixels>0);assert(unknownLine.issues.some(i=>i.code==='edge-classification-unresolved'));
 const obstructionLine=measureProposal({...model,edges:[{id:'obstacle',type:'obstruction',status:'user-provided',points:[[2,5],[8,5]]}]},meta);assert.equal(obstructionLine.edges[0].horizontalLengthM,null,'obstruction paths never supply physical roof-edge length');assert.equal(obstructionLine.edges[0].trueSlopedLengthM,null);assert.equal(obstructionLine.edges[0].lengthPixels,6);assert(obstructionLine.issues.some(i=>i.code==='edge-classification-unresolved'));
+test('explicit unsupported openings and missing source extent cannot become physical measurements',()=>{
+ const ring=[[2,2],[10,2],[10,10],[2,10]],hole=[[4,4],[6,4],[6,6],[4,6]];
+ const meta={view:'orthographic',width:40,height:40,calibration:{verified:true,source:'Synthetic control',date:'2026-11-25',a:ring[0],b:ring[1],distance:8,unit:'ft'}};
+ const facet={id:'F1',polygon:ring},roof={outline:ring,facets:[facet]};
+ assert(Math.abs(measureProposal(roof,meta).projectedAreaM2-64*0.3048**2)<1e-10);
+ for(const candidate of [{...roof,cutouts:[hole]},{...roof,facets:[{...facet,holes:[hole]}]},{...roof,facets:[{...facet,excluded:true}]}]){
+   const result=measureProposal(candidate,meta);
+   assert.equal(result.projectedAreaM2,null);
+   assert(result.issues.some(issue=>issue.code==='unresolved-cutout'));
+ }
+ assert.equal(measureProposal(roof,{...meta,width:undefined}).projectedAreaM2,null);
+});

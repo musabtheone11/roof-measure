@@ -34,10 +34,11 @@ try {
     p.measurementSnapshot.imageMetadata = structuredClone(p.imageMetadata); p.latestResult = analyzeRoofModel(p.model, p.imageMetadata, { revision: p.revision });
     const result = await page.evaluate(async p => { const blob = await buildAIReviewPDF(p); return { bytes: Array.from(new Uint8Array(await blob.arrayBuffer())), layout: blob.reviewReport }; }, p);
     fs.writeFileSync(path.join(out, name + '.pdf'), Buffer.from(result.bytes)); layouts[name] = result.layout;
-    const r = spawnSync('pdftotext', ['-layout', path.join(out, name + '.pdf'), '-'], { encoding: 'utf8' }); assert.equal(r.status, 0);
+    const r = spawnSync('pdftotext', ['-enc', 'UTF-8', '-layout', path.join(out, name + '.pdf'), '-'], { encoding: 'utf8' }); assert.equal(r.status, 0);
     fs.writeFileSync(path.join(out, name + '.txt'), r.stdout);
     assert.match(r.stdout, /SOURCE IMAGE REVIEW/); assert.match(r.stdout, /REVIEW REQUIRED/); assert.doesNotMatch(r.stdout, /\bCOMPLETE\b/);
     assert.match(r.stdout, /SOURCE-REPORTED \/ UNVERIFIED/); assert.match(r.stdout, /40 ft printed on source; not independently verified/);
+    assert.match(r.stdout, /Source page 1, image region from \(120, 90\) to \(186, 108\) px/);
     assert.match(r.stdout, /No geographic north or map scale is established/); assert.match(r.stdout, /No order quantities/);
     if (name === 'calibrated') {
       assert.match(r.stdout, /Confirmed visible synthetic upper boundary; no independent certification/);
