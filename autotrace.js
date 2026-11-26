@@ -910,6 +910,7 @@ async function autoTraceRoof(opts = {}) {
     sourceLayerRequest: layerChoice?.used === 'record' ? rmLayerRequestIdentity(main, radius, cLat, cLng, main.imageryQuality.toUpperCase()) : cacheKey,
     layerChoice, registration: registered.registration, newerRecords, addressCheck: rmAddressCheck(results[0] && results[0].res, kx, ky, cLat, cLng), obstruction: mainRes.obstruction || null, hiddenZones, alt: altInfo, repairs: mainRes.repairs || [], structures: results.length, buildingName: main.name, radius, ref: { lat: cLat, lng: cLng, kx, ky }, selection: { ...mainComp.selection, planSqft: mainComp.n * geo.pxM2 * 10.7639104, otherPiecesInFrame: comps.length },
     raw: results.map(({ res }, idx) => ({ structure: idx + 1, facets: res.facets.map((f) => ({ pitch: f.pitch, slope: f.slope, status: f.status, path: f.path, rawPath: f.rawPath || null })), edges: res.edges.map((e) => ({ type: e.type, factor: e.factor, status: e.status, path: e.path })) })) };
+  rmAttachTraceEvidence();
   recompute();   // after state.trace is set: labels, hatching and the review panel read the hidden zones from it
   if (!opts.quiet) toast(`Auto-traced ${fi} facets, ${state.edges.length} lines, ${results.length} structure${results.length === 1 ? '' : 's'}`);
   return info;
@@ -949,4 +950,36 @@ async function batchTest(n = 50, box = { latMin: 30.17, latMax: 30.42, lngMin: -
   }
   window.__batchDone = true;
   return results;
+}
+
+// Provenance of every auto-traced quantity, recorded once the whole trace is in the model. Each quantity carries the
+// dated georeferenced source it came from and how it was derived, bound to the current geometry by its evidence
+// revision (a later edit makes it stale, never silently valid). Only what the engine actually measured is recorded as
+// measured; an inferred continuation stays inferred; an unresolved item gets no provenance at all. Undated imagery
+// gives no provenance (the audit then withholds the quantity). The building selection is left to a person.
+function rmTraceIsoDate(d) { if (!d) return null; if (typeof d === 'string') return /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : null; return d.year ? `${d.year}-${String(d.month || 1).padStart(2, '0')}-${String(d.day || 1).padStart(2, '0')}` : null; }
+// backfill (a job saved before provenance existed): only items still exactly as the engine produced them (same path,
+// status, type / pitch as the trace's stored raw output, no hand edit) get the engine's provenance; anything else stays
+// unresolved until a person records evidence for it
+function rmAttachTraceEvidence(opts = {}) {
+  const tr = state.trace; if (!tr) return 0;
+  const raw = opts.backfill ? (tr.raw || []).flatMap((r) => [...(r.facets || []).map((f) => ({ ...f, kind: 'facet' })), ...(r.edges || []).map((e) => ({ ...e, kind: 'edge' }))]) : null;
+  if (opts.backfill && !raw.length) return 0;
+  const samePath = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((p, i) => Math.abs(p.lat - b[i].lat) < 1e-9 && Math.abs(p.lng - b[i].lng) < 1e-9);
+  const asEngine = (x, item, kind) => !opts.backfill || (!x.measurementEvidence && !x.edited && raw.some((r) => r.kind === kind && r.status === RM.statusOf(x) && samePath(r.path, item.path) && (kind === 'edge' ? r.type === x.type : r.pitch === x.pitch))); const date = rmTraceIsoDate(tr.imageryDate); if (!date || typeof serialize !== 'function' || !RM.evidenceRevision) return 0;
+  const source = 'Google Solar API GeoTIFF layers (10 cm height model, building mask)'; const job = serialize(); let n = 0;
+  const rec = (live, item, quantity, status, basis) => { if (status === 'unresolved') return; live.measurementEvidence = { ...(live.measurementEvidence || {}), [quantity]: { source, date, basis, status, revision: RM.evidenceRevision(item, quantity, job), auto: true } }; n++; };
+  for (const f of state.facets) { if (!f.auto) continue; const item = (job.facets || []).find((x) => x.modelId === f.modelId); if (!item || !asEngine(f, item, 'facet')) continue; const st = RM.statusOf(f);
+    const fit = f.rms != null ? `plane fitted to the height model, rms ${f.rms.toFixed(3)} m` : 'plane fitted to the height model';
+    rec(f, item, 'geometry', st, st === 'inferred' ? 'outline continued from adjoining measured planes (estimate)' : 'outline from the building mask and plane segmentation');
+    rec(f, item, 'pitch', f.slope != null ? st : 'unresolved', st === 'inferred' ? fit + ' (estimate)' : fit);
+    rec(f, item, 'area', f.slope != null ? st : 'unresolved', 'traced outline with the fitted slope' + (st === 'inferred' ? ' (estimate)' : '')); }
+  for (const e of state.edges) { if (e.autoType == null) continue; const item = (job.edges || []).find((x) => x.modelId === e.modelId); if (!item || !asEngine(e, item, 'edge')) continue; const st = RM.statusOf(e);
+    rec(e, item, 'geometry', st, 'boundary or intersection of fitted roof planes' + (st === 'inferred' ? ' (estimate)' : ''));
+    rec(e, item, 'type', st, 'classified from the adjoining plane slopes and heights');
+    rec(e, item, 'length', st, 'true length from the traced path and the adjoining fitted slope' + (st === 'inferred' ? ' (estimate)' : '')); }
+  // scale: the layers are georeferenced and were checked against one affine grid (residual within tolerance)
+  const reg = tr.registration; if (reg && Number.isFinite(reg.residualM) && reg.residualM <= (reg.toleranceM || 0.05) && typeof reviewScopeRevision === 'function' && !(tr.scopeEvidence && tr.scopeEvidence.selectionVerified))
+    tr.scopeEvidence = { source, date, basis: `georeferenced raster grid; affine residual ${reg.residualM.toFixed(3)} m within ${(reg.toleranceM || 0.05).toFixed(2)} m`, selectionVerified: false, scaleVerified: true, revision: reviewScopeRevision(job), auto: true };
+  return n;
 }

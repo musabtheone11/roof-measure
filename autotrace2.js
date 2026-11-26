@@ -60,6 +60,9 @@ var AT2 = {
   bumpObjectRms: 0.08, // (m) a region this lumpy is not a roof plane: an object on the roof ...
   bumpObjectMaxM: 1.5, // ... when it stands on or above a bigger neighbour plane everywhere, less than this high on average
   bumpObjectRatio: 2.5, // ... and that neighbour is at least this many times its size (a porch roof beside a similar plane is kept)
+  bumpObjectAng: 30,   // (deg) ... and its own plane turns no more than this from the neighbour's ...
+  bumpObjectMed: 0.075, // (m) ... and its median own-fit residual is at least this: not flat inside (a blurred real facet is)
+  bumpObjectLowM: 0.8, // (m) ... or it stands less than this above it (a small real facet turns away and rises higher)
   debugBumps: false,
 };
 
@@ -728,6 +731,8 @@ function absorbBumps(dsm, label, regions, w, h, lp, geo) {
       const P = regions[l].plane; let ownSq = 0, ownN = 0;
       const pix = []; for (let i = 0; i < w * h; i++) if (label[i] === l && dsm[i] > -1000) { const x = i % w, y = (i - x) / w; pix.push(i); const r = dsm[i] - (P.a * lp.Ecol[x] + P.b * lp.Nrow[y] + P.c); ownSq += r * r; ownN++; }
       if (pix.length < 12) continue; const ownRms = Math.sqrt(ownSq / ownN);
+      // median own-fit residual: blur spoils a real plane's fit only along its edges, an object is not flat inside either
+      const ownMed = (() => { const rs = pix.map((i) => { const x = i % w, y = (i - x) / w; return Math.abs(dsm[i] - (P.a * lp.Ecol[x] + P.b * lp.Nrow[y] + P.c)); }).sort((u, v) => u - v); return rs[rs.length >> 1]; })();
       let best = null;
       for (const [q, sh] of nbs) { const Q = regions[q].plane; let inl = 0, above = 0, sumUp = 0;
         for (const i of pix) { const x = i % w, y = (i - x) / w; const r = dsm[i] - (Q.a * lp.Ecol[x] + Q.b * lp.Nrow[y] + Q.c); if (Math.abs(r) <= AT2.bumpDist) inl++; else if (r > 0) { above++; sumUp += r; } }
@@ -737,9 +742,11 @@ function absorbBumps(dsm, label, regions, w, h, lp, geo) {
         // (lumpy fit), on or above the neighbour everywhere, less than a storey high. A real raised roof (a dormer, an upper
         // level) fits its own plane well, so (b) never takes it.
         const a = frac >= AT2.bumpInlier && above >= (pix.length - inl) * 0.7 && (dPitch > AT2.bumpPitchTol || ownRms > AT2.bumpRms || ang > 12);
-        const b = bigger && ownRms >= AT2.bumpObjectRms && upFrac >= 0.9 && meanUp < AT2.bumpObjectMaxM;
+        // an object follows its host plane roughly or is low; a small real facet at a hip end, valley or dormer turns well away
+        // from the neighbour and stands a storey-fraction above its extension (blur makes its fit lumpy too, so rms alone is not enough)
+        const b = bigger && ownRms >= AT2.bumpObjectRms && upFrac >= 0.9 && meanUp < AT2.bumpObjectMaxM && (ang <= AT2.bumpObjectAng || meanUp < AT2.bumpObjectLowM) && ownMed >= AT2.bumpObjectMed;
         const ok = a || b;
-        if (AT2.debugBumps) console.log(`bump? region ${l} ${aM2.toFixed(1)} m2 own ${(Math.hypot(P.a, P.b) * 12).toFixed(1)}/12 rms ${ownRms.toFixed(3)} vs ${q} (${((area.get(q) || 0) * geo.pxM2).toFixed(0)} m2, shared ${sh}): inliers ${(frac * 100).toFixed(0)}% on-or-above ${(upFrac * 100).toFixed(0)}% mean up ${meanUp.toFixed(2)} m dPitch ${dPitch.toFixed(1)} ang ${ang.toFixed(0)} -> ${ok ? (a ? 'tilted' : 'object') : 'keep'}`);
+        if (AT2.debugBumps) console.log(`bump? region ${l} ${aM2.toFixed(1)} m2 own ${(Math.hypot(P.a, P.b) * 12).toFixed(1)}/12 rms ${ownRms.toFixed(3)} med ${ownMed.toFixed(3)} vs ${q} (${((area.get(q) || 0) * geo.pxM2).toFixed(0)} m2, shared ${sh}): inliers ${(frac * 100).toFixed(0)}% on-or-above ${(upFrac * 100).toFixed(0)}% mean up ${meanUp.toFixed(2)} m dPitch ${dPitch.toFixed(1)} ang ${ang.toFixed(0)} -> ${ok ? (a ? 'tilted' : 'object') : 'keep'}`);
         if (ok && (!best || sh > best.sh)) best = { q, frac, sh }; }
       if (!best) continue;
       for (const i of pix) label[i] = best.q; for (let i = 0; i < w * h; i++) if (label[i] === l) label[i] = best.q;

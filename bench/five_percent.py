@@ -135,7 +135,7 @@ def compare(before, after):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("cohort", choices=("development", "holdout"))
+    parser.add_argument("cohort", choices=("development", "holdout", "integratedHoldout"))
     parser.add_argument("baseline", type=Path)
     parser.add_argument("candidate", type=Path)
     args = parser.parse_args()

@@ -18,7 +18,7 @@ assert.deepEqual(validateResponse('structure',{...outputs.structure,annotations}
 for(const bad of [{...annotations[0],value:12},{...annotations[0],status:'measured'}])assert.throws(()=>validateResponse('structure',{...outputs.structure,annotations:[bad]},sketchMeta));
 assert.throws(()=>validateBudget({maxTokens:null}));assert.equal(validateBudget({maxUsd:0}).maxUsd,0);
 let permanentStatus=400,roleCounts={},behavior='ok',requests=[],active=0,peak=0,outlineAttempts=0;
-const server=http.createServer(async(req,res)=>{if(req.url==='/v1/models'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[...new Set(Object.values(VERIFIED_MODELS))].map(id=>({id}))}));return;}let raw='';for await(const part of req)raw+=part;const body=JSON.parse(raw);const role=body.messages[0].content.match(/You are the (\w+) /)[1];requests.push({role,body});roleCounts[role]=(roleCounts[role]||0)+1;active++;peak=Math.max(peak,active);await new Promise(r=>setTimeout(r,behavior==='slow'?200:5));active--;
+const server=http.createServer(async(req,res)=>{if(req.url==='/v1/models'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[...new Set(Object.values(VERIFIED_MODELS))].map(id=>({id}))}));return;}let raw='';for await(const part of req)raw+=part;const body=JSON.parse(raw);const role=body.messages[0].content.match(/You are the (\w+) /)[1];requests.push({role,body});roleCounts[role]=(roleCounts[role]||0)+1;active++;peak=Math.max(peak,active);let slowOnce=false;if(behavior==='slow-once'&&role==='outline'&&roleCounts[role]===1)slowOnce=true;await new Promise(r=>setTimeout(r,behavior==='slow'||slowOnce?200:5));active--;
  if(behavior==='long-retry'&&role==='outline'){res.statusCode=429;res.setHeader('Retry-After','120');res.end('{}');return;}
  if(behavior==='retry'&&role==='outline'&&++outlineAttempts===1){res.statusCode=429;res.end('{}');return;}
  if(behavior==='permanent'&&role==='quality'){res.statusCode=permanentStatus;res.end('{}');return;}
@@ -66,6 +66,9 @@ try{
  await assert.rejects(runRoofAgents({...input(),consentExternal:false},options),/authorization/);
  await assert.rejects(runRoofAgents(input(),{...options,isCurrent:()=>false}),/roof changed/);
  behavior='slow';const timed=await runRoofAgents(input(),{...options,timeoutMs:100});assert(timed.ledger.usageMissing>0);assert.equal(timed.ledger.reportedUsageRequests,0);assert(timed.failures.some(f=>f.code==='TIMEOUT'));
+ // a timeout is transient: one bounded retry, then success; the timed-out call keeps unknown billing
+ behavior='slow-once';for(const k in roleCounts)delete roleCounts[k];const timeoutRetried=await runRoofAgents(input(),{...options,timeoutMs:100});assert.equal(roleCounts.outline,2,'outline retried once after a timeout');assert(!timeoutRetried.failures.some(f=>f.code==="TIMEOUT"),"retried timeout succeeds");assert(timeoutRetried.ledger.usageMissing>=1,'the timed-out request is not counted as free');
+ behavior='slow';for(const k in roleCounts)delete roleCounts[k];const twice=await runRoofAgents(input(),{...options,timeoutMs:100});assert(twice.failures.some(f=>f.code==='TIMEOUT'));assert(Object.values(roleCounts).every(n=>n<=2),'no more than one retry per role');
  behavior='slow';const controller=new AbortController();setTimeout(()=>controller.abort(),20);await assert.rejects(runRoofAgents(input(),{...options,signal:controller.signal}),/abort|cancel/i);
  console.log('Runtime agents: real HTTP contract, independent trace isolation, concurrency, usage, retry, schema failure, budget, consent, stale revision and cancellation pass');
 }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}

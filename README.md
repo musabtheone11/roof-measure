@@ -19,8 +19,9 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
 
 **Preview report**, **Print report** and **Download report** (panel 6) all use one generated PDF: the preview shows it inside the app, Print sends that same file to the print dialog, Download saves it. US Letter, grayscale, vector (selectable text), with the Diversity Contracting logo. The sheets are built from the selected job's own address, geometry and quantities:
 
-1. **Roof Measurement Report**: slim logo/address/date/status header, compact supported takeoff, and a dominant scaled north-up vector plan with feet-and-inches dimensions, scale bar, north arrow, and keyed callouts. An aerial reference is optional and small. The active report does not include a 3D sketch.
+1. **Roof Measurement Report**: slim logo/address/date/status header, compact supported takeoff, and a dominant scaled north-up vector plan with feet-and-inches dimensions, scale bar, north arrow, and keyed callouts. An aerial reference is optional and small. A 3D illustration is available when verified elevations support it.
 2. **Measurement schedules**: separate building subtotals, edge and facet schedules keyed to the plan, and concise source/review notes. Detail and continuation sheets are added only when required for readable keys or schedules. Order quantities are withheld for incomplete scope.
+3. **Measurement summary** includes net area, pitch, orientation and waste scenarios. Bearings come from the fitted or modelled planes.
 
 Preview, Print and Download use the same signature-cached PDF. A model edit during generation rejects the result; saved preview actions and delayed downloads also check the signature. Direct vector PDF generation checks the model revision across asynchronous image loading.
 

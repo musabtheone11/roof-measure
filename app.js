@@ -933,6 +933,8 @@ function restore(d) {
   drawSolar(); renderSolar(); $('#btnAuto').disabled = !state.solar;
   recompute();
   if (state.facets.length) { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 80); }
+    // jobs saved before per-quantity provenance: give unedited engine output its engine provenance (see autotrace.js)
+    if (typeof rmAttachTraceEvidence === 'function') rmAttachTraceEvidence({ backfill: true });
   } finally { state.deferRecompute--; recompute(); }
 }
 function savedProjects() { return JSON.parse(localStorage.getItem('rm.projects') || '{}'); }

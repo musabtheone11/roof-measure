@@ -85,6 +85,8 @@ jobs:
           node --test target-intent-test.mjs
           node roof-invariants.mjs
           node canopy-ambiguity.mjs
+          node trace-evidence-test.mjs
+          node bump-regression-test.mjs
         working-directory: bench
       - name: Server-side AI geometry and orchestration contracts
         run: |
@@ -116,6 +118,7 @@ jobs:
           node tools/dev/source-review-delivery-test.mjs
           node tools/dev/source-review-recovery-test.mjs
           node tools/dev/map-pointer-test.mjs
+          node tools/dev/static-ai-test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
