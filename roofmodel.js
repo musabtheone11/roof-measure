@@ -345,6 +345,18 @@ var RM = (function () {
     for (const x of f.extra || []) why.push(x);
     return { status: why.length ? 'REVIEW REQUIRED' : 'COMPLETE', reasons: why };
   }
-  return { netFacetAreas, evidenceRevision, modelRevision, auditEvidence, reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
+  // fitted planes that meet at a shared corner must give that corner one height. facets: [{name, plane: [a, b, c], path:
+  // [{lat, lng}]}] with plane z = a*E + b*N + c (metres, E/N from ref); ref: {lat, lng, kx, ky}. Returns every shared
+  // corner where the planes disagree by more than tolM, worst first: a step or wall the trace did not draw, or an outline
+  // that is wrong there. A 3D drawing of such a roof folds; the areas of the planes involved are in doubt.
+  // breaks: [[{lat, lng}, ...]] drawn height-break lines (step, wall, parapet, the lower line of a pair): corners on them may differ
+  function planeConflicts(facets, ref, tolM = 0.6, breaks = []) {
+    const at = new Map(); const E = (p) => (p.lng - ref.lng) * ref.kx, N = (p) => (p.lat - ref.lat) * ref.ky;
+    const brk = breaks.map((L) => L.map((p) => [E(p), N(p)])); const onBreak = (q) => brk.some((L) => { for (let i = 1; i < L.length; i++) if (pointSeg(q, L[i - 1], L[i]) < 0.35) return true; return false; });
+    for (const f of facets) { if (!f.plane || !f.path) continue; const [a, b, c] = f.plane; for (const p of f.path) { const e = E(p), n = N(p); const k = Math.round(e / 0.3) + ',' + Math.round(n / 0.3); if (!at.has(k)) at.set(k, []); at.get(k).push({ name: f.name, z: a * e + b * n + c, e, n }); } }
+    const out = []; for (const arr of at.values()) { const names = [...new Set(arr.map((q) => q.name))]; if (names.length < 2 || onBreak([arr[0].e, arr[0].n])) continue; const zs = arr.map((q) => q.z); const sp = Math.max(...zs) - Math.min(...zs); if (sp > tolM) out.push({ names, spreadM: sp, at: [arr[0].e, arr[0].n] }); }
+    return out.sort((p, q) => q.spreadM - p.spreadM);
+  }
+  return { planeConflicts, netFacetAreas, evidenceRevision, modelRevision, auditEvidence, reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = RM;
