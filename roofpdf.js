@@ -869,7 +869,9 @@ function rpPurchaseUnits(base, coverage = 1, waste = 0) {
   return Math.max(0, Math.ceil((base * (1 + waste / 100) - 0.0001) / coverage));
 }
 function rpSheetMaterials(doc, M, n, total) {
-  rpHeader(doc, M, 'Materials', 'Material order quantities', `${M.line1}  /  Estimates from the net measurements`, n, total);
+  const illustrative = M.kind === 'illustrative';
+  rpHeader(doc, M, 'Materials', illustrative ? 'Illustrative material scenarios' : 'Material order quantities',
+    illustrative ? 'Modeled roof / example waste allowances' : `${M.line1}  /  Estimates from the net measurements`, n, total);
   const t = M.t, bt = t.byType; let y = 150; const bases = { pitched: t.pitched, starter: bt.eave.true + bt.rake.true, otherDrip: bt.eave.true + bt.rake.true, otherValley: bt.valley.true, iw: bt.eave.true + bt.valley.true + bt.wall.true + bt.step.true, cap: bt.hip.true + bt.ridge.true };
   const cols = typeof matColumns === 'function' ? matColumns(t.recWaste) : [0, 10, 12, 15]; const rows = [];
   for (const g of MATERIAL_CATALOG) { const base = bases[g.base]; rows.push([g.group, '', ...cols.map((w) => (g.baseUnit === 'sqft' ? rpNum(rpPurchaseUnits(base, 1, w)) + ' sqft' : rpPurchaseUnits(base, 1, w) + ' ft'))]); for (const [name, cov] of g.items) rows.push(['   ' + name, g.unit, ...cols.map((w) => String(rpPurchaseUnits(base, cov, w)))]); }
@@ -877,7 +879,10 @@ function rpSheetMaterials(doc, M, n, total) {
   rows.push(['   Drip edge / nominal 10 ft stick', 'sticks', ...cols.map((w) => String(rpPurchaseUnits(bases.otherDrip, 10, w)))]);
   rows.push(['   Valley metal / nominal 8 ft piece', 'pieces', ...cols.map((w) => String(rpPurchaseUnits(bases.otherValley, 8, w)))]);
   y = rpTableD(doc, RP.L, y, [230, 50, ...cols.map(() => (548 - 280) / cols.length)], ['Product', 'Unit', ...cols.map((w) => `Waste ${w}%`)], rows, { rowh: 13.5, size: 8, headsz: 7.8, num: cols.map((_, i) => i + 2) }) + 10;
-  rpText(doc, `Nominal coverage; confirm manufacturer coverage, laps and installation requirements before ordering. Order quantities are estimates from the net measurements plus the waste shown; they are not measurements. Based on the pitched area (flat area excluded). Suggested waste for this roof: ${t.recWaste}%.`, RP.L, y, { size: 8.4, color: GR(0.3), maxWidth: 548 });
+  const note = illustrative
+    ? 'Each column applies the stated waste allowance to this modeled roof. Package counts use nominal product coverage and round up to whole units. Use these example quantities only to compare scenarios.'
+    : `Nominal coverage; confirm manufacturer coverage, laps and installation requirements before ordering. Order quantities are estimates from the net measurements plus the waste shown; they are not measurements. Based on the pitched area (flat area excluded). Suggested waste for this roof: ${t.recWaste}%.`;
+  rpText(doc, note, RP.L, y, { size: 8.4, color: GR(0.3), maxWidth: 548 });
 }
 
 // Plan-first report: keep the roof drawing dominant and all schedules on following sheets.
@@ -905,7 +910,12 @@ function rpSheetPlanFirst(doc, M, hero, n, total, ctx) {
   let x = 225, y = 622;
   for (const k of used) { rpLineStyle(doc, k, 'measured'); doc.line(x, y, x + 18, y); doc.setLineDashPattern([], 0); rpText(doc, EDGE_TYPES[k].label, x + 23, y + 3, { size: 7.8 }); y += 14; if (y > 665) { x += 115; y = 622; } }
   rpText(doc, 'Solid: supported   Dashed: inferred   Hatching: unresolved', 36, 699, { size: 8 });
-  rpText(doc, M.kind === 'illustrative' ? 'Illustrative geometry and quantities only; no property measurements or imagery verified. Purchasing quantities withheld.' : partial ? 'REVIEW REQUIRED: verified subtotal only. Unsupported quantities are blank; purchasing quantities withheld. See schedules and review notes.' : 'Plan dimensions are horizontal; schedule lengths are sloped. Net measurements exclude waste. IDs match the schedules.', 36, 717, { size: 8.2, maxWidth: 548 });
+  let planNote = 'Plan dimensions are horizontal; schedule lengths are sloped. Net measurements exclude waste. IDs match the schedules.';
+  if (partial) planNote = 'REVIEW REQUIRED: verified subtotal only. Unsupported quantities are blank; purchasing quantities withheld. See schedules and review notes.';
+  if (M.kind === 'illustrative') planNote = M.review
+    ? 'Illustrative roof under review. Unsupported quantities are blank. Purchasing quantities are withheld.'
+    : 'Geometry and quantities are modeled. Any material scenarios apply only to this example. Verify the property before ordering.';
+  rpText(doc, planNote, 36, 717, { size: 8.2, maxWidth: 548 });
   let chk = null; for (const L of M.lines) for (let i = 1; i < L.xy.length; i++) { const ft = Math.hypot(L.xy[i][0] - L.xy[i - 1][0], L.xy[i][1] - L.xy[i - 1][1]); if (!chk || ft > chk.segmentFt) { const a = V.P(L.xy[i - 1]), b = V.P(L.xy[i]); chk = { key: L.tag || L.key, segmentFt: ft, segmentPt: Math.hypot(b[0] - a[0], b[1] - a[1]) }; } }
   if (chk) { chk.expectedPt = chk.segmentFt * V.k; chk.ok = Math.abs(chk.segmentPt - chk.expectedPt) < 1e-6 * Math.max(1, chk.expectedPt); }
   ctx.layout = { scale: V.label, perIn: V.perIn, ptPerFt: V.k, rotationDeg: 0, bar: { ft: 2 * step, pt: 2 * step * V.k, inches: +(2 * step * V.k / 72).toFixed(2) }, dims: res.dims, scaleCheck: chk, keys: { total: res.keys, placed: res.placedKeys, missed: res.missed }, plan: box };

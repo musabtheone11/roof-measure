@@ -1,0 +1,2648 @@
+{
+  "resultLabels": {
+    "baseline": "baseline",
+    "current": "current"
+  },
+  "resultSuffixes": {
+    "baseline": "",
+    "current": ""
+  },
+  "spatialRescored": false,
+  "spatialPrecisionRecovery": false,
+  "generatedAt": "2026-11-26T03:50:40.333Z",
+  "manifestSHA256": "86bb451b20c4e3e0165e64559ae132d0720fadd7253e2598d3ae030886f278c2",
+  "frozenEngineHashes": {
+    "baseline": {
+      "autotrace.js": "aa68c71d79657df90376e0acfb9ebb91490cc4267ef29406dad035b35fdc311b",
+      "autotrace2.js": "5deb5dff839ad26acf11745ef29f80d9a56569aefb59db3598ba27ea62a17762",
+      "obstruction.js": "78a36a9a79aa4e798707870a1ab1e3cbe22d7c53807269c7be17f0acd079b9ea"
+    },
+    "current": {
+      "autotrace.js": "c41a659e75f478ab4024cb3dd7fc4fd1f4435203cfdb8771739498fa58db8dd2",
+      "autotrace2.js": "4567d8034147f7ea20521061ea7ecc612f9f52ea3da5de83fcf9726a7ba7f1c5",
+      "obstruction.js": "78a36a9a79aa4e798707870a1ab1e3cbe22d7c53807269c7be17f0acd079b9ea"
+    }
+  },
+  "thresholds": {
+    "areaAbsPct": 3,
+    "outlineIoU": 0.9,
+    "missingPlanPct": 5,
+    "extraPlanPct": 5,
+    "lineAbsoluteFt": 5,
+    "lineRelativePct": 10
+  },
+  "settings": {
+    "exactFittedSlopeAndPlaneFactors": true,
+    "defaultPitch": 6
+  },
+  "scope": "Synthetic DSM reconstruction through the same traceBuildingV2 caller and settings for both versions. Not the address-selection, georeferencing, browser or PDF-export pipeline.",
+  "falseCompleteExports": null,
+  "falseCompleteNote": "Not evaluated: this benchmark generates no PDFs and does not execute the actual export gate. No claim of zero false COMPLETE exports.",
+  "accuracyNote": "Ground truth is analytic synthetic geometry. These results cannot establish real-property numerical accuracy. Numerical within-threshold counts include automatic estimates and are not measurement acceptance or export passes; unresolved measurements remain unresolved. Skips/errors/unscored values never count as passes.",
+  "splitDesign": "Existing development seeds 1-120 and a separately frozen synthetic holdout 1100001-1100120. Seed ranges are disjoint. The same parametric generator produces both cohorts.",
+  "coverageNote": "Generator combines hip/gable rectangular wings, mixed pitches, eave levels, dormers, rotated roofs, DSM noise/blur and clutter. Arbitrary diagonal additions, parcel/address selection, alternate imagery registration and real property evidence require separate fixtures or real runs.",
+  "splits": {
+    "development": {
+      "baseline": {
+        "attempts": 120,
+        "qualified": 71,
+        "skipped": 49,
+        "skipReasons": {
+          "degenerate": 49
+        },
+        "engineErrors": 0,
+        "spatialScored": 71,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.8314599643705256,
+        "p90AbsoluteAreaErrorPct": 3.0250506788142224,
+        "medianSignedAreaErrorPct": 0.5310186867599378,
+        "areaWithin3Pct": 63,
+        "medianOutlineIoU": 0.9905322154554789,
+        "p10OutlineIoU": 0.9690699822309623,
+        "medianMissingPlanPct": 0.35945745265104984,
+        "p90MissingPlanPct": 1.6862383113861117,
+        "medianExtraPlanPct": 0.4637556926234672,
+        "p90ExtraPlanPct": 1.1141662705093656,
+        "spatialWithinThresholds": 68,
+        "medianFacetCountAbsoluteError": 1,
+        "exactFacetCount": 28,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 96.44702113211883,
+        "roofsWithInferredFacets": 20,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 18,
+        "roofsWithHiddenZones": 17,
+        "allLineTypesWithinThresholds": 14,
+        "numericSpatialAndLineTypesWithinThresholds": 14,
+        "byLineType": {
+          "eave": {
+            "scored": 71,
+            "positiveReference": 71,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.8039977127106965,
+            "medianAbsoluteErrorPctPositiveReference": 3.1728615326757517,
+            "withinThreshold": 62,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 71,
+            "positiveReference": 46,
+            "zeroReference": 25,
+            "medianAbsoluteErrorFt": 10.582726618046912,
+            "medianAbsoluteErrorPctPositiveReference": 24.29343449193579,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 11
+          },
+          "ridge": {
+            "scored": 71,
+            "positiveReference": 71,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 4.7131132496807595,
+            "medianAbsoluteErrorPctPositiveReference": 7.582640322205743,
+            "withinThreshold": 41,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 71,
+            "positiveReference": 59,
+            "zeroReference": 12,
+            "medianAbsoluteErrorFt": 8.10135550540781,
+            "medianAbsoluteErrorPctPositiveReference": 7.126520762695343,
+            "withinThreshold": 41,
+            "spuriousWhenReferenceZero": 3
+          },
+          "valley": {
+            "scored": 71,
+            "positiveReference": 56,
+            "zeroReference": 15,
+            "medianAbsoluteErrorFt": 5.961646411433151,
+            "medianAbsoluteErrorPctPositiveReference": 20.88043339785267,
+            "withinThreshold": 36,
+            "spuriousWhenReferenceZero": 2
+          },
+          "step": {
+            "scored": 71,
+            "positiveReference": 39,
+            "zeroReference": 32,
+            "medianAbsoluteErrorFt": 5.967481193422883,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 32,
+            "spuriousWhenReferenceZero": 10
+          },
+          "wall": {
+            "scored": 71,
+            "positiveReference": 40,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 4.387263565015194,
+            "medianAbsoluteErrorPctPositiveReference": 46.22983735464015,
+            "withinThreshold": 36,
+            "spuriousWhenReferenceZero": 8
+          },
+          "transition": {
+            "scored": 71,
+            "positiveReference": 8,
+            "zeroReference": 63,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 54,
+            "spuriousWhenReferenceZero": 13
+          },
+          "unspecified": {
+            "scored": 71,
+            "positiveReference": 0,
+            "zeroReference": 71,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 71,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 120,
+        "qualified": 71,
+        "skipped": 49,
+        "skipReasons": {
+          "degenerate": 49
+        },
+        "engineErrors": 0,
+        "spatialScored": 71,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.847903382102525,
+        "p90AbsoluteAreaErrorPct": 3.0250506788142224,
+        "medianSignedAreaErrorPct": 0.524019630746611,
+        "areaWithin3Pct": 63,
+        "medianOutlineIoU": 0.9906602931599583,
+        "p10OutlineIoU": 0.9698762655335608,
+        "medianMissingPlanPct": 0.3406049300130168,
+        "p90MissingPlanPct": 1.7344793949271802,
+        "medianExtraPlanPct": 0.4637556926234672,
+        "p90ExtraPlanPct": 1.0278517744492461,
+        "spatialWithinThresholds": 68,
+        "medianFacetCountAbsoluteError": 2,
+        "exactFacetCount": 25,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 96.96083750897918,
+        "roofsWithInferredFacets": 20,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 17,
+        "roofsWithHiddenZones": 16,
+        "allLineTypesWithinThresholds": 13,
+        "numericSpatialAndLineTypesWithinThresholds": 13,
+        "byLineType": {
+          "eave": {
+            "scored": 71,
+            "positiveReference": 71,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.69094393834979,
+            "medianAbsoluteErrorPctPositiveReference": 3.1728615326757517,
+            "withinThreshold": 61,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 71,
+            "positiveReference": 46,
+            "zeroReference": 25,
+            "medianAbsoluteErrorFt": 10.791594941726999,
+            "medianAbsoluteErrorPctPositiveReference": 23.656764222047002,
+            "withinThreshold": 24,
+            "spuriousWhenReferenceZero": 15
+          },
+          "ridge": {
+            "scored": 71,
+            "positiveReference": 71,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 4.7131132496807595,
+            "medianAbsoluteErrorPctPositiveReference": 8.450832883601436,
+            "withinThreshold": 40,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 71,
+            "positiveReference": 59,
+            "zeroReference": 12,
+            "medianAbsoluteErrorFt": 9.85423581655185,
+            "medianAbsoluteErrorPctPositiveReference": 10.705098521232872,
+            "withinThreshold": 36,
+            "spuriousWhenReferenceZero": 3
+          },
+          "valley": {
+            "scored": 71,
+            "positiveReference": 56,
+            "zeroReference": 15,
+            "medianAbsoluteErrorFt": 8.679853823636385,
+            "medianAbsoluteErrorPctPositiveReference": 26.89173696812498,
+            "withinThreshold": 31,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 71,
+            "positiveReference": 39,
+            "zeroReference": 32,
+            "medianAbsoluteErrorFt": 7.571659032289322,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 26,
+            "spuriousWhenReferenceZero": 14
+          },
+          "wall": {
+            "scored": 71,
+            "positiveReference": 40,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 5.867448029906272,
+            "medianAbsoluteErrorPctPositiveReference": 58.80647994400586,
+            "withinThreshold": 32,
+            "spuriousWhenReferenceZero": 8
+          },
+          "transition": {
+            "scored": 71,
+            "positiveReference": 8,
+            "zeroReference": 63,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 86.13441310994408,
+            "withinThreshold": 60,
+            "spuriousWhenReferenceZero": 8
+          },
+          "unspecified": {
+            "scored": 71,
+            "positiveReference": 0,
+            "zeroReference": 71,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 71,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "pairedQualified": 71,
+      "pairedSpatialScored": 71,
+      "pairedSpatial": {
+        "baseline": {
+          "attempts": 71,
+          "qualified": 71,
+          "skipped": 0,
+          "skipReasons": {},
+          "engineErrors": 0,
+          "spatialScored": 71,
+          "spatialUnscored": 0,
+          "medianAbsoluteAreaErrorPct": 0.8314599643705256,
+          "p90AbsoluteAreaErrorPct": 3.0250506788142224,
+          "medianSignedAreaErrorPct": 0.5310186867599378,
+          "areaWithin3Pct": 63,
+          "medianOutlineIoU": 0.9905322154554789,
+          "p10OutlineIoU": 0.9690699822309623,
+          "medianMissingPlanPct": 0.35945745265104984,
+          "p90MissingPlanPct": 1.6862383113861117,
+          "medianExtraPlanPct": 0.4637556926234672,
+          "p90ExtraPlanPct": 1.1141662705093656,
+          "spatialWithinThresholds": 68,
+          "medianFacetCountAbsoluteError": 1,
+          "exactFacetCount": 28,
+          "medianPredominantPitchAbsoluteError": 0,
+          "medianPitchAreaMatchPct": 96.44702113211883,
+          "roofsWithInferredFacets": 20,
+          "roofsWithUnresolvedFacets": 0,
+          "roofsWithObstructionBoundary": 18,
+          "roofsWithHiddenZones": 17,
+          "allLineTypesWithinThresholds": 14,
+          "numericSpatialAndLineTypesWithinThresholds": 14,
+          "byLineType": {
+            "eave": {
+              "scored": 71,
+              "positiveReference": 71,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 6.8039977127106965,
+              "medianAbsoluteErrorPctPositiveReference": 3.1728615326757517,
+              "withinThreshold": 62,
+              "spuriousWhenReferenceZero": 0
+            },
+            "rake": {
+              "scored": 71,
+              "positiveReference": 46,
+              "zeroReference": 25,
+              "medianAbsoluteErrorFt": 10.582726618046912,
+              "medianAbsoluteErrorPctPositiveReference": 24.29343449193579,
+              "withinThreshold": 28,
+              "spuriousWhenReferenceZero": 11
+            },
+            "ridge": {
+              "scored": 71,
+              "positiveReference": 71,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 4.7131132496807595,
+              "medianAbsoluteErrorPctPositiveReference": 7.582640322205743,
+              "withinThreshold": 41,
+              "spuriousWhenReferenceZero": 0
+            },
+            "hip": {
+              "scored": 71,
+              "positiveReference": 59,
+              "zeroReference": 12,
+              "medianAbsoluteErrorFt": 8.10135550540781,
+              "medianAbsoluteErrorPctPositiveReference": 7.126520762695343,
+              "withinThreshold": 41,
+              "spuriousWhenReferenceZero": 3
+            },
+            "valley": {
+              "scored": 71,
+              "positiveReference": 56,
+              "zeroReference": 15,
+              "medianAbsoluteErrorFt": 5.961646411433151,
+              "medianAbsoluteErrorPctPositiveReference": 20.88043339785267,
+              "withinThreshold": 36,
+              "spuriousWhenReferenceZero": 2
+            },
+            "step": {
+              "scored": 71,
+              "positiveReference": 39,
+              "zeroReference": 32,
+              "medianAbsoluteErrorFt": 5.967481193422883,
+              "medianAbsoluteErrorPctPositiveReference": 100,
+              "withinThreshold": 32,
+              "spuriousWhenReferenceZero": 10
+            },
+            "wall": {
+              "scored": 71,
+              "positiveReference": 40,
+              "zeroReference": 31,
+              "medianAbsoluteErrorFt": 4.387263565015194,
+              "medianAbsoluteErrorPctPositiveReference": 46.22983735464015,
+              "withinThreshold": 36,
+              "spuriousWhenReferenceZero": 8
+            },
+            "transition": {
+              "scored": 71,
+              "positiveReference": 8,
+              "zeroReference": 63,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": 100,
+              "withinThreshold": 54,
+              "spuriousWhenReferenceZero": 13
+            },
+            "unspecified": {
+              "scored": 71,
+              "positiveReference": 0,
+              "zeroReference": 71,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": null,
+              "withinThreshold": 71,
+              "spuriousWhenReferenceZero": 0
+            }
+          }
+        },
+        "current": {
+          "attempts": 71,
+          "qualified": 71,
+          "skipped": 0,
+          "skipReasons": {},
+          "engineErrors": 0,
+          "spatialScored": 71,
+          "spatialUnscored": 0,
+          "medianAbsoluteAreaErrorPct": 0.847903382102525,
+          "p90AbsoluteAreaErrorPct": 3.0250506788142224,
+          "medianSignedAreaErrorPct": 0.524019630746611,
+          "areaWithin3Pct": 63,
+          "medianOutlineIoU": 0.9906602931599583,
+          "p10OutlineIoU": 0.9698762655335608,
+          "medianMissingPlanPct": 0.3406049300130168,
+          "p90MissingPlanPct": 1.7344793949271802,
+          "medianExtraPlanPct": 0.4637556926234672,
+          "p90ExtraPlanPct": 1.0278517744492461,
+          "spatialWithinThresholds": 68,
+          "medianFacetCountAbsoluteError": 2,
+          "exactFacetCount": 25,
+          "medianPredominantPitchAbsoluteError": 0,
+          "medianPitchAreaMatchPct": 96.96083750897918,
+          "roofsWithInferredFacets": 20,
+          "roofsWithUnresolvedFacets": 0,
+          "roofsWithObstructionBoundary": 17,
+          "roofsWithHiddenZones": 16,
+          "allLineTypesWithinThresholds": 13,
+          "numericSpatialAndLineTypesWithinThresholds": 13,
+          "byLineType": {
+            "eave": {
+              "scored": 71,
+              "positiveReference": 71,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 6.69094393834979,
+              "medianAbsoluteErrorPctPositiveReference": 3.1728615326757517,
+              "withinThreshold": 61,
+              "spuriousWhenReferenceZero": 0
+            },
+            "rake": {
+              "scored": 71,
+              "positiveReference": 46,
+              "zeroReference": 25,
+              "medianAbsoluteErrorFt": 10.791594941726999,
+              "medianAbsoluteErrorPctPositiveReference": 23.656764222047002,
+              "withinThreshold": 24,
+              "spuriousWhenReferenceZero": 15
+            },
+            "ridge": {
+              "scored": 71,
+              "positiveReference": 71,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 4.7131132496807595,
+              "medianAbsoluteErrorPctPositiveReference": 8.450832883601436,
+              "withinThreshold": 40,
+              "spuriousWhenReferenceZero": 0
+            },
+            "hip": {
+              "scored": 71,
+              "positiveReference": 59,
+              "zeroReference": 12,
+              "medianAbsoluteErrorFt": 9.85423581655185,
+              "medianAbsoluteErrorPctPositiveReference": 10.705098521232872,
+              "withinThreshold": 36,
+              "spuriousWhenReferenceZero": 3
+            },
+            "valley": {
+              "scored": 71,
+              "positiveReference": 56,
+              "zeroReference": 15,
+              "medianAbsoluteErrorFt": 8.679853823636385,
+              "medianAbsoluteErrorPctPositiveReference": 26.89173696812498,
+              "withinThreshold": 31,
+              "spuriousWhenReferenceZero": 1
+            },
+            "step": {
+              "scored": 71,
+              "positiveReference": 39,
+              "zeroReference": 32,
+              "medianAbsoluteErrorFt": 7.571659032289322,
+              "medianAbsoluteErrorPctPositiveReference": 100,
+              "withinThreshold": 26,
+              "spuriousWhenReferenceZero": 14
+            },
+            "wall": {
+              "scored": 71,
+              "positiveReference": 40,
+              "zeroReference": 31,
+              "medianAbsoluteErrorFt": 5.867448029906272,
+              "medianAbsoluteErrorPctPositiveReference": 58.80647994400586,
+              "withinThreshold": 32,
+              "spuriousWhenReferenceZero": 8
+            },
+            "transition": {
+              "scored": 71,
+              "positiveReference": 8,
+              "zeroReference": 63,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": 86.13441310994408,
+              "withinThreshold": 60,
+              "spuriousWhenReferenceZero": 8
+            },
+            "unspecified": {
+              "scored": 71,
+              "positiveReference": 0,
+              "zeroReference": 71,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": null,
+              "withinThreshold": 71,
+              "spuriousWhenReferenceZero": 0
+            }
+          }
+        }
+      },
+      "pairedAreaBetter": 16,
+      "pairedAreaWorse": 15,
+      "pairedOutlineBetter": 20,
+      "pairedOutlineWorse": 11
+    },
+    "holdout": {
+      "baseline": {
+        "attempts": 120,
+        "qualified": 77,
+        "skipped": 43,
+        "skipReasons": {
+          "degenerate": 43
+        },
+        "engineErrors": 0,
+        "spatialScored": 77,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 1.064527039262243,
+        "p90AbsoluteAreaErrorPct": 3.5181330731016676,
+        "medianSignedAreaErrorPct": 0.5913985906418155,
+        "areaWithin3Pct": 66,
+        "medianOutlineIoU": 0.98977956406327,
+        "p10OutlineIoU": 0.9639298874641703,
+        "medianMissingPlanPct": 0.3490040108023972,
+        "p90MissingPlanPct": 2.2639807201815736,
+        "medianExtraPlanPct": 0.5294985370354914,
+        "p90ExtraPlanPct": 1.0173962640868885,
+        "spatialWithinThresholds": 75,
+        "medianFacetCountAbsoluteError": 1,
+        "exactFacetCount": 32,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 95.80810083313838,
+        "roofsWithInferredFacets": 24,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 18,
+        "roofsWithHiddenZones": 17,
+        "allLineTypesWithinThresholds": 14,
+        "numericSpatialAndLineTypesWithinThresholds": 14,
+        "byLineType": {
+          "eave": {
+            "scored": 77,
+            "positiveReference": 77,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 5.516197361312692,
+            "medianAbsoluteErrorPctPositiveReference": 3.1272887567122716,
+            "withinThreshold": 64,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 77,
+            "positiveReference": 51,
+            "zeroReference": 26,
+            "medianAbsoluteErrorFt": 9.277565812411723,
+            "medianAbsoluteErrorPctPositiveReference": 15.61590178282167,
+            "withinThreshold": 36,
+            "spuriousWhenReferenceZero": 9
+          },
+          "ridge": {
+            "scored": 77,
+            "positiveReference": 77,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 3.5744820317348847,
+            "medianAbsoluteErrorPctPositiveReference": 5.735196470189862,
+            "withinThreshold": 50,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 77,
+            "positiveReference": 61,
+            "zeroReference": 16,
+            "medianAbsoluteErrorFt": 7.148076602337142,
+            "medianAbsoluteErrorPctPositiveReference": 6.372721317295693,
+            "withinThreshold": 47,
+            "spuriousWhenReferenceZero": 5
+          },
+          "valley": {
+            "scored": 77,
+            "positiveReference": 59,
+            "zeroReference": 18,
+            "medianAbsoluteErrorFt": 5.272818683634458,
+            "medianAbsoluteErrorPctPositiveReference": 19.082679865842326,
+            "withinThreshold": 41,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 77,
+            "positiveReference": 35,
+            "zeroReference": 42,
+            "medianAbsoluteErrorFt": 5.643277546430887,
+            "medianAbsoluteErrorPctPositiveReference": 95.59721691239007,
+            "withinThreshold": 36,
+            "spuriousWhenReferenceZero": 13
+          },
+          "wall": {
+            "scored": 77,
+            "positiveReference": 44,
+            "zeroReference": 33,
+            "medianAbsoluteErrorFt": 3.5802724474058754,
+            "medianAbsoluteErrorPctPositiveReference": 51.458576565448006,
+            "withinThreshold": 43,
+            "spuriousWhenReferenceZero": 7
+          },
+          "transition": {
+            "scored": 77,
+            "positiveReference": 2,
+            "zeroReference": 75,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 208.02500700793524,
+            "withinThreshold": 61,
+            "spuriousWhenReferenceZero": 15
+          },
+          "unspecified": {
+            "scored": 77,
+            "positiveReference": 0,
+            "zeroReference": 77,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 77,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 120,
+        "qualified": 77,
+        "skipped": 43,
+        "skipReasons": {
+          "degenerate": 43
+        },
+        "engineErrors": 0,
+        "spatialScored": 77,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.8413386099191823,
+        "p90AbsoluteAreaErrorPct": 3.58608575403295,
+        "medianSignedAreaErrorPct": 0.552954976276773,
+        "areaWithin3Pct": 66,
+        "medianOutlineIoU": 0.990671327801483,
+        "p10OutlineIoU": 0.9639298874641703,
+        "medianMissingPlanPct": 0.3358026687018078,
+        "p90MissingPlanPct": 2.319111580508898,
+        "medianExtraPlanPct": 0.48686786598588927,
+        "p90ExtraPlanPct": 1.0173962640868885,
+        "spatialWithinThresholds": 75,
+        "medianFacetCountAbsoluteError": 2,
+        "exactFacetCount": 24,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 97.87531030195801,
+        "roofsWithInferredFacets": 24,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 18,
+        "roofsWithHiddenZones": 17,
+        "allLineTypesWithinThresholds": 14,
+        "numericSpatialAndLineTypesWithinThresholds": 14,
+        "byLineType": {
+          "eave": {
+            "scored": 77,
+            "positiveReference": 77,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.552702254891216,
+            "medianAbsoluteErrorPctPositiveReference": 3.6497710835949686,
+            "withinThreshold": 60,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 77,
+            "positiveReference": 51,
+            "zeroReference": 26,
+            "medianAbsoluteErrorFt": 14.612909892794477,
+            "medianAbsoluteErrorPctPositiveReference": 21.026178213931775,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 12
+          },
+          "ridge": {
+            "scored": 77,
+            "positiveReference": 77,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 3.76168130117577,
+            "medianAbsoluteErrorPctPositiveReference": 6.528936992215,
+            "withinThreshold": 49,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 77,
+            "positiveReference": 61,
+            "zeroReference": 16,
+            "medianAbsoluteErrorFt": 9.019374959713588,
+            "medianAbsoluteErrorPctPositiveReference": 14.256011653652076,
+            "withinThreshold": 43,
+            "spuriousWhenReferenceZero": 2
+          },
+          "valley": {
+            "scored": 77,
+            "positiveReference": 59,
+            "zeroReference": 18,
+            "medianAbsoluteErrorFt": 11.23774229416233,
+            "medianAbsoluteErrorPctPositiveReference": 41.41537503543966,
+            "withinThreshold": 32,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 77,
+            "positiveReference": 35,
+            "zeroReference": 42,
+            "medianAbsoluteErrorFt": 6.561678906386673,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 33,
+            "spuriousWhenReferenceZero": 15
+          },
+          "wall": {
+            "scored": 77,
+            "positiveReference": 44,
+            "zeroReference": 33,
+            "medianAbsoluteErrorFt": 3.4457589466547223,
+            "medianAbsoluteErrorPctPositiveReference": 54.74919656083195,
+            "withinThreshold": 43,
+            "spuriousWhenReferenceZero": 8
+          },
+          "transition": {
+            "scored": 77,
+            "positiveReference": 2,
+            "zeroReference": 75,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 208.02500700793524,
+            "withinThreshold": 63,
+            "spuriousWhenReferenceZero": 13
+          },
+          "unspecified": {
+            "scored": 77,
+            "positiveReference": 0,
+            "zeroReference": 77,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 77,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "pairedQualified": 77,
+      "pairedSpatialScored": 77,
+      "pairedSpatial": {
+        "baseline": {
+          "attempts": 77,
+          "qualified": 77,
+          "skipped": 0,
+          "skipReasons": {},
+          "engineErrors": 0,
+          "spatialScored": 77,
+          "spatialUnscored": 0,
+          "medianAbsoluteAreaErrorPct": 1.064527039262243,
+          "p90AbsoluteAreaErrorPct": 3.5181330731016676,
+          "medianSignedAreaErrorPct": 0.5913985906418155,
+          "areaWithin3Pct": 66,
+          "medianOutlineIoU": 0.98977956406327,
+          "p10OutlineIoU": 0.9639298874641703,
+          "medianMissingPlanPct": 0.3490040108023972,
+          "p90MissingPlanPct": 2.2639807201815736,
+          "medianExtraPlanPct": 0.5294985370354914,
+          "p90ExtraPlanPct": 1.0173962640868885,
+          "spatialWithinThresholds": 75,
+          "medianFacetCountAbsoluteError": 1,
+          "exactFacetCount": 32,
+          "medianPredominantPitchAbsoluteError": 0,
+          "medianPitchAreaMatchPct": 95.80810083313838,
+          "roofsWithInferredFacets": 24,
+          "roofsWithUnresolvedFacets": 0,
+          "roofsWithObstructionBoundary": 18,
+          "roofsWithHiddenZones": 17,
+          "allLineTypesWithinThresholds": 14,
+          "numericSpatialAndLineTypesWithinThresholds": 14,
+          "byLineType": {
+            "eave": {
+              "scored": 77,
+              "positiveReference": 77,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 5.516197361312692,
+              "medianAbsoluteErrorPctPositiveReference": 3.1272887567122716,
+              "withinThreshold": 64,
+              "spuriousWhenReferenceZero": 0
+            },
+            "rake": {
+              "scored": 77,
+              "positiveReference": 51,
+              "zeroReference": 26,
+              "medianAbsoluteErrorFt": 9.277565812411723,
+              "medianAbsoluteErrorPctPositiveReference": 15.61590178282167,
+              "withinThreshold": 36,
+              "spuriousWhenReferenceZero": 9
+            },
+            "ridge": {
+              "scored": 77,
+              "positiveReference": 77,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 3.5744820317348847,
+              "medianAbsoluteErrorPctPositiveReference": 5.735196470189862,
+              "withinThreshold": 50,
+              "spuriousWhenReferenceZero": 0
+            },
+            "hip": {
+              "scored": 77,
+              "positiveReference": 61,
+              "zeroReference": 16,
+              "medianAbsoluteErrorFt": 7.148076602337142,
+              "medianAbsoluteErrorPctPositiveReference": 6.372721317295693,
+              "withinThreshold": 47,
+              "spuriousWhenReferenceZero": 5
+            },
+            "valley": {
+              "scored": 77,
+              "positiveReference": 59,
+              "zeroReference": 18,
+              "medianAbsoluteErrorFt": 5.272818683634458,
+              "medianAbsoluteErrorPctPositiveReference": 19.082679865842326,
+              "withinThreshold": 41,
+              "spuriousWhenReferenceZero": 1
+            },
+            "step": {
+              "scored": 77,
+              "positiveReference": 35,
+              "zeroReference": 42,
+              "medianAbsoluteErrorFt": 5.643277546430887,
+              "medianAbsoluteErrorPctPositiveReference": 95.59721691239007,
+              "withinThreshold": 36,
+              "spuriousWhenReferenceZero": 13
+            },
+            "wall": {
+              "scored": 77,
+              "positiveReference": 44,
+              "zeroReference": 33,
+              "medianAbsoluteErrorFt": 3.5802724474058754,
+              "medianAbsoluteErrorPctPositiveReference": 51.458576565448006,
+              "withinThreshold": 43,
+              "spuriousWhenReferenceZero": 7
+            },
+            "transition": {
+              "scored": 77,
+              "positiveReference": 2,
+              "zeroReference": 75,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": 208.02500700793524,
+              "withinThreshold": 61,
+              "spuriousWhenReferenceZero": 15
+            },
+            "unspecified": {
+              "scored": 77,
+              "positiveReference": 0,
+              "zeroReference": 77,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": null,
+              "withinThreshold": 77,
+              "spuriousWhenReferenceZero": 0
+            }
+          }
+        },
+        "current": {
+          "attempts": 77,
+          "qualified": 77,
+          "skipped": 0,
+          "skipReasons": {},
+          "engineErrors": 0,
+          "spatialScored": 77,
+          "spatialUnscored": 0,
+          "medianAbsoluteAreaErrorPct": 0.8413386099191823,
+          "p90AbsoluteAreaErrorPct": 3.58608575403295,
+          "medianSignedAreaErrorPct": 0.552954976276773,
+          "areaWithin3Pct": 66,
+          "medianOutlineIoU": 0.990671327801483,
+          "p10OutlineIoU": 0.9639298874641703,
+          "medianMissingPlanPct": 0.3358026687018078,
+          "p90MissingPlanPct": 2.319111580508898,
+          "medianExtraPlanPct": 0.48686786598588927,
+          "p90ExtraPlanPct": 1.0173962640868885,
+          "spatialWithinThresholds": 75,
+          "medianFacetCountAbsoluteError": 2,
+          "exactFacetCount": 24,
+          "medianPredominantPitchAbsoluteError": 0,
+          "medianPitchAreaMatchPct": 97.87531030195801,
+          "roofsWithInferredFacets": 24,
+          "roofsWithUnresolvedFacets": 0,
+          "roofsWithObstructionBoundary": 18,
+          "roofsWithHiddenZones": 17,
+          "allLineTypesWithinThresholds": 14,
+          "numericSpatialAndLineTypesWithinThresholds": 14,
+          "byLineType": {
+            "eave": {
+              "scored": 77,
+              "positiveReference": 77,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 6.552702254891216,
+              "medianAbsoluteErrorPctPositiveReference": 3.6497710835949686,
+              "withinThreshold": 60,
+              "spuriousWhenReferenceZero": 0
+            },
+            "rake": {
+              "scored": 77,
+              "positiveReference": 51,
+              "zeroReference": 26,
+              "medianAbsoluteErrorFt": 14.612909892794477,
+              "medianAbsoluteErrorPctPositiveReference": 21.026178213931775,
+              "withinThreshold": 28,
+              "spuriousWhenReferenceZero": 12
+            },
+            "ridge": {
+              "scored": 77,
+              "positiveReference": 77,
+              "zeroReference": 0,
+              "medianAbsoluteErrorFt": 3.76168130117577,
+              "medianAbsoluteErrorPctPositiveReference": 6.528936992215,
+              "withinThreshold": 49,
+              "spuriousWhenReferenceZero": 0
+            },
+            "hip": {
+              "scored": 77,
+              "positiveReference": 61,
+              "zeroReference": 16,
+              "medianAbsoluteErrorFt": 9.019374959713588,
+              "medianAbsoluteErrorPctPositiveReference": 14.256011653652076,
+              "withinThreshold": 43,
+              "spuriousWhenReferenceZero": 2
+            },
+            "valley": {
+              "scored": 77,
+              "positiveReference": 59,
+              "zeroReference": 18,
+              "medianAbsoluteErrorFt": 11.23774229416233,
+              "medianAbsoluteErrorPctPositiveReference": 41.41537503543966,
+              "withinThreshold": 32,
+              "spuriousWhenReferenceZero": 1
+            },
+            "step": {
+              "scored": 77,
+              "positiveReference": 35,
+              "zeroReference": 42,
+              "medianAbsoluteErrorFt": 6.561678906386673,
+              "medianAbsoluteErrorPctPositiveReference": 100,
+              "withinThreshold": 33,
+              "spuriousWhenReferenceZero": 15
+            },
+            "wall": {
+              "scored": 77,
+              "positiveReference": 44,
+              "zeroReference": 33,
+              "medianAbsoluteErrorFt": 3.4457589466547223,
+              "medianAbsoluteErrorPctPositiveReference": 54.74919656083195,
+              "withinThreshold": 43,
+              "spuriousWhenReferenceZero": 8
+            },
+            "transition": {
+              "scored": 77,
+              "positiveReference": 2,
+              "zeroReference": 75,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": 208.02500700793524,
+              "withinThreshold": 63,
+              "spuriousWhenReferenceZero": 13
+            },
+            "unspecified": {
+              "scored": 77,
+              "positiveReference": 0,
+              "zeroReference": 77,
+              "medianAbsoluteErrorFt": 0,
+              "medianAbsoluteErrorPctPositiveReference": null,
+              "withinThreshold": 77,
+              "spuriousWhenReferenceZero": 0
+            }
+          }
+        }
+      },
+      "pairedAreaBetter": 15,
+      "pairedAreaWorse": 13,
+      "pairedOutlineBetter": 18,
+      "pairedOutlineWorse": 10
+    }
+  },
+  "all": {
+    "baseline": {
+      "attempts": 240,
+      "qualified": 148,
+      "skipped": 92,
+      "skipReasons": {
+        "degenerate": 92
+      },
+      "engineErrors": 0,
+      "spatialScored": 148,
+      "spatialUnscored": 0,
+      "medianAbsoluteAreaErrorPct": 0.8751104896135982,
+      "p90AbsoluteAreaErrorPct": 3.468200656159192,
+      "medianSignedAreaErrorPct": 0.5751843159809513,
+      "areaWithin3Pct": 129,
+      "medianOutlineIoU": 0.9900657124695016,
+      "p10OutlineIoU": 0.9661733239458998,
+      "medianMissingPlanPct": 0.35730681108532036,
+      "p90MissingPlanPct": 1.7344793949271802,
+      "medianExtraPlanPct": 0.4864445277405067,
+      "p90ExtraPlanPct": 1.072109064606844,
+      "spatialWithinThresholds": 143,
+      "medianFacetCountAbsoluteError": 1,
+      "exactFacetCount": 60,
+      "medianPredominantPitchAbsoluteError": 0,
+      "medianPitchAreaMatchPct": 96.43718280087595,
+      "roofsWithInferredFacets": 44,
+      "roofsWithUnresolvedFacets": 0,
+      "roofsWithObstructionBoundary": 36,
+      "roofsWithHiddenZones": 34,
+      "allLineTypesWithinThresholds": 28,
+      "numericSpatialAndLineTypesWithinThresholds": 28,
+      "byLineType": {
+        "eave": {
+          "scored": 148,
+          "positiveReference": 148,
+          "zeroReference": 0,
+          "medianAbsoluteErrorFt": 6.057359735395622,
+          "medianAbsoluteErrorPctPositiveReference": 3.1500751446940116,
+          "withinThreshold": 126,
+          "spuriousWhenReferenceZero": 0
+        },
+        "rake": {
+          "scored": 148,
+          "positiveReference": 97,
+          "zeroReference": 51,
+          "medianAbsoluteErrorFt": 10.178928546235191,
+          "medianAbsoluteErrorPctPositiveReference": 20.79029532118206,
+          "withinThreshold": 64,
+          "spuriousWhenReferenceZero": 20
+        },
+        "ridge": {
+          "scored": 148,
+          "positiveReference": 148,
+          "zeroReference": 0,
+          "medianAbsoluteErrorFt": 4.156350229861296,
+          "medianAbsoluteErrorPctPositiveReference": 6.577896907704545,
+          "withinThreshold": 91,
+          "spuriousWhenReferenceZero": 0
+        },
+        "hip": {
+          "scored": 148,
+          "positiveReference": 120,
+          "zeroReference": 28,
+          "medianAbsoluteErrorFt": 7.894119667585969,
+          "medianAbsoluteErrorPctPositiveReference": 6.749621039995517,
+          "withinThreshold": 88,
+          "spuriousWhenReferenceZero": 8
+        },
+        "valley": {
+          "scored": 148,
+          "positiveReference": 115,
+          "zeroReference": 33,
+          "medianAbsoluteErrorFt": 5.632341902955318,
+          "medianAbsoluteErrorPctPositiveReference": 19.440874465173327,
+          "withinThreshold": 77,
+          "spuriousWhenReferenceZero": 3
+        },
+        "step": {
+          "scored": 148,
+          "positiveReference": 74,
+          "zeroReference": 74,
+          "medianAbsoluteErrorFt": 5.647946136967498,
+          "medianAbsoluteErrorPctPositiveReference": 98.09635378528901,
+          "withinThreshold": 68,
+          "spuriousWhenReferenceZero": 23
+        },
+        "wall": {
+          "scored": 148,
+          "positiveReference": 84,
+          "zeroReference": 64,
+          "medianAbsoluteErrorFt": 3.9715040887351547,
+          "medianAbsoluteErrorPctPositiveReference": 47.46838955195375,
+          "withinThreshold": 79,
+          "spuriousWhenReferenceZero": 15
+        },
+        "transition": {
+          "scored": 148,
+          "positiveReference": 10,
+          "zeroReference": 138,
+          "medianAbsoluteErrorFt": 0,
+          "medianAbsoluteErrorPctPositiveReference": 100,
+          "withinThreshold": 115,
+          "spuriousWhenReferenceZero": 28
+        },
+        "unspecified": {
+          "scored": 148,
+          "positiveReference": 0,
+          "zeroReference": 148,
+          "medianAbsoluteErrorFt": 0,
+          "medianAbsoluteErrorPctPositiveReference": null,
+          "withinThreshold": 148,
+          "spuriousWhenReferenceZero": 0
+        }
+      }
+    },
+    "current": {
+      "attempts": 240,
+      "qualified": 148,
+      "skipped": 92,
+      "skipReasons": {
+        "degenerate": 92
+      },
+      "engineErrors": 0,
+      "spatialScored": 148,
+      "spatialUnscored": 0,
+      "medianAbsoluteAreaErrorPct": 0.8445718393714445,
+      "p90AbsoluteAreaErrorPct": 3.2869406498264224,
+      "medianSignedAreaErrorPct": 0.5384784653312971,
+      "areaWithin3Pct": 129,
+      "medianOutlineIoU": 0.9906658104807207,
+      "p10OutlineIoU": 0.9657029806333599,
+      "medianMissingPlanPct": 0.3377023556657246,
+      "p90MissingPlanPct": 1.8000184133302837,
+      "medianExtraPlanPct": 0.47449422660123663,
+      "p90ExtraPlanPct": 1.0278517744492461,
+      "spatialWithinThresholds": 143,
+      "medianFacetCountAbsoluteError": 2,
+      "exactFacetCount": 49,
+      "medianPredominantPitchAbsoluteError": 0,
+      "medianPitchAreaMatchPct": 96.98150893251848,
+      "roofsWithInferredFacets": 44,
+      "roofsWithUnresolvedFacets": 0,
+      "roofsWithObstructionBoundary": 35,
+      "roofsWithHiddenZones": 33,
+      "allLineTypesWithinThresholds": 27,
+      "numericSpatialAndLineTypesWithinThresholds": 27,
+      "byLineType": {
+        "eave": {
+          "scored": 148,
+          "positiveReference": 148,
+          "zeroReference": 0,
+          "medianAbsoluteErrorFt": 6.655334761111789,
+          "medianAbsoluteErrorPctPositiveReference": 3.3841161172641345,
+          "withinThreshold": 121,
+          "spuriousWhenReferenceZero": 0
+        },
+        "rake": {
+          "scored": 148,
+          "positiveReference": 97,
+          "zeroReference": 51,
+          "medianAbsoluteErrorFt": 13.28023591635915,
+          "medianAbsoluteErrorPctPositiveReference": 22.28597210176058,
+          "withinThreshold": 52,
+          "spuriousWhenReferenceZero": 27
+        },
+        "ridge": {
+          "scored": 148,
+          "positiveReference": 148,
+          "zeroReference": 0,
+          "medianAbsoluteErrorFt": 4.299067385851199,
+          "medianAbsoluteErrorPctPositiveReference": 7.445784095077428,
+          "withinThreshold": 89,
+          "spuriousWhenReferenceZero": 0
+        },
+        "hip": {
+          "scored": 148,
+          "positiveReference": 120,
+          "zeroReference": 28,
+          "medianAbsoluteErrorFt": 9.535577467510791,
+          "medianAbsoluteErrorPctPositiveReference": 11.928807325894475,
+          "withinThreshold": 79,
+          "spuriousWhenReferenceZero": 5
+        },
+        "valley": {
+          "scored": 148,
+          "positiveReference": 115,
+          "zeroReference": 33,
+          "medianAbsoluteErrorFt": 9.647990426048565,
+          "medianAbsoluteErrorPctPositiveReference": 31.731173897028945,
+          "withinThreshold": 63,
+          "spuriousWhenReferenceZero": 2
+        },
+        "step": {
+          "scored": 148,
+          "positiveReference": 74,
+          "zeroReference": 74,
+          "medianAbsoluteErrorFt": 7.3218346786154145,
+          "medianAbsoluteErrorPctPositiveReference": 100,
+          "withinThreshold": 59,
+          "spuriousWhenReferenceZero": 29
+        },
+        "wall": {
+          "scored": 148,
+          "positiveReference": 84,
+          "zeroReference": 64,
+          "medianAbsoluteErrorFt": 4.751409052618472,
+          "medianAbsoluteErrorPctPositiveReference": 56.938804074197336,
+          "withinThreshold": 75,
+          "spuriousWhenReferenceZero": 16
+        },
+        "transition": {
+          "scored": 148,
+          "positiveReference": 10,
+          "zeroReference": 138,
+          "medianAbsoluteErrorFt": 0,
+          "medianAbsoluteErrorPctPositiveReference": 100,
+          "withinThreshold": 123,
+          "spuriousWhenReferenceZero": 21
+        },
+        "unspecified": {
+          "scored": 148,
+          "positiveReference": 0,
+          "zeroReference": 148,
+          "medianAbsoluteErrorFt": 0,
+          "medianAbsoluteErrorPctPositiveReference": null,
+          "withinThreshold": 148,
+          "spuriousWhenReferenceZero": 0
+        }
+      }
+    }
+  },
+  "strata": {
+    "singleWing": {
+      "baseline": {
+        "attempts": 31,
+        "qualified": 31,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 31,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.552954976276773,
+        "p90AbsoluteAreaErrorPct": 2.2903966730473306,
+        "medianSignedAreaErrorPct": 0.3663119948060881,
+        "areaWithin3Pct": 30,
+        "medianOutlineIoU": 0.9935461630098583,
+        "p10OutlineIoU": 0.9782490099285731,
+        "medianMissingPlanPct": 0.20978571226946116,
+        "p90MissingPlanPct": 1.6862383113861117,
+        "medianExtraPlanPct": 0.31378371047201165,
+        "p90ExtraPlanPct": 0.9853432961304585,
+        "spatialWithinThresholds": 31,
+        "medianFacetCountAbsoluteError": 0,
+        "exactFacetCount": 26,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 100,
+        "roofsWithInferredFacets": 6,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 5,
+        "roofsWithHiddenZones": 5,
+        "allLineTypesWithinThresholds": 23,
+        "numericSpatialAndLineTypesWithinThresholds": 23,
+        "byLineType": {
+          "eave": {
+            "scored": 31,
+            "positiveReference": 31,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 0.41062446552916754,
+            "medianAbsoluteErrorPctPositiveReference": 0.19599887036907676,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 31,
+            "positiveReference": 7,
+            "zeroReference": 24,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 0.47610006993707277,
+            "withinThreshold": 25,
+            "spuriousWhenReferenceZero": 5
+          },
+          "ridge": {
+            "scored": 31,
+            "positiveReference": 31,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 0.1504879178416587,
+            "medianAbsoluteErrorPctPositiveReference": 0.6125856411364203,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 31,
+            "positiveReference": 24,
+            "zeroReference": 7,
+            "medianAbsoluteErrorFt": 0.239600730412576,
+            "medianAbsoluteErrorPctPositiveReference": 0.3551924641435035,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 0
+          },
+          "valley": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 2
+          },
+          "step": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 26,
+            "spuriousWhenReferenceZero": 5
+          },
+          "wall": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 2
+          },
+          "transition": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 3
+          },
+          "unspecified": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 31,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 31,
+        "qualified": 31,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 31,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.572321647778772,
+        "p90AbsoluteAreaErrorPct": 2.2903966730473306,
+        "medianSignedAreaErrorPct": 0.386555633170479,
+        "areaWithin3Pct": 30,
+        "medianOutlineIoU": 0.9935461630098583,
+        "p10OutlineIoU": 0.9775985882776993,
+        "medianMissingPlanPct": 0.17523255777328534,
+        "p90MissingPlanPct": 1.7118556155990228,
+        "medianExtraPlanPct": 0.31378371047201165,
+        "p90ExtraPlanPct": 0.9853432961304585,
+        "spatialWithinThresholds": 31,
+        "medianFacetCountAbsoluteError": 0,
+        "exactFacetCount": 26,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 100,
+        "roofsWithInferredFacets": 6,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 5,
+        "roofsWithHiddenZones": 5,
+        "allLineTypesWithinThresholds": 23,
+        "numericSpatialAndLineTypesWithinThresholds": 23,
+        "byLineType": {
+          "eave": {
+            "scored": 31,
+            "positiveReference": 31,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 0.41062446552916754,
+            "medianAbsoluteErrorPctPositiveReference": 0.19599887036907676,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 31,
+            "positiveReference": 7,
+            "zeroReference": 24,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 0.47610006993707277,
+            "withinThreshold": 25,
+            "spuriousWhenReferenceZero": 5
+          },
+          "ridge": {
+            "scored": 31,
+            "positiveReference": 31,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 0.1504879178416587,
+            "medianAbsoluteErrorPctPositiveReference": 0.6125856411364203,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 31,
+            "positiveReference": 24,
+            "zeroReference": 7,
+            "medianAbsoluteErrorFt": 0.239600730412576,
+            "medianAbsoluteErrorPctPositiveReference": 0.3551924641435035,
+            "withinThreshold": 27,
+            "spuriousWhenReferenceZero": 0
+          },
+          "valley": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 30,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 26,
+            "spuriousWhenReferenceZero": 5
+          },
+          "wall": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 2
+          },
+          "transition": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 2
+          },
+          "unspecified": {
+            "scored": 31,
+            "positiveReference": 0,
+            "zeroReference": 31,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 31,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      }
+    },
+    "twoOrThreeWings": {
+      "baseline": {
+        "attempts": 59,
+        "qualified": 59,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 59,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.8314599643705256,
+        "p90AbsoluteAreaErrorPct": 2.4248269217276985,
+        "medianSignedAreaErrorPct": 0.6197513536133787,
+        "areaWithin3Pct": 53,
+        "medianOutlineIoU": 0.99116135600615,
+        "p10OutlineIoU": 0.9703892172340152,
+        "medianMissingPlanPct": 0.2836678620017816,
+        "p90MissingPlanPct": 1.5399897899740362,
+        "medianExtraPlanPct": 0.42726125645398894,
+        "p90ExtraPlanPct": 1.0282645384371218,
+        "spatialWithinThresholds": 58,
+        "medianFacetCountAbsoluteError": 1,
+        "exactFacetCount": 22,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 97.50660159496066,
+        "roofsWithInferredFacets": 18,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 16,
+        "roofsWithHiddenZones": 16,
+        "allLineTypesWithinThresholds": 5,
+        "numericSpatialAndLineTypesWithinThresholds": 5,
+        "byLineType": {
+          "eave": {
+            "scored": 59,
+            "positiveReference": 59,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 5.312190060546328,
+            "medianAbsoluteErrorPctPositiveReference": 2.78964235785357,
+            "withinThreshold": 55,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 59,
+            "positiveReference": 38,
+            "zeroReference": 21,
+            "medianAbsoluteErrorFt": 9.277565812411723,
+            "medianAbsoluteErrorPctPositiveReference": 22.6148224367915,
+            "withinThreshold": 22,
+            "spuriousWhenReferenceZero": 10
+          },
+          "ridge": {
+            "scored": 59,
+            "positiveReference": 59,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 3.7725033870961155,
+            "medianAbsoluteErrorPctPositiveReference": 9.075658501515047,
+            "withinThreshold": 34,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 59,
+            "positiveReference": 47,
+            "zeroReference": 12,
+            "medianAbsoluteErrorFt": 9.019374959713588,
+            "medianAbsoluteErrorPctPositiveReference": 6.19904934306525,
+            "withinThreshold": 35,
+            "spuriousWhenReferenceZero": 5
+          },
+          "valley": {
+            "scored": 59,
+            "positiveReference": 57,
+            "zeroReference": 2,
+            "medianAbsoluteErrorFt": 6.244450136874281,
+            "medianAbsoluteErrorPctPositiveReference": 17.639522825283414,
+            "withinThreshold": 27,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 59,
+            "positiveReference": 27,
+            "zeroReference": 32,
+            "medianAbsoluteErrorFt": 6.539356723718675,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 23,
+            "spuriousWhenReferenceZero": 13
+          },
+          "wall": {
+            "scored": 59,
+            "positiveReference": 33,
+            "zeroReference": 26,
+            "medianAbsoluteErrorFt": 5.550695180762208,
+            "medianAbsoluteErrorPctPositiveReference": 87.19518981001586,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 9
+          },
+          "transition": {
+            "scored": 59,
+            "positiveReference": 3,
+            "zeroReference": 56,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 50,
+            "spuriousWhenReferenceZero": 9
+          },
+          "unspecified": {
+            "scored": 59,
+            "positiveReference": 0,
+            "zeroReference": 59,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 59,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 59,
+        "qualified": 59,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 59,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.7965151724885166,
+        "p90AbsoluteAreaErrorPct": 2.3772234504144465,
+        "medianSignedAreaErrorPct": 0.5310186867599378,
+        "areaWithin3Pct": 53,
+        "medianOutlineIoU": 0.9920242380418787,
+        "p10OutlineIoU": 0.9710578586477497,
+        "medianMissingPlanPct": 0.26431496414782674,
+        "p90MissingPlanPct": 1.5399897899740362,
+        "medianExtraPlanPct": 0.4719033214657121,
+        "p90ExtraPlanPct": 1.0282645384371218,
+        "spatialWithinThresholds": 58,
+        "medianFacetCountAbsoluteError": 2,
+        "exactFacetCount": 18,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 98.09524564507954,
+        "roofsWithInferredFacets": 18,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 15,
+        "roofsWithHiddenZones": 15,
+        "allLineTypesWithinThresholds": 4,
+        "numericSpatialAndLineTypesWithinThresholds": 4,
+        "byLineType": {
+          "eave": {
+            "scored": 59,
+            "positiveReference": 59,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.390390280258956,
+            "medianAbsoluteErrorPctPositiveReference": 3.05771282163445,
+            "withinThreshold": 53,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 59,
+            "positiveReference": 38,
+            "zeroReference": 21,
+            "medianAbsoluteErrorFt": 11.712600802976858,
+            "medianAbsoluteErrorPctPositiveReference": 22.493681849558318,
+            "withinThreshold": 16,
+            "spuriousWhenReferenceZero": 16
+          },
+          "ridge": {
+            "scored": 59,
+            "positiveReference": 59,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 4.192458916731347,
+            "medianAbsoluteErrorPctPositiveReference": 10.228808476168592,
+            "withinThreshold": 32,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 59,
+            "positiveReference": 47,
+            "zeroReference": 12,
+            "medianAbsoluteErrorFt": 11.433252305274692,
+            "medianAbsoluteErrorPctPositiveReference": 12.706428880687822,
+            "withinThreshold": 32,
+            "spuriousWhenReferenceZero": 2
+          },
+          "valley": {
+            "scored": 59,
+            "positiveReference": 57,
+            "zeroReference": 2,
+            "medianAbsoluteErrorFt": 9.897129460152463,
+            "medianAbsoluteErrorPctPositiveReference": 36.08564033103468,
+            "withinThreshold": 21,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 59,
+            "positiveReference": 27,
+            "zeroReference": 32,
+            "medianAbsoluteErrorFt": 9.303436622617077,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 19,
+            "spuriousWhenReferenceZero": 17
+          },
+          "wall": {
+            "scored": 59,
+            "positiveReference": 33,
+            "zeroReference": 26,
+            "medianAbsoluteErrorFt": 5.867448029906272,
+            "medianAbsoluteErrorPctPositiveReference": 87.19518981001586,
+            "withinThreshold": 26,
+            "spuriousWhenReferenceZero": 9
+          },
+          "transition": {
+            "scored": 59,
+            "positiveReference": 3,
+            "zeroReference": 56,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 51,
+            "spuriousWhenReferenceZero": 8
+          },
+          "unspecified": {
+            "scored": 59,
+            "positiveReference": 0,
+            "zeroReference": 59,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 59,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      }
+    },
+    "fourPlusWings": {
+      "baseline": {
+        "attempts": 58,
+        "qualified": 58,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 58,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 1.307807785733751,
+        "p90AbsoluteAreaErrorPct": 4.39985120843613,
+        "medianSignedAreaErrorPct": 0.6808010154224668,
+        "areaWithin3Pct": 46,
+        "medianOutlineIoU": 0.9875175510006625,
+        "p10OutlineIoU": 0.9569007810055266,
+        "medianMissingPlanPct": 0.6068839919356381,
+        "p90MissingPlanPct": 2.2639807201815736,
+        "medianExtraPlanPct": 0.5390060824845372,
+        "p90ExtraPlanPct": 1.072109064606844,
+        "spatialWithinThresholds": 54,
+        "medianFacetCountAbsoluteError": 2,
+        "exactFacetCount": 12,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 91.35481324046553,
+        "roofsWithInferredFacets": 20,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 15,
+        "roofsWithHiddenZones": 13,
+        "allLineTypesWithinThresholds": 0,
+        "numericSpatialAndLineTypesWithinThresholds": 0,
+        "byLineType": {
+          "eave": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 14.52698026905614,
+            "medianAbsoluteErrorPctPositiveReference": 5.781069972844179,
+            "withinThreshold": 43,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 58,
+            "positiveReference": 52,
+            "zeroReference": 6,
+            "medianAbsoluteErrorFt": 19.49223675780092,
+            "medianAbsoluteErrorPctPositiveReference": 24.09337883761121,
+            "withinThreshold": 17,
+            "spuriousWhenReferenceZero": 5
+          },
+          "ridge": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 8.489071951076404,
+            "medianAbsoluteErrorPctPositiveReference": 10.687646491529252,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 58,
+            "positiveReference": 49,
+            "zeroReference": 9,
+            "medianAbsoluteErrorFt": 22.01605608027704,
+            "medianAbsoluteErrorPctPositiveReference": 14.682296984512414,
+            "withinThreshold": 24,
+            "spuriousWhenReferenceZero": 3
+          },
+          "valley": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 14.094395395811603,
+            "medianAbsoluteErrorPctPositiveReference": 19.568439722637283,
+            "withinThreshold": 21,
+            "spuriousWhenReferenceZero": 0
+          },
+          "step": {
+            "scored": 58,
+            "positiveReference": 47,
+            "zeroReference": 11,
+            "medianAbsoluteErrorFt": 8.169487373713771,
+            "medianAbsoluteErrorPctPositiveReference": 47.62220390355029,
+            "withinThreshold": 19,
+            "spuriousWhenReferenceZero": 5
+          },
+          "wall": {
+            "scored": 58,
+            "positiveReference": 51,
+            "zeroReference": 7,
+            "medianAbsoluteErrorFt": 7.3010498685640455,
+            "medianAbsoluteErrorPctPositiveReference": 41.279505238466996,
+            "withinThreshold": 22,
+            "spuriousWhenReferenceZero": 4
+          },
+          "transition": {
+            "scored": 58,
+            "positiveReference": 7,
+            "zeroReference": 51,
+            "medianAbsoluteErrorFt": 1.5338238878199446,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 37,
+            "spuriousWhenReferenceZero": 16
+          },
+          "unspecified": {
+            "scored": 58,
+            "positiveReference": 0,
+            "zeroReference": 58,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 58,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 58,
+        "qualified": 58,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 58,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 1.3639245779012845,
+        "p90AbsoluteAreaErrorPct": 4.1561192890860355,
+        "medianSignedAreaErrorPct": 0.6808010154224668,
+        "areaWithin3Pct": 46,
+        "medianOutlineIoU": 0.9893868603049336,
+        "p10OutlineIoU": 0.9581422116986633,
+        "medianMissingPlanPct": 0.4847472543542918,
+        "p90MissingPlanPct": 2.319111580508898,
+        "medianExtraPlanPct": 0.5091689368327856,
+        "p90ExtraPlanPct": 1.0102938719223802,
+        "spatialWithinThresholds": 54,
+        "medianFacetCountAbsoluteError": 3,
+        "exactFacetCount": 5,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 92.55238645000729,
+        "roofsWithInferredFacets": 20,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 15,
+        "roofsWithHiddenZones": 13,
+        "allLineTypesWithinThresholds": 0,
+        "numericSpatialAndLineTypesWithinThresholds": 0,
+        "byLineType": {
+          "eave": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 16.765507723288337,
+            "medianAbsoluteErrorPctPositiveReference": 7.177606250826843,
+            "withinThreshold": 40,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 58,
+            "positiveReference": 52,
+            "zeroReference": 6,
+            "medianAbsoluteErrorFt": 20.43001111579468,
+            "medianAbsoluteErrorPctPositiveReference": 27.55355854773007,
+            "withinThreshold": 11,
+            "spuriousWhenReferenceZero": 6
+          },
+          "ridge": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 8.665235212279214,
+            "medianAbsoluteErrorPctPositiveReference": 10.823899796901935,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 58,
+            "positiveReference": 49,
+            "zeroReference": 9,
+            "medianAbsoluteErrorFt": 30.14643219000679,
+            "medianAbsoluteErrorPctPositiveReference": 18.781622578952245,
+            "withinThreshold": 20,
+            "spuriousWhenReferenceZero": 3
+          },
+          "valley": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 19.515779676880246,
+            "medianAbsoluteErrorPctPositiveReference": 31.679161171039656,
+            "withinThreshold": 12,
+            "spuriousWhenReferenceZero": 0
+          },
+          "step": {
+            "scored": 58,
+            "positiveReference": 47,
+            "zeroReference": 11,
+            "medianAbsoluteErrorFt": 11.277939672644003,
+            "medianAbsoluteErrorPctPositiveReference": 58.28100128716546,
+            "withinThreshold": 14,
+            "spuriousWhenReferenceZero": 7
+          },
+          "wall": {
+            "scored": 58,
+            "positiveReference": 51,
+            "zeroReference": 7,
+            "medianAbsoluteErrorFt": 8.890288124815672,
+            "medianAbsoluteErrorPctPositiveReference": 54.63429655697259,
+            "withinThreshold": 20,
+            "spuriousWhenReferenceZero": 5
+          },
+          "transition": {
+            "scored": 58,
+            "positiveReference": 7,
+            "zeroReference": 51,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 43,
+            "spuriousWhenReferenceZero": 11
+          },
+          "unspecified": {
+            "scored": 58,
+            "positiveReference": 0,
+            "zeroReference": 58,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 58,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      }
+    },
+    "multipleEaveLevels": {
+      "baseline": {
+        "attempts": 63,
+        "qualified": 63,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 63,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 1.1263085297131303,
+        "p90AbsoluteAreaErrorPct": 4.054269686261445,
+        "medianSignedAreaErrorPct": 0.7078858650734694,
+        "areaWithin3Pct": 53,
+        "medianOutlineIoU": 0.9896730546200645,
+        "p10OutlineIoU": 0.9661733239458998,
+        "medianMissingPlanPct": 0.4449827315068003,
+        "p90MissingPlanPct": 1.6486507634542562,
+        "medianExtraPlanPct": 0.4874591941211426,
+        "p90ExtraPlanPct": 1.1578532107051698,
+        "spatialWithinThresholds": 61,
+        "medianFacetCountAbsoluteError": 2,
+        "exactFacetCount": 13,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 91.62810208149565,
+        "roofsWithInferredFacets": 19,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 16,
+        "roofsWithHiddenZones": 15,
+        "allLineTypesWithinThresholds": 0,
+        "numericSpatialAndLineTypesWithinThresholds": 0,
+        "byLineType": {
+          "eave": {
+            "scored": 63,
+            "positiveReference": 63,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 11.492934465538099,
+            "medianAbsoluteErrorPctPositiveReference": 5.714005220205033,
+            "withinThreshold": 47,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 63,
+            "positiveReference": 56,
+            "zeroReference": 7,
+            "medianAbsoluteErrorFt": 15.479689735412911,
+            "medianAbsoluteErrorPctPositiveReference": 29.562898446358794,
+            "withinThreshold": 18,
+            "spuriousWhenReferenceZero": 5
+          },
+          "ridge": {
+            "scored": 63,
+            "positiveReference": 63,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 7.541988703735186,
+            "medianAbsoluteErrorPctPositiveReference": 11.250001561555663,
+            "withinThreshold": 30,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 63,
+            "positiveReference": 54,
+            "zeroReference": 9,
+            "medianAbsoluteErrorFt": 12.048084360050765,
+            "medianAbsoluteErrorPctPositiveReference": 13.032993676010342,
+            "withinThreshold": 28,
+            "spuriousWhenReferenceZero": 4
+          },
+          "valley": {
+            "scored": 63,
+            "positiveReference": 62,
+            "zeroReference": 1,
+            "medianAbsoluteErrorFt": 12.043688131988887,
+            "medianAbsoluteErrorPctPositiveReference": 28.378888905014712,
+            "withinThreshold": 19,
+            "spuriousWhenReferenceZero": 0
+          },
+          "step": {
+            "scored": 63,
+            "positiveReference": 62,
+            "zeroReference": 1,
+            "medianAbsoluteErrorFt": 9.303436622617077,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 13,
+            "spuriousWhenReferenceZero": 1
+          },
+          "wall": {
+            "scored": 63,
+            "positiveReference": 59,
+            "zeroReference": 4,
+            "medianAbsoluteErrorFt": 6.091966988883797,
+            "medianAbsoluteErrorPctPositiveReference": 42.45441266160808,
+            "withinThreshold": 23,
+            "spuriousWhenReferenceZero": 1
+          },
+          "transition": {
+            "scored": 63,
+            "positiveReference": 7,
+            "zeroReference": 56,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 44,
+            "spuriousWhenReferenceZero": 15
+          },
+          "unspecified": {
+            "scored": 63,
+            "positiveReference": 0,
+            "zeroReference": 63,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 63,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 63,
+        "qualified": 63,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 63,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 1.0569447561991832,
+        "p90AbsoluteAreaErrorPct": 3.7340700826594095,
+        "medianSignedAreaErrorPct": 0.7078858650734694,
+        "areaWithin3Pct": 53,
+        "medianOutlineIoU": 0.9898852256853186,
+        "p10OutlineIoU": 0.9657029806333599,
+        "medianMissingPlanPct": 0.4438892036362709,
+        "p90MissingPlanPct": 1.8000184133302837,
+        "medianExtraPlanPct": 0.4719033214657121,
+        "p90ExtraPlanPct": 1.075586823854639,
+        "spatialWithinThresholds": 61,
+        "medianFacetCountAbsoluteError": 2,
+        "exactFacetCount": 9,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 94.03036378875171,
+        "roofsWithInferredFacets": 19,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 16,
+        "roofsWithHiddenZones": 15,
+        "allLineTypesWithinThresholds": 0,
+        "numericSpatialAndLineTypesWithinThresholds": 0,
+        "byLineType": {
+          "eave": {
+            "scored": 63,
+            "positiveReference": 63,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 11.976869093555763,
+            "medianAbsoluteErrorPctPositiveReference": 5.793612119517199,
+            "withinThreshold": 46,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 63,
+            "positiveReference": 56,
+            "zeroReference": 7,
+            "medianAbsoluteErrorFt": 15.837177820408456,
+            "medianAbsoluteErrorPctPositiveReference": 32.88592814442345,
+            "withinThreshold": 13,
+            "spuriousWhenReferenceZero": 5
+          },
+          "ridge": {
+            "scored": 63,
+            "positiveReference": 63,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 7.92070796813492,
+            "medianAbsoluteErrorPctPositiveReference": 12.040547113895347,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 63,
+            "positiveReference": 54,
+            "zeroReference": 9,
+            "medianAbsoluteErrorFt": 22.167399295704797,
+            "medianAbsoluteErrorPctPositiveReference": 17.686973053663316,
+            "withinThreshold": 25,
+            "spuriousWhenReferenceZero": 3
+          },
+          "valley": {
+            "scored": 63,
+            "positiveReference": 62,
+            "zeroReference": 1,
+            "medianAbsoluteErrorFt": 13.948455879293544,
+            "medianAbsoluteErrorPctPositiveReference": 41.95443962031962,
+            "withinThreshold": 15,
+            "spuriousWhenReferenceZero": 0
+          },
+          "step": {
+            "scored": 63,
+            "positiveReference": 62,
+            "zeroReference": 1,
+            "medianAbsoluteErrorFt": 10.208603446129331,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 12,
+            "spuriousWhenReferenceZero": 0
+          },
+          "wall": {
+            "scored": 63,
+            "positiveReference": 59,
+            "zeroReference": 4,
+            "medianAbsoluteErrorFt": 7.214597987676527,
+            "medianAbsoluteErrorPctPositiveReference": 54.63429655697259,
+            "withinThreshold": 20,
+            "spuriousWhenReferenceZero": 1
+          },
+          "transition": {
+            "scored": 63,
+            "positiveReference": 7,
+            "zeroReference": 56,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 51,
+            "spuriousWhenReferenceZero": 9
+          },
+          "unspecified": {
+            "scored": 63,
+            "positiveReference": 0,
+            "zeroReference": 63,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 63,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      }
+    },
+    "hardImagery": {
+      "baseline": {
+        "attempts": 58,
+        "qualified": 58,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 58,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 1.579159021418452,
+        "p90AbsoluteAreaErrorPct": 3.4379451409776016,
+        "medianSignedAreaErrorPct": 1.200351761643722,
+        "areaWithin3Pct": 49,
+        "medianOutlineIoU": 0.9895972266154757,
+        "p10OutlineIoU": 0.9661733239458998,
+        "medianMissingPlanPct": 0.47552995880758464,
+        "p90MissingPlanPct": 1.7344793949271802,
+        "medianExtraPlanPct": 0.5086172081101197,
+        "p90ExtraPlanPct": 1.067072923914531,
+        "spatialWithinThresholds": 57,
+        "medianFacetCountAbsoluteError": 1,
+        "exactFacetCount": 19,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 85.45880669220847,
+        "roofsWithInferredFacets": 14,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 11,
+        "roofsWithHiddenZones": 10,
+        "allLineTypesWithinThresholds": 9,
+        "numericSpatialAndLineTypesWithinThresholds": 9,
+        "byLineType": {
+          "eave": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.108918916461974,
+            "medianAbsoluteErrorPctPositiveReference": 3.2709788707119527,
+            "withinThreshold": 49,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 58,
+            "positiveReference": 40,
+            "zeroReference": 18,
+            "medianAbsoluteErrorFt": 15.47647508428922,
+            "medianAbsoluteErrorPctPositiveReference": 24.819269520304076,
+            "withinThreshold": 17,
+            "spuriousWhenReferenceZero": 10
+          },
+          "ridge": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 4.701437937723028,
+            "medianAbsoluteErrorPctPositiveReference": 9.274318030509942,
+            "withinThreshold": 32,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 58,
+            "positiveReference": 50,
+            "zeroReference": 8,
+            "medianAbsoluteErrorFt": 9.571448177735906,
+            "medianAbsoluteErrorPctPositiveReference": 10.125927431497875,
+            "withinThreshold": 30,
+            "spuriousWhenReferenceZero": 3
+          },
+          "valley": {
+            "scored": 58,
+            "positiveReference": 45,
+            "zeroReference": 13,
+            "medianAbsoluteErrorFt": 5.807239177593452,
+            "medianAbsoluteErrorPctPositiveReference": 16.631677269118658,
+            "withinThreshold": 29,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 58,
+            "positiveReference": 29,
+            "zeroReference": 29,
+            "medianAbsoluteErrorFt": 9.732183590278394,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 19,
+            "spuriousWhenReferenceZero": 15
+          },
+          "wall": {
+            "scored": 58,
+            "positiveReference": 37,
+            "zeroReference": 21,
+            "medianAbsoluteErrorFt": 4.456727925340065,
+            "medianAbsoluteErrorPctPositiveReference": 46.759390390651866,
+            "withinThreshold": 31,
+            "spuriousWhenReferenceZero": 8
+          },
+          "transition": {
+            "scored": 58,
+            "positiveReference": 4,
+            "zeroReference": 54,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 170.5545400277407,
+            "withinThreshold": 40,
+            "spuriousWhenReferenceZero": 16
+          },
+          "unspecified": {
+            "scored": 58,
+            "positiveReference": 0,
+            "zeroReference": 58,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 58,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 58,
+        "qualified": 58,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 58,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 1.5497353000660508,
+        "p90AbsoluteAreaErrorPct": 3.2869406498264224,
+        "medianSignedAreaErrorPct": 1.004089568543605,
+        "areaWithin3Pct": 49,
+        "medianOutlineIoU": 0.9898007876638959,
+        "p10OutlineIoU": 0.9657029806333599,
+        "medianMissingPlanPct": 0.40992357577897254,
+        "p90MissingPlanPct": 1.7344793949271802,
+        "medianExtraPlanPct": 0.49394733198537705,
+        "p90ExtraPlanPct": 1.0278517744492461,
+        "spatialWithinThresholds": 57,
+        "medianFacetCountAbsoluteError": 2,
+        "exactFacetCount": 18,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 85.96742647079591,
+        "roofsWithInferredFacets": 14,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 11,
+        "roofsWithHiddenZones": 10,
+        "allLineTypesWithinThresholds": 9,
+        "numericSpatialAndLineTypesWithinThresholds": 9,
+        "byLineType": {
+          "eave": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.5050579320663715,
+            "medianAbsoluteErrorPctPositiveReference": 2.9591222841076212,
+            "withinThreshold": 50,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 58,
+            "positiveReference": 40,
+            "zeroReference": 18,
+            "medianAbsoluteErrorFt": 11.862847685371602,
+            "medianAbsoluteErrorPctPositiveReference": 24.819269520304076,
+            "withinThreshold": 19,
+            "spuriousWhenReferenceZero": 10
+          },
+          "ridge": {
+            "scored": 58,
+            "positiveReference": 58,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 4.099649120203173,
+            "medianAbsoluteErrorPctPositiveReference": 9.451963099737139,
+            "withinThreshold": 33,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 58,
+            "positiveReference": 50,
+            "zeroReference": 8,
+            "medianAbsoluteErrorFt": 9.535577467510791,
+            "medianAbsoluteErrorPctPositiveReference": 11.729465725755812,
+            "withinThreshold": 31,
+            "spuriousWhenReferenceZero": 1
+          },
+          "valley": {
+            "scored": 58,
+            "positiveReference": 45,
+            "zeroReference": 13,
+            "medianAbsoluteErrorFt": 9.975161163592892,
+            "medianAbsoluteErrorPctPositiveReference": 30.995149346678886,
+            "withinThreshold": 25,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 58,
+            "positiveReference": 29,
+            "zeroReference": 29,
+            "medianAbsoluteErrorFt": 13.308480459142078,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 16,
+            "spuriousWhenReferenceZero": 16
+          },
+          "wall": {
+            "scored": 58,
+            "positiveReference": 37,
+            "zeroReference": 21,
+            "medianAbsoluteErrorFt": 4.751409052618472,
+            "medianAbsoluteErrorPctPositiveReference": 71.25504747729259,
+            "withinThreshold": 30,
+            "spuriousWhenReferenceZero": 8
+          },
+          "transition": {
+            "scored": 58,
+            "positiveReference": 4,
+            "zeroReference": 54,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 100,
+            "withinThreshold": 44,
+            "spuriousWhenReferenceZero": 13
+          },
+          "unspecified": {
+            "scored": 58,
+            "positiveReference": 0,
+            "zeroReference": 58,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 58,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      }
+    },
+    "easierImagery": {
+      "baseline": {
+        "attempts": 90,
+        "qualified": 90,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 90,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.6475975398772755,
+        "p90AbsoluteAreaErrorPct": 3.468200656159192,
+        "medianSignedAreaErrorPct": 0.4178308290920471,
+        "areaWithin3Pct": 80,
+        "medianOutlineIoU": 0.9907509378233594,
+        "p10OutlineIoU": 0.9603104573919102,
+        "medianMissingPlanPct": 0.3079469014609185,
+        "p90MissingPlanPct": 1.6486507634542562,
+        "medianExtraPlanPct": 0.4678295070445897,
+        "p90ExtraPlanPct": 1.1141662705093656,
+        "spatialWithinThresholds": 86,
+        "medianFacetCountAbsoluteError": 1,
+        "exactFacetCount": 41,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 99.01303884726025,
+        "roofsWithInferredFacets": 30,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 25,
+        "roofsWithHiddenZones": 24,
+        "allLineTypesWithinThresholds": 19,
+        "numericSpatialAndLineTypesWithinThresholds": 19,
+        "byLineType": {
+          "eave": {
+            "scored": 90,
+            "positiveReference": 90,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.057359735395622,
+            "medianAbsoluteErrorPctPositiveReference": 3.008683784866511,
+            "withinThreshold": 77,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 90,
+            "positiveReference": 57,
+            "zeroReference": 33,
+            "medianAbsoluteErrorFt": 8.131961713495254,
+            "medianAbsoluteErrorPctPositiveReference": 15.189212444559953,
+            "withinThreshold": 47,
+            "spuriousWhenReferenceZero": 10
+          },
+          "ridge": {
+            "scored": 90,
+            "positiveReference": 90,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 4.101966706878745,
+            "medianAbsoluteErrorPctPositiveReference": 5.957144676324203,
+            "withinThreshold": 59,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 90,
+            "positiveReference": 70,
+            "zeroReference": 20,
+            "medianAbsoluteErrorFt": 6.101405994111936,
+            "medianAbsoluteErrorPctPositiveReference": 6.223789913416338,
+            "withinThreshold": 58,
+            "spuriousWhenReferenceZero": 5
+          },
+          "valley": {
+            "scored": 90,
+            "positiveReference": 70,
+            "zeroReference": 20,
+            "medianAbsoluteErrorFt": 5.476693638189481,
+            "medianAbsoluteErrorPctPositiveReference": 21.05681134798725,
+            "withinThreshold": 48,
+            "spuriousWhenReferenceZero": 2
+          },
+          "step": {
+            "scored": 90,
+            "positiveReference": 45,
+            "zeroReference": 45,
+            "medianAbsoluteErrorFt": 3.243230518032423,
+            "medianAbsoluteErrorPctPositiveReference": 86.53725147119336,
+            "withinThreshold": 49,
+            "spuriousWhenReferenceZero": 8
+          },
+          "wall": {
+            "scored": 90,
+            "positiveReference": 47,
+            "zeroReference": 43,
+            "medianAbsoluteErrorFt": 3.514048042193516,
+            "medianAbsoluteErrorPctPositiveReference": 50.02095235477473,
+            "withinThreshold": 48,
+            "spuriousWhenReferenceZero": 7
+          },
+          "transition": {
+            "scored": 90,
+            "positiveReference": 6,
+            "zeroReference": 84,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 86.17684551788122,
+            "withinThreshold": 75,
+            "spuriousWhenReferenceZero": 12
+          },
+          "unspecified": {
+            "scored": 90,
+            "positiveReference": 0,
+            "zeroReference": 90,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 90,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      },
+      "current": {
+        "attempts": 90,
+        "qualified": 90,
+        "skipped": 0,
+        "skipReasons": {},
+        "engineErrors": 0,
+        "spatialScored": 90,
+        "spatialUnscored": 0,
+        "medianAbsoluteAreaErrorPct": 0.6513150535603083,
+        "p90AbsoluteAreaErrorPct": 3.1779629075343077,
+        "medianSignedAreaErrorPct": 0.4353535954473523,
+        "areaWithin3Pct": 80,
+        "medianOutlineIoU": 0.9920257740269638,
+        "p10OutlineIoU": 0.9604126700047386,
+        "medianMissingPlanPct": 0.27849802755434167,
+        "p90MissingPlanPct": 1.8000184133302837,
+        "medianExtraPlanPct": 0.44865515329779837,
+        "p90ExtraPlanPct": 1.0173962640868885,
+        "spatialWithinThresholds": 86,
+        "medianFacetCountAbsoluteError": 1.5,
+        "exactFacetCount": 31,
+        "medianPredominantPitchAbsoluteError": 0,
+        "medianPitchAreaMatchPct": 99.08313923879277,
+        "roofsWithInferredFacets": 30,
+        "roofsWithUnresolvedFacets": 0,
+        "roofsWithObstructionBoundary": 24,
+        "roofsWithHiddenZones": 23,
+        "allLineTypesWithinThresholds": 18,
+        "numericSpatialAndLineTypesWithinThresholds": 18,
+        "byLineType": {
+          "eave": {
+            "scored": 90,
+            "positiveReference": 90,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 6.993547932377993,
+            "medianAbsoluteErrorPctPositiveReference": 3.541434386013621,
+            "withinThreshold": 71,
+            "spuriousWhenReferenceZero": 0
+          },
+          "rake": {
+            "scored": 90,
+            "positiveReference": 57,
+            "zeroReference": 33,
+            "medianAbsoluteErrorFt": 13.641523596566067,
+            "medianAbsoluteErrorPctPositiveReference": 20.88589251382731,
+            "withinThreshold": 33,
+            "spuriousWhenReferenceZero": 17
+          },
+          "ridge": {
+            "scored": 90,
+            "positiveReference": 90,
+            "zeroReference": 0,
+            "medianAbsoluteErrorFt": 4.299067385851199,
+            "medianAbsoluteErrorPctPositiveReference": 6.3824365017235145,
+            "withinThreshold": 56,
+            "spuriousWhenReferenceZero": 0
+          },
+          "hip": {
+            "scored": 90,
+            "positiveReference": 70,
+            "zeroReference": 20,
+            "medianAbsoluteErrorFt": 9.429875057980489,
+            "medianAbsoluteErrorPctPositiveReference": 11.928807325894475,
+            "withinThreshold": 48,
+            "spuriousWhenReferenceZero": 4
+          },
+          "valley": {
+            "scored": 90,
+            "positiveReference": 70,
+            "zeroReference": 20,
+            "medianAbsoluteErrorFt": 9.647990426048565,
+            "medianAbsoluteErrorPctPositiveReference": 35.25029705238356,
+            "withinThreshold": 38,
+            "spuriousWhenReferenceZero": 1
+          },
+          "step": {
+            "scored": 90,
+            "positiveReference": 45,
+            "zeroReference": 45,
+            "medianAbsoluteErrorFt": 5.767625187116292,
+            "medianAbsoluteErrorPctPositiveReference": 85.42579951633984,
+            "withinThreshold": 43,
+            "spuriousWhenReferenceZero": 13
+          },
+          "wall": {
+            "scored": 90,
+            "positiveReference": 47,
+            "zeroReference": 43,
+            "medianAbsoluteErrorFt": 4.717265232009154,
+            "medianAbsoluteErrorPctPositiveReference": 54.63429655697259,
+            "withinThreshold": 45,
+            "spuriousWhenReferenceZero": 8
+          },
+          "transition": {
+            "scored": 90,
+            "positiveReference": 6,
+            "zeroReference": 84,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": 86.13441310994408,
+            "withinThreshold": 79,
+            "spuriousWhenReferenceZero": 8
+          },
+          "unspecified": {
+            "scored": 90,
+            "positiveReference": 0,
+            "zeroReference": 90,
+            "medianAbsoluteErrorFt": 0,
+            "medianAbsoluteErrorPctPositiveReference": null,
+            "withinThreshold": 90,
+            "spuriousWhenReferenceZero": 0
+          }
+        }
+      }
+    }
+  },
+  "inventory": {
+    "baseline-development.jsonl": {
+      "attempts": 120,
+      "sha256": "dab76067fda037b1ec21f8f20a4b28ccca5b766119776dd7f528edb332429df1"
+    },
+    "current-development.jsonl": {
+      "attempts": 120,
+      "sha256": "e661450971bfa7b7e850383eb00cd7cd98fccbd042967d129de8027a4ae73c36"
+    },
+    "baseline-holdout.jsonl": {
+      "attempts": 120,
+      "sha256": "ecf0d6ad643848d62002f96764c632cff9a087f0e82f52f5ff6e37d79aa5fd55"
+    },
+    "current-holdout.jsonl": {
+      "attempts": 120,
+      "sha256": "4585e2769235553df6aa4d0ed6f80c5243fff783558c3881a7ae257f0f7b680f"
+    }
+  },
+  "areaAbsolutePercentDistributions": {
+    "baseline-development": {
+      "attempted": 120,
+      "qualified": 71,
+      "exclusions": {
+        "degenerate": 49
+      },
+      "failures": 0,
+      "median": 0.8314599643705256,
+      "p95": 4.68680476210953,
+      "worst": 10.92464069083563,
+      "missingOverlapScore": 0
+    },
+    "baseline-holdout": {
+      "attempted": 120,
+      "qualified": 77,
+      "exclusions": {
+        "degenerate": 43
+      },
+      "failures": 0,
+      "median": 1.064527039262243,
+      "p95": 4.4112396502423765,
+      "worst": 7.922273746759218,
+      "missingOverlapScore": 0
+    },
+    "current-development": {
+      "attempted": 120,
+      "qualified": 71,
+      "exclusions": {
+        "degenerate": 49
+      },
+      "failures": 0,
+      "median": 0.847903382102525,
+      "p95": 4.655069389753993,
+      "worst": 7.149303542087108,
+      "missingOverlapScore": 0
+    },
+    "current-holdout": {
+      "attempted": 120,
+      "qualified": 77,
+      "exclusions": {
+        "degenerate": 43
+      },
+      "failures": 0,
+      "median": 0.8413386099191823,
+      "p95": 4.244878016982772,
+      "worst": 7.8158606765223935,
+      "missingOverlapScore": 0
+    }
+  }
+}

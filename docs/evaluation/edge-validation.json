@@ -1,0 +1,4760 @@
+{
+  "schema": 1,
+  "scope": "Eight fixed synthetic, single-structure, unobstructed gable/hip roofs. No field accuracy, typing of valleys, wrong-building selection or untouched real holdout tested.",
+  "provenance": "Independent closed-form 3D vertices and source-local edges, seeded repository renderer, 0.1 m pixels; no customer data.",
+  "baseline": "4806a129bea3fe6aa18d20a613f2cad494485082",
+  "integratedHead": "924bba58196577baa396ed1d11ab55ed75f22f43",
+  "fixtures": [
+    {
+      "id": "G1",
+      "kind": "gable",
+      "lengthM": 14,
+      "widthM": 8,
+      "riseIn12": 4,
+      "rotationDeg": 0,
+      "seed": 73101
+    },
+    {
+      "id": "G2",
+      "kind": "gable",
+      "lengthM": 21,
+      "widthM": 11,
+      "riseIn12": 6,
+      "rotationDeg": 17,
+      "seed": 73102
+    },
+    {
+      "id": "G3",
+      "kind": "gable",
+      "lengthM": 18,
+      "widthM": 9,
+      "riseIn12": 8,
+      "rotationDeg": 49,
+      "seed": 73103
+    },
+    {
+      "id": "G4",
+      "kind": "gable",
+      "lengthM": 24,
+      "widthM": 12,
+      "riseIn12": 12,
+      "rotationDeg": 83,
+      "seed": 73104
+    },
+    {
+      "id": "H1",
+      "kind": "hip",
+      "lengthM": 16,
+      "widthM": 8,
+      "riseIn12": 4,
+      "rotationDeg": 7,
+      "seed": 73105
+    },
+    {
+      "id": "H2",
+      "kind": "hip",
+      "lengthM": 22,
+      "widthM": 12,
+      "riseIn12": 6,
+      "rotationDeg": 31,
+      "seed": 73106
+    },
+    {
+      "id": "H3",
+      "kind": "hip",
+      "lengthM": 19,
+      "widthM": 10,
+      "riseIn12": 8,
+      "rotationDeg": 59,
+      "seed": 73107
+    },
+    {
+      "id": "H4",
+      "kind": "hip",
+      "lengthM": 25,
+      "widthM": 13,
+      "riseIn12": 12,
+      "rotationDeg": 88,
+      "seed": 73108
+    }
+  ],
+  "renderOptions": {
+    "noise": 0.02,
+    "blur": 1,
+    "hard": false,
+    "clutter": false,
+    "trees": 0
+  },
+  "fixtureSha256": "1aa3902198b38211618a710d5eed8510cb4936ea814cebd2dab34d2e8e494121",
+  "method": {
+    "endpointToleranceM": 0.4,
+    "minimumFacetIou": 0.5,
+    "matching": "One-to-one greedy minimum of the worse of two reversible endpoint distances. Four raster pixels distinguish correspondences; type is scored after assignment. Facets maximize planar polygon IoU above 0.50.",
+    "length": "Sum emitted polyline segment lengths using the exact fitted edge factor via summarizeEngine(...,true). Includes matched, finite lines regardless of type; misses and extra lines are listed separately.",
+    "quantiles": "Median midpoint, nearest-rank p95, maximum. Absolute feet for individual edges and absolute percentage for whole-roof sloped area. Internal diagnostics only."
+  },
+  "reports": {
+    "baseline": {
+      "sourceSha256": {
+        "autotrace.js": "aa68c71d79657df90376e0acfb9ebb91490cc4267ef29406dad035b35fdc311b",
+        "autotrace2.js": "5deb5dff839ad26acf11745ef29f80d9a56569aefb59db3598ba27ea62a17762",
+        "obstruction.js": "78a36a9a79aa4e798707870a1ab1e3cbe22d7c53807269c7be17f0acd079b9ea"
+      },
+      "summary": {
+        "scenes": 8,
+        "traceErrors": 0,
+        "matchedEdges": 64,
+        "missedEdges": 0,
+        "extraEdges": 3,
+        "misclassifiedEdges": 0,
+        "missingLengths": 0,
+        "matchedFacets": 24,
+        "missedFacets": 0,
+        "extraFacets": 0,
+        "absoluteEdgeErrorFt": {
+          "n": 64,
+          "median": 0.04931,
+          "p95": 1.055858,
+          "worst": 1.519528
+        },
+        "absoluteAreaErrorPct": {
+          "n": 8,
+          "median": 0.41894,
+          "p95": 1.188338,
+          "worst": 1.188338
+        },
+        "perEdgeType": {
+          "eave": {
+            "n": 24,
+            "median": 0.035005,
+            "p95": 1.287307,
+            "worst": 1.519528
+          },
+          "ridge": {
+            "n": 8,
+            "median": 0.092433,
+            "p95": 0.374883,
+            "worst": 0.374883
+          },
+          "hip": {
+            "n": 16,
+            "median": 0.045552,
+            "p95": 0.662821,
+            "worst": 0.662821
+          },
+          "rake": {
+            "n": 16,
+            "median": 0.075569,
+            "p95": 1.055858,
+            "worst": 1.055858
+          }
+        }
+      },
+      "scenes": [
+        {
+          "id": "G1",
+          "rasterSha256": "839064d42100da55cad99829e9aae15c83669e43ec0a601b7faa282e39971d89",
+          "expectedAreaSqFt": 1270.769675,
+          "candidateAreaSqFt": 1281.38325,
+          "absoluteAreaErrorPct": 0.835208,
+          "edgeMatches": [
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -7,
+                  -4
+                ],
+                [
+                  7,
+                  -4
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.99778,
+                  -4.007739
+                ],
+                [
+                  -7.002148,
+                  -3.992256
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 45.931759,
+              "predictedFt": 45.931571,
+              "absoluteErrorFt": 0.000188,
+              "endpointErrorM": 0.008051
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 4,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  7,
+                  -4
+                ],
+                [
+                  7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.000003,
+                  0.002326
+                ],
+                [
+                  6.99778,
+                  -4.007739
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 13.897755,
+              "absoluteErrorFt": 0.064519,
+              "endpointErrorM": 0.008051
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 3,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -7,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.000003,
+                  0.002326
+                ],
+                [
+                  -6.999926,
+                  0.015564
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 45.931759,
+              "predictedFt": 45.93157,
+              "absoluteErrorFt": 0.000188,
+              "endpointErrorM": 0.015564
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 6,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -7,
+                  -4
+                ],
+                [
+                  -7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -7.002148,
+                  -3.992256
+                ],
+                [
+                  -6.999926,
+                  0.015564
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 13.889974,
+              "absoluteErrorFt": 0.056739,
+              "endpointErrorM": 0.015564
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  7,
+                  4
+                ],
+                [
+                  7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.000003,
+                  0.002326
+                ],
+                [
+                  7.002233,
+                  4.019283
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 13.933555,
+              "absoluteErrorFt": 0.100319,
+              "endpointErrorM": 0.019412
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  7,
+                  4
+                ],
+                [
+                  -7,
+                  4
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.002233,
+                  4.019283
+                ],
+                [
+                  -6.997652,
+                  4.073045
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 45.931759,
+              "predictedFt": 45.931722,
+              "absoluteErrorFt": 0.000036,
+              "endpointErrorM": 0.073083
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 2,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -7,
+                  4
+                ],
+                [
+                  -7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.997652,
+                  4.073045
+                ],
+                [
+                  -6.999926,
+                  0.015564
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 14.07412,
+              "absoluteErrorFt": 0.240885,
+              "endpointErrorM": 0.073083
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.996652
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.986219
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "G2",
+          "rasterSha256": "31356fe9f64b1f517758dace43961b96606baf5eeb60609aa90bdfe8af9c2112",
+          "expectedAreaSqFt": 2779.950488,
+          "candidateAreaSqFt": 2788.415263,
+          "absoluteAreaErrorPct": 0.304494,
+          "edgeMatches": [
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 7,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -8.433156,
+                  -8.329579
+                ],
+                [
+                  -10.0412,
+                  -3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -8.433612,
+                  -8.338579
+                ],
+                [
+                  -10.04245,
+                  -3.055462
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 20.261116,
+              "absoluteErrorFt": 0.086618,
+              "endpointErrorM": 0.014495
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 4,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -10.0412,
+                  -3.069903
+                ],
+                [
+                  10.0412,
+                  3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  10.056049,
+                  3.06857
+                ],
+                [
+                  -10.04245,
+                  -3.055462
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 68.897638,
+              "predictedFt": 68.933052,
+              "absoluteErrorFt": 0.035415,
+              "endpointErrorM": 0.014909
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 6,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -8.433156,
+                  -8.329579
+                ],
+                [
+                  11.649244,
+                  -2.189773
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  11.660006,
+                  -2.203723
+                ],
+                [
+                  -8.433612,
+                  -8.338579
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 68.897638,
+              "predictedFt": 68.928094,
+              "absoluteErrorFt": 0.030456,
+              "endpointErrorM": 0.017619
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 5,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  11.649244,
+                  -2.189773
+                ],
+                [
+                  10.0412,
+                  3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  10.056049,
+                  3.06857
+                ],
+                [
+                  11.660006,
+                  -2.203723
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 20.217913,
+              "absoluteErrorFt": 0.043415,
+              "endpointErrorM": 0.017619
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 3,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -11.649244,
+                  2.189773
+                ],
+                [
+                  -10.0412,
+                  -3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -11.643618,
+                  2.210004
+                ],
+                [
+                  -10.04245,
+                  -3.055462
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 20.21064,
+              "absoluteErrorFt": 0.036142,
+              "endpointErrorM": 0.020999
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  8.433156,
+                  8.329579
+                ],
+                [
+                  10.0412,
+                  3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  10.056049,
+                  3.06857
+                ],
+                [
+                  8.5152,
+                  8.136834
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 19.453335,
+              "absoluteErrorFt": 0.721163,
+              "endpointErrorM": 0.20948
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 2,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  8.433156,
+                  8.329579
+                ],
+                [
+                  -11.649244,
+                  2.189773
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  8.067825,
+                  8.221104
+                ],
+                [
+                  -11.643618,
+                  2.210004
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 68.897638,
+              "predictedFt": 67.61033,
+              "absoluteErrorFt": 1.287307,
+              "endpointErrorM": 0.381095
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [
+            {
+              "index": 1,
+              "type": "eave",
+              "lineM": [
+                [
+                  8.5152,
+                  8.136834
+                ],
+                [
+                  8.067825,
+                  8.221104
+                ]
+              ],
+              "estimatedFt": 1.533598
+            }
+          ],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.996127
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.995607
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "G3",
+          "rasterSha256": "e544f446672ab2212fdabc0602da8696c3205dec46825eace573854191774e28",
+          "expectedAreaSqFt": 2095.73087,
+          "candidateAreaSqFt": 2098.829487,
+          "absoluteAreaErrorPct": 0.147854,
+          "edgeMatches": [
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 3,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  9.300724,
+                  3.840121
+                ],
+                [
+                  5.904531,
+                  6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  5.903594,
+                  6.797062
+                ],
+                [
+                  9.29996,
+                  3.845284
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.766338,
+              "absoluteErrorFt": 0.022483,
+              "endpointErrorM": 0.005219
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  2.508338,
+                  9.744652
+                ],
+                [
+                  5.904531,
+                  6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  5.903594,
+                  6.797062
+                ],
+                [
+                  2.504393,
+                  9.750843
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.793333,
+              "absoluteErrorFt": 0.049478,
+              "endpointErrorM": 0.007342
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  2.508338,
+                  9.744652
+                ],
+                [
+                  -9.300724,
+                  -3.840121
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  2.504393,
+                  9.750843
+                ],
+                [
+                  -9.29862,
+                  -3.829402
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 59.055118,
+              "predictedFt": 59.030891,
+              "absoluteErrorFt": 0.024227,
+              "endpointErrorM": 0.010923
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 6,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -5.904531,
+                  -6.792386
+                ],
+                [
+                  5.904531,
+                  6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  5.903594,
+                  6.797062
+                ],
+                [
+                  -5.898086,
+                  -6.780172
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 59.055118,
+              "predictedFt": 59.020565,
+              "absoluteErrorFt": 0.034553,
+              "endpointErrorM": 0.013811
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 2,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -9.300724,
+                  -3.840121
+                ],
+                [
+                  -5.904531,
+                  -6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -9.29862,
+                  -3.829402
+                ],
+                [
+                  -5.898086,
+                  -6.780172
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.789506,
+              "absoluteErrorFt": 0.045652,
+              "endpointErrorM": 0.013811
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 4,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -2.508338,
+                  -9.744652
+                ],
+                [
+                  9.300724,
+                  3.840121
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  9.29996,
+                  3.845284
+                ],
+                [
+                  -2.50072,
+                  -9.732278
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 59.055118,
+              "predictedFt": 59.019223,
+              "absoluteErrorFt": 0.035895,
+              "endpointErrorM": 0.014531
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 5,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -2.508338,
+                  -9.744652
+                ],
+                [
+                  -5.904531,
+                  -6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -2.50072,
+                  -9.732278
+                ],
+                [
+                  -5.898086,
+                  -6.780172
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.770165,
+              "absoluteErrorFt": 0.02631,
+              "endpointErrorM": 0.014531
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.997583
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.997074
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "G4",
+          "rasterSha256": "7ee5e1046f4f708b242ba51b6b484cc5196691d260b4f1ffbad4c0b0cc152b83",
+          "expectedAreaSqFt": 4384.070811,
+          "candidateAreaSqFt": 4404.939254,
+          "absoluteAreaErrorPct": 0.476006,
+          "edgeMatches": [
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 6,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  4.492845,
+                  -12.64177
+                ],
+                [
+                  -1.462432,
+                  -11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.506614,
+                  -12.651648
+                ],
+                [
+                  -1.468127,
+                  -11.919951
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 27.944768,
+              "absoluteErrorFt": 0.105918,
+              "endpointErrorM": 0.016946
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 7,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -1.462432,
+                  -11.910554
+                ],
+                [
+                  1.462432,
+                  11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  1.455237,
+                  11.926437
+                ],
+                [
+                  -1.468127,
+                  -11.919951
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 78.740157,
+              "predictedFt": 78.821885,
+              "absoluteErrorFt": 0.081727,
+              "endpointErrorM": 0.017437
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 2,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -7.417709,
+                  -11.179338
+                ],
+                [
+                  -1.462432,
+                  -11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -7.436834,
+                  -11.189683
+                ],
+                [
+                  -1.468127,
+                  -11.919951
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 27.94798,
+              "absoluteErrorFt": 0.109131,
+              "endpointErrorM": 0.021743
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -4.492845,
+                  12.64177
+                ],
+                [
+                  -7.417709,
+                  -11.179338
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -4.512918,
+                  12.65832
+                ],
+                [
+                  -7.436834,
+                  -11.189683
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 78.740157,
+              "predictedFt": 78.827362,
+              "absoluteErrorFt": 0.087205,
+              "endpointErrorM": 0.026016
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -4.492845,
+                  12.64177
+                ],
+                [
+                  1.462432,
+                  11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  1.455237,
+                  11.926437
+                ],
+                [
+                  -4.512918,
+                  12.65832
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 27.946346,
+              "absoluteErrorFt": 0.107497,
+              "endpointErrorM": 0.026016
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 3,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  7.417709,
+                  11.179338
+                ],
+                [
+                  1.462432,
+                  11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  1.455237,
+                  11.926437
+                ],
+                [
+                  7.181628,
+                  11.225524
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 26.782992,
+              "absoluteErrorFt": 1.055858,
+              "endpointErrorM": 0.240556
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  4.492845,
+                  -12.64177
+                ],
+                [
+                  7.417709,
+                  11.179338
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.382415,
+                  10.802439
+                ],
+                [
+                  4.506614,
+                  -12.651648
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 78.740157,
+              "predictedFt": 77.525384,
+              "absoluteErrorFt": 1.214774,
+              "endpointErrorM": 0.378547
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [
+            {
+              "index": 4,
+              "type": "rake",
+              "lineM": [
+                [
+                  7.181628,
+                  11.225524
+                ],
+                [
+                  7.382415,
+                  10.802439
+                ]
+              ],
+              "estimatedFt": 1.743336
+            }
+          ],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.995466
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.994512
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H1",
+          "rasterSha256": "048f368748490dec37b7500e8a2813973153cb91a9bc6fcf7e8211f7cb67e455",
+          "expectedAreaSqFt": 1452.3082,
+          "candidateAreaSqFt": 1469.566537,
+          "absoluteAreaErrorPct": 1.188338,
+          "edgeMatches": [
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 8,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -7.452892,
+                  -4.945139
+                ],
+                [
+                  -3.970185,
+                  -0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -3.97042,
+                  -0.468131
+                ],
+                [
+                  -7.463104,
+                  -4.902879
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 19.045191,
+              "absoluteErrorFt": 0.022609,
+              "endpointErrorM": 0.043476
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -8.427847,
+                  2.99523
+                ],
+                [
+                  -7.452892,
+                  -4.945139
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -8.365583,
+                  2.912912
+                ],
+                [
+                  -7.463104,
+                  -4.902879
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 26.246719,
+              "predictedFt": 25.812741,
+              "absoluteErrorFt": 0.433978,
+              "endpointErrorM": 0.103213
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 4,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -8.427847,
+                  2.99523
+                ],
+                [
+                  -3.970185,
+                  -0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -8.365583,
+                  2.912912
+                ],
+                [
+                  -3.97042,
+                  -0.468131
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 18.72209,
+              "absoluteErrorFt": 0.345709,
+              "endpointErrorM": 0.103213
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 6,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -3.970185,
+                  -0.487477
+                ],
+                [
+                  3.970185,
+                  0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.083442,
+                  0.520066
+                ],
+                [
+                  -3.97042,
+                  -0.468131
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 26.246719,
+              "predictedFt": 26.621602,
+              "absoluteErrorFt": 0.374883,
+              "endpointErrorM": 0.117853
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  7.452892,
+                  4.945139
+                ],
+                [
+                  3.970185,
+                  0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.486328,
+                  4.839182
+                ],
+                [
+                  4.083442,
+                  0.520066
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 18.573766,
+              "absoluteErrorFt": 0.494033,
+              "endpointErrorM": 0.117853
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 9,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -7.452892,
+                  -4.945139
+                ],
+                [
+                  8.427847,
+                  -2.99523
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  8.29174,
+                  -3.035326
+                ],
+                [
+                  -7.460413,
+                  -4.953778
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 52.493438,
+              "predictedFt": 52.062198,
+              "absoluteErrorFt": 0.43124,
+              "endpointErrorM": 0.14189
+            },
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 3,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  8.427847,
+                  -2.99523
+                ],
+                [
+                  7.452892,
+                  4.945139
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.486328,
+                  4.839182
+                ],
+                [
+                  8.369391,
+                  -2.849171
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 26.246719,
+              "predictedFt": 25.390161,
+              "absoluteErrorFt": 0.856558,
+              "endpointErrorM": 0.157322
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 7,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  8.427847,
+                  -2.99523
+                ],
+                [
+                  3.970185,
+                  0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.083442,
+                  0.520066
+                ],
+                [
+                  8.369391,
+                  -2.849171
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 18.404979,
+              "absoluteErrorFt": 0.662821,
+              "endpointErrorM": 0.157322
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  7.452892,
+                  4.945139
+                ],
+                [
+                  -8.427847,
+                  2.99523
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.165658,
+                  5
+                ],
+                [
+                  -8.257226,
+                  3.121649
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 52.493438,
+              "predictedFt": 50.973911,
+              "absoluteErrorFt": 1.519528,
+              "endpointErrorM": 0.292426
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [
+            {
+              "index": 0,
+              "type": "eave",
+              "lineM": [
+                [
+                  7.475957,
+                  5
+                ],
+                [
+                  7.165658,
+                  5
+                ]
+              ],
+              "estimatedFt": 1.018913
+            }
+          ],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 3,
+              "iou": 0.978433
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 2,
+              "iou": 0.97605
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.956034
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.933617
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H2",
+          "rasterSha256": "0419281e492987e1b1adcde0ff42e4314ae9aafcf847197e59cafa1ec2f4eef4",
+          "expectedAreaSqFt": 3177.086272,
+          "candidateAreaSqFt": 3182.22702,
+          "absoluteAreaErrorPct": 0.161807,
+          "edgeMatches": [
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 0,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  6.338612,
+                  10.808423
+                ],
+                [
+                  -12.519069,
+                  -0.522415
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.333322,
+                  10.812683
+                ],
+                [
+                  -12.523045,
+                  -0.524609
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 72.178478,
+              "predictedFt": 72.185701,
+              "absoluteErrorFt": 0.007223,
+              "endpointErrorM": 0.006792
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 7,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -12.519069,
+                  -0.522415
+                ],
+                [
+                  -6.338612,
+                  -10.808423
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -12.523045,
+                  -0.524609
+                ],
+                [
+                  -6.339506,
+                  -10.816901
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 39.370079,
+              "predictedFt": 39.39297,
+              "absoluteErrorFt": 0.022891,
+              "endpointErrorM": 0.008525
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -6.338612,
+                  -10.808423
+                ],
+                [
+                  12.519069,
+                  0.522415
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  12.507162,
+                  0.523882
+                ],
+                [
+                  -6.339506,
+                  -10.816901
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 72.178478,
+              "predictedFt": 72.164337,
+              "absoluteErrorFt": 0.014141,
+              "endpointErrorM": 0.011997
+            },
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  12.519069,
+                  0.522415
+                ],
+                [
+                  6.338612,
+                  10.808423
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.333322,
+                  10.812683
+                ],
+                [
+                  12.507162,
+                  0.523882
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 39.370079,
+              "predictedFt": 39.366762,
+              "absoluteErrorFt": 0.003317,
+              "endpointErrorM": 0.011997
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 4,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  12.519069,
+                  0.522415
+                ],
+                [
+                  4.285837,
+                  2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.296556,
+                  2.585536
+                ],
+                [
+                  12.507162,
+                  0.523882
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.480921,
+              "absoluteErrorFt": 0.046638,
+              "endpointErrorM": 0.014897
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  6.338612,
+                  10.808423
+                ],
+                [
+                  4.285837,
+                  2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.333322,
+                  10.812683
+                ],
+                [
+                  4.296556,
+                  2.585536
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.520043,
+              "absoluteErrorFt": 0.007516,
+              "endpointErrorM": 0.014897
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 3,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -4.285837,
+                  -2.57519
+                ],
+                [
+                  4.285837,
+                  2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.296556,
+                  2.585536
+                ],
+                [
+                  -4.300045,
+                  -2.584392
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 32.808399,
+              "predictedFt": 32.911537,
+              "absoluteErrorFt": 0.103138,
+              "endpointErrorM": 0.016928
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 8,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -6.338612,
+                  -10.808423
+                ],
+                [
+                  -4.285837,
+                  -2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -4.300045,
+                  -2.584392
+                ],
+                [
+                  -6.339506,
+                  -10.816901
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.536796,
+              "absoluteErrorFt": 0.009237,
+              "endpointErrorM": 0.016928
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 6,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -12.519069,
+                  -0.522415
+                ],
+                [
+                  -4.285837,
+                  -2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -12.523045,
+                  -0.524609
+                ],
+                [
+                  -4.300045,
+                  -2.584392
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.530178,
+              "absoluteErrorFt": 0.002619,
+              "endpointErrorM": 0.016928
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.998102
+            },
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 2,
+              "iou": 0.99806
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.995845
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 3,
+              "iou": 0.995324
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H3",
+          "rasterSha256": "6265bda40b6d973a880633170bb6ac664abbf685c009a9cefac8f22ba2096444",
+          "expectedAreaSqFt": 2457.955959,
+          "candidateAreaSqFt": 2467.382116,
+          "absoluteAreaErrorPct": 0.383496,
+          "edgeMatches": [
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  9.178698,
+                  5.567899
+                ],
+                [
+                  0.607025,
+                  10.71828
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.602768,
+                  10.728201
+                ],
+                [
+                  9.182903,
+                  5.555902
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 32.808399,
+              "predictedFt": 32.869269,
+              "absoluteErrorFt": 0.06087,
+              "endpointErrorM": 0.012713
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 4,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -0.607025,
+                  -10.71828
+                ],
+                [
+                  9.178698,
+                  5.567899
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  9.182903,
+                  5.555902
+                ],
+                [
+                  -0.59725,
+                  -10.706975
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 62.335958,
+              "predictedFt": 62.261023,
+              "absoluteErrorFt": 0.074935,
+              "endpointErrorM": 0.014945
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 3,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  9.178698,
+                  5.567899
+                ],
+                [
+                  2.317671,
+                  3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  9.182903,
+                  5.555902
+                ],
+                [
+                  2.326175,
+                  3.871316
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.653445,
+              "absoluteErrorFt": 0.00594,
+              "endpointErrorM": 0.016434
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  0.607025,
+                  10.71828
+                ],
+                [
+                  2.317671,
+                  3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.602768,
+                  10.728201
+                ],
+                [
+                  2.326175,
+                  3.871316
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.68495,
+              "absoluteErrorFt": 0.037445,
+              "endpointErrorM": 0.016434
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 0,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  0.607025,
+                  10.71828
+                ],
+                [
+                  -9.178698,
+                  -5.567899
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.602768,
+                  10.728201
+                ],
+                [
+                  -9.195353,
+                  -5.568001
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 62.335958,
+              "predictedFt": 62.3851,
+              "absoluteErrorFt": 0.049142,
+              "endpointErrorM": 0.016655
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 8,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -9.178698,
+                  -5.567899
+                ],
+                [
+                  -0.607025,
+                  -10.71828
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -9.195353,
+                  -5.568001
+                ],
+                [
+                  -0.59725,
+                  -10.706975
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 32.808399,
+              "predictedFt": 32.863565,
+              "absoluteErrorFt": 0.055166,
+              "endpointErrorM": 0.016655
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 5,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -2.317671,
+                  -3.857253
+                ],
+                [
+                  2.317671,
+                  3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  2.326175,
+                  3.871316
+                ],
+                [
+                  -2.328743,
+                  -3.874679
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.64919,
+              "absoluteErrorFt": 0.121631,
+              "endpointErrorM": 0.020646
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 7,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -0.607025,
+                  -10.71828
+                ],
+                [
+                  -2.317671,
+                  -3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -2.328743,
+                  -3.874679
+                ],
+                [
+                  -0.59725,
+                  -10.706975
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.606364,
+              "absoluteErrorFt": 0.041141,
+              "endpointErrorM": 0.020646
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 6,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -9.178698,
+                  -5.567899
+                ],
+                [
+                  -2.317671,
+                  -3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -2.328743,
+                  -3.874679
+                ],
+                [
+                  -9.195353,
+                  -5.568001
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.694307,
+              "absoluteErrorFt": 0.046802,
+              "endpointErrorM": 0.020646
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 2,
+              "iou": 0.996999
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.995737
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.995361
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 3,
+              "iou": 0.993881
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H4",
+          "rasterSha256": "d6316ef01675edd74c3c6e4cab61032091c73c5e1e538f4f0a2b82f61c188642",
+          "expectedAreaSqFt": 4947.302131,
+          "candidateAreaSqFt": 4969.781845,
+          "absoluteAreaErrorPct": 0.454383,
+          "edgeMatches": [
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  6.932284,
+                  12.265539
+                ],
+                [
+                  -6.059797,
+                  12.719232
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.069531,
+                  12.705579
+                ],
+                [
+                  6.933153,
+                  12.279418
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 42.650919,
+              "predictedFt": 42.682672,
+              "absoluteErrorFt": 0.031753,
+              "endpointErrorM": 0.016768
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 4,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  6.059797,
+                  -12.719232
+                ],
+                [
+                  6.932284,
+                  12.265539
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.933153,
+                  12.279418
+                ],
+                [
+                  6.07579,
+                  -12.710333
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 82.020997,
+              "predictedFt": 82.035624,
+              "absoluteErrorFt": 0.014626,
+              "endpointErrorM": 0.018303
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 6,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  6.059797,
+                  -12.719232
+                ],
+                [
+                  -0.209397,
+                  -5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -0.206599,
+                  -5.972943
+                ],
+                [
+                  6.07579,
+                  -12.710333
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 37.041893,
+              "absoluteErrorFt": 0.105114,
+              "endpointErrorM": 0.023569
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 0,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -6.059797,
+                  12.719232
+                ],
+                [
+                  -6.932284,
+                  -12.265539
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.074287,
+                  12.710966
+                ],
+                [
+                  -6.915898,
+                  -12.285264
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 82.020997,
+              "predictedFt": 82.055113,
+              "absoluteErrorFt": 0.034115,
+              "endpointErrorM": 0.025643
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 8,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -6.932284,
+                  -12.265539
+                ],
+                [
+                  6.059797,
+                  -12.719232
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.915898,
+                  -12.285264
+                ],
+                [
+                  6.07579,
+                  -12.710333
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 42.650919,
+              "predictedFt": 42.64647,
+              "absoluteErrorFt": 0.004449,
+              "endpointErrorM": 0.025643
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 7,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -6.932284,
+                  -12.265539
+                ],
+                [
+                  -0.209397,
+                  -5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -0.206599,
+                  -5.972943
+                ],
+                [
+                  -6.915898,
+                  -12.285264
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 36.981245,
+              "absoluteErrorFt": 0.044466,
+              "endpointErrorM": 0.025643
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 5,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -0.209397,
+                  -5.996345
+                ],
+                [
+                  0.209397,
+                  5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.210465,
+                  6.055047
+                ],
+                [
+                  -0.206599,
+                  -5.972943
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 39.370079,
+              "predictedFt": 39.485626,
+              "absoluteErrorFt": 0.115547,
+              "endpointErrorM": 0.058712
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 3,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  6.932284,
+                  12.265539
+                ],
+                [
+                  0.209397,
+                  5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.933153,
+                  12.279418
+                ],
+                [
+                  0.210465,
+                  6.055047
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 36.885795,
+              "absoluteErrorFt": 0.050984,
+              "endpointErrorM": 0.058712
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -6.059797,
+                  12.719232
+                ],
+                [
+                  0.209397,
+                  5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.069531,
+                  12.705579
+                ],
+                [
+                  0.210465,
+                  6.055047
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 36.834045,
+              "absoluteErrorFt": 0.102734,
+              "endpointErrorM": 0.058712
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 2,
+              "iou": 0.994922
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 3,
+              "iou": 0.991363
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.990562
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.988572
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        }
+      ]
+    },
+    "integrated": {
+      "sourceSha256": {
+        "autotrace.js": "c41a659e75f478ab4024cb3dd7fc4fd1f4435203cfdb8771739498fa58db8dd2",
+        "autotrace2.js": "4567d8034147f7ea20521061ea7ecc612f9f52ea3da5de83fcf9726a7ba7f1c5",
+        "obstruction.js": "78a36a9a79aa4e798707870a1ab1e3cbe22d7c53807269c7be17f0acd079b9ea"
+      },
+      "summary": {
+        "scenes": 8,
+        "traceErrors": 0,
+        "matchedEdges": 64,
+        "missedEdges": 0,
+        "extraEdges": 3,
+        "misclassifiedEdges": 0,
+        "missingLengths": 0,
+        "matchedFacets": 24,
+        "missedFacets": 0,
+        "extraFacets": 0,
+        "absoluteEdgeErrorFt": {
+          "n": 64,
+          "median": 0.04931,
+          "p95": 1.055858,
+          "worst": 1.519528
+        },
+        "absoluteAreaErrorPct": {
+          "n": 8,
+          "median": 0.41894,
+          "p95": 1.188338,
+          "worst": 1.188338
+        },
+        "perEdgeType": {
+          "eave": {
+            "n": 24,
+            "median": 0.035005,
+            "p95": 1.287307,
+            "worst": 1.519528
+          },
+          "ridge": {
+            "n": 8,
+            "median": 0.092433,
+            "p95": 0.374883,
+            "worst": 0.374883
+          },
+          "hip": {
+            "n": 16,
+            "median": 0.045552,
+            "p95": 0.662821,
+            "worst": 0.662821
+          },
+          "rake": {
+            "n": 16,
+            "median": 0.075569,
+            "p95": 1.055858,
+            "worst": 1.055858
+          }
+        }
+      },
+      "scenes": [
+        {
+          "id": "G1",
+          "rasterSha256": "839064d42100da55cad99829e9aae15c83669e43ec0a601b7faa282e39971d89",
+          "expectedAreaSqFt": 1270.769675,
+          "candidateAreaSqFt": 1281.38325,
+          "absoluteAreaErrorPct": 0.835208,
+          "edgeMatches": [
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -7,
+                  -4
+                ],
+                [
+                  7,
+                  -4
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.99778,
+                  -4.007739
+                ],
+                [
+                  -7.002148,
+                  -3.992256
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 45.931759,
+              "predictedFt": 45.931571,
+              "absoluteErrorFt": 0.000188,
+              "endpointErrorM": 0.008051
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 4,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  7,
+                  -4
+                ],
+                [
+                  7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.000003,
+                  0.002326
+                ],
+                [
+                  6.99778,
+                  -4.007739
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 13.897755,
+              "absoluteErrorFt": 0.064519,
+              "endpointErrorM": 0.008051
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 3,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -7,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.000003,
+                  0.002326
+                ],
+                [
+                  -6.999926,
+                  0.015564
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 45.931759,
+              "predictedFt": 45.93157,
+              "absoluteErrorFt": 0.000188,
+              "endpointErrorM": 0.015564
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 6,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -7,
+                  -4
+                ],
+                [
+                  -7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -7.002148,
+                  -3.992256
+                ],
+                [
+                  -6.999926,
+                  0.015564
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 13.889974,
+              "absoluteErrorFt": 0.056739,
+              "endpointErrorM": 0.015564
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  7,
+                  4
+                ],
+                [
+                  7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.000003,
+                  0.002326
+                ],
+                [
+                  7.002233,
+                  4.019283
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 13.933555,
+              "absoluteErrorFt": 0.100319,
+              "endpointErrorM": 0.019412
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  7,
+                  4
+                ],
+                [
+                  -7,
+                  4
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.002233,
+                  4.019283
+                ],
+                [
+                  -6.997652,
+                  4.073045
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 45.931759,
+              "predictedFt": 45.931722,
+              "absoluteErrorFt": 0.000036,
+              "endpointErrorM": 0.073083
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 2,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -7,
+                  4
+                ],
+                [
+                  -7,
+                  0
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.997652,
+                  4.073045
+                ],
+                [
+                  -6.999926,
+                  0.015564
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 13.833236,
+              "predictedFt": 14.07412,
+              "absoluteErrorFt": 0.240885,
+              "endpointErrorM": 0.073083
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.996652
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.986219
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "G2",
+          "rasterSha256": "31356fe9f64b1f517758dace43961b96606baf5eeb60609aa90bdfe8af9c2112",
+          "expectedAreaSqFt": 2779.950488,
+          "candidateAreaSqFt": 2788.415263,
+          "absoluteAreaErrorPct": 0.304494,
+          "edgeMatches": [
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 7,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -8.433156,
+                  -8.329579
+                ],
+                [
+                  -10.0412,
+                  -3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -8.433612,
+                  -8.338579
+                ],
+                [
+                  -10.04245,
+                  -3.055462
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 20.261116,
+              "absoluteErrorFt": 0.086618,
+              "endpointErrorM": 0.014495
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 4,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -10.0412,
+                  -3.069903
+                ],
+                [
+                  10.0412,
+                  3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  10.056049,
+                  3.06857
+                ],
+                [
+                  -10.04245,
+                  -3.055462
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 68.897638,
+              "predictedFt": 68.933052,
+              "absoluteErrorFt": 0.035415,
+              "endpointErrorM": 0.014909
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 6,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -8.433156,
+                  -8.329579
+                ],
+                [
+                  11.649244,
+                  -2.189773
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  11.660006,
+                  -2.203723
+                ],
+                [
+                  -8.433612,
+                  -8.338579
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 68.897638,
+              "predictedFt": 68.928094,
+              "absoluteErrorFt": 0.030456,
+              "endpointErrorM": 0.017619
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 5,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  11.649244,
+                  -2.189773
+                ],
+                [
+                  10.0412,
+                  3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  10.056049,
+                  3.06857
+                ],
+                [
+                  11.660006,
+                  -2.203723
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 20.217913,
+              "absoluteErrorFt": 0.043415,
+              "endpointErrorM": 0.017619
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 3,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -11.649244,
+                  2.189773
+                ],
+                [
+                  -10.0412,
+                  -3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -11.643618,
+                  2.210004
+                ],
+                [
+                  -10.04245,
+                  -3.055462
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 20.21064,
+              "absoluteErrorFt": 0.036142,
+              "endpointErrorM": 0.020999
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  8.433156,
+                  8.329579
+                ],
+                [
+                  10.0412,
+                  3.069903
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  10.056049,
+                  3.06857
+                ],
+                [
+                  8.5152,
+                  8.136834
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 20.174498,
+              "predictedFt": 19.453335,
+              "absoluteErrorFt": 0.721163,
+              "endpointErrorM": 0.20948
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 2,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  8.433156,
+                  8.329579
+                ],
+                [
+                  -11.649244,
+                  2.189773
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  8.067825,
+                  8.221104
+                ],
+                [
+                  -11.643618,
+                  2.210004
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 68.897638,
+              "predictedFt": 67.61033,
+              "absoluteErrorFt": 1.287307,
+              "endpointErrorM": 0.381095
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [
+            {
+              "index": 1,
+              "type": "eave",
+              "lineM": [
+                [
+                  8.5152,
+                  8.136834
+                ],
+                [
+                  8.067825,
+                  8.221104
+                ]
+              ],
+              "estimatedFt": 1.533598
+            }
+          ],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.996127
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.995607
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "G3",
+          "rasterSha256": "e544f446672ab2212fdabc0602da8696c3205dec46825eace573854191774e28",
+          "expectedAreaSqFt": 2095.73087,
+          "candidateAreaSqFt": 2098.829487,
+          "absoluteAreaErrorPct": 0.147854,
+          "edgeMatches": [
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 3,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  9.300724,
+                  3.840121
+                ],
+                [
+                  5.904531,
+                  6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  5.903594,
+                  6.797062
+                ],
+                [
+                  9.29996,
+                  3.845284
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.766338,
+              "absoluteErrorFt": 0.022483,
+              "endpointErrorM": 0.005219
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  2.508338,
+                  9.744652
+                ],
+                [
+                  5.904531,
+                  6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  5.903594,
+                  6.797062
+                ],
+                [
+                  2.504393,
+                  9.750843
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.793333,
+              "absoluteErrorFt": 0.049478,
+              "endpointErrorM": 0.007342
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  2.508338,
+                  9.744652
+                ],
+                [
+                  -9.300724,
+                  -3.840121
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  2.504393,
+                  9.750843
+                ],
+                [
+                  -9.29862,
+                  -3.829402
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 59.055118,
+              "predictedFt": 59.030891,
+              "absoluteErrorFt": 0.024227,
+              "endpointErrorM": 0.010923
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 6,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -5.904531,
+                  -6.792386
+                ],
+                [
+                  5.904531,
+                  6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  5.903594,
+                  6.797062
+                ],
+                [
+                  -5.898086,
+                  -6.780172
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 59.055118,
+              "predictedFt": 59.020565,
+              "absoluteErrorFt": 0.034553,
+              "endpointErrorM": 0.013811
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 2,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -9.300724,
+                  -3.840121
+                ],
+                [
+                  -5.904531,
+                  -6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -9.29862,
+                  -3.829402
+                ],
+                [
+                  -5.898086,
+                  -6.780172
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.789506,
+              "absoluteErrorFt": 0.045652,
+              "endpointErrorM": 0.013811
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 4,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -2.508338,
+                  -9.744652
+                ],
+                [
+                  9.300724,
+                  3.840121
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  9.29996,
+                  3.845284
+                ],
+                [
+                  -2.50072,
+                  -9.732278
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 59.055118,
+              "predictedFt": 59.019223,
+              "absoluteErrorFt": 0.035895,
+              "endpointErrorM": 0.014531
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 5,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -2.508338,
+                  -9.744652
+                ],
+                [
+                  -5.904531,
+                  -6.792386
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -2.50072,
+                  -9.732278
+                ],
+                [
+                  -5.898086,
+                  -6.780172
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 17.743855,
+              "predictedFt": 17.770165,
+              "absoluteErrorFt": 0.02631,
+              "endpointErrorM": 0.014531
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.997583
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.997074
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "G4",
+          "rasterSha256": "7ee5e1046f4f708b242ba51b6b484cc5196691d260b4f1ffbad4c0b0cc152b83",
+          "expectedAreaSqFt": 4384.070811,
+          "candidateAreaSqFt": 4404.939254,
+          "absoluteAreaErrorPct": 0.476006,
+          "edgeMatches": [
+            {
+              "truthId": "AX",
+              "expectedType": "rake",
+              "predictedIndex": 6,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  4.492845,
+                  -12.64177
+                ],
+                [
+                  -1.462432,
+                  -11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.506614,
+                  -12.651648
+                ],
+                [
+                  -1.468127,
+                  -11.919951
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 27.944768,
+              "absoluteErrorFt": 0.105918,
+              "endpointErrorM": 0.016946
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 7,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -1.462432,
+                  -11.910554
+                ],
+                [
+                  1.462432,
+                  11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  1.455237,
+                  11.926437
+                ],
+                [
+                  -1.468127,
+                  -11.919951
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 78.740157,
+              "predictedFt": 78.821885,
+              "absoluteErrorFt": 0.081727,
+              "endpointErrorM": 0.017437
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "rake",
+              "predictedIndex": 2,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -7.417709,
+                  -11.179338
+                ],
+                [
+                  -1.462432,
+                  -11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -7.436834,
+                  -11.189683
+                ],
+                [
+                  -1.468127,
+                  -11.919951
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 27.94798,
+              "absoluteErrorFt": 0.109131,
+              "endpointErrorM": 0.021743
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -4.492845,
+                  12.64177
+                ],
+                [
+                  -7.417709,
+                  -11.179338
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -4.512918,
+                  12.65832
+                ],
+                [
+                  -7.436834,
+                  -11.189683
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 78.740157,
+              "predictedFt": 78.827362,
+              "absoluteErrorFt": 0.087205,
+              "endpointErrorM": 0.026016
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "rake",
+              "predictedIndex": 0,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  -4.492845,
+                  12.64177
+                ],
+                [
+                  1.462432,
+                  11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  1.455237,
+                  11.926437
+                ],
+                [
+                  -4.512918,
+                  12.65832
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 27.946346,
+              "absoluteErrorFt": 0.107497,
+              "endpointErrorM": 0.026016
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "rake",
+              "predictedIndex": 3,
+              "predictedType": "rake",
+              "expectedEndsM": [
+                [
+                  7.417709,
+                  11.179338
+                ],
+                [
+                  1.462432,
+                  11.910554
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  1.455237,
+                  11.926437
+                ],
+                [
+                  7.181628,
+                  11.225524
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 27.83885,
+              "predictedFt": 26.782992,
+              "absoluteErrorFt": 1.055858,
+              "endpointErrorM": 0.240556
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  4.492845,
+                  -12.64177
+                ],
+                [
+                  7.417709,
+                  11.179338
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.382415,
+                  10.802439
+                ],
+                [
+                  4.506614,
+                  -12.651648
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 78.740157,
+              "predictedFt": 77.525384,
+              "absoluteErrorFt": 1.214774,
+              "endpointErrorM": 0.378547
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [
+            {
+              "index": 4,
+              "type": "rake",
+              "lineM": [
+                [
+                  7.181628,
+                  11.225524
+                ],
+                [
+                  7.382415,
+                  10.802439
+                ]
+              ],
+              "estimatedFt": 1.743336
+            }
+          ],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 1,
+              "iou": 0.995466
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.994512
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H1",
+          "rasterSha256": "048f368748490dec37b7500e8a2813973153cb91a9bc6fcf7e8211f7cb67e455",
+          "expectedAreaSqFt": 1452.3082,
+          "candidateAreaSqFt": 1469.566537,
+          "absoluteAreaErrorPct": 1.188338,
+          "edgeMatches": [
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 8,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -7.452892,
+                  -4.945139
+                ],
+                [
+                  -3.970185,
+                  -0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -3.97042,
+                  -0.468131
+                ],
+                [
+                  -7.463104,
+                  -4.902879
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 19.045191,
+              "absoluteErrorFt": 0.022609,
+              "endpointErrorM": 0.043476
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -8.427847,
+                  2.99523
+                ],
+                [
+                  -7.452892,
+                  -4.945139
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -8.365583,
+                  2.912912
+                ],
+                [
+                  -7.463104,
+                  -4.902879
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 26.246719,
+              "predictedFt": 25.812741,
+              "absoluteErrorFt": 0.433978,
+              "endpointErrorM": 0.103213
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 4,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -8.427847,
+                  2.99523
+                ],
+                [
+                  -3.970185,
+                  -0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -8.365583,
+                  2.912912
+                ],
+                [
+                  -3.97042,
+                  -0.468131
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 18.72209,
+              "absoluteErrorFt": 0.345709,
+              "endpointErrorM": 0.103213
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 6,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -3.970185,
+                  -0.487477
+                ],
+                [
+                  3.970185,
+                  0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.083442,
+                  0.520066
+                ],
+                [
+                  -3.97042,
+                  -0.468131
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 26.246719,
+              "predictedFt": 26.621602,
+              "absoluteErrorFt": 0.374883,
+              "endpointErrorM": 0.117853
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  7.452892,
+                  4.945139
+                ],
+                [
+                  3.970185,
+                  0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.486328,
+                  4.839182
+                ],
+                [
+                  4.083442,
+                  0.520066
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 18.573766,
+              "absoluteErrorFt": 0.494033,
+              "endpointErrorM": 0.117853
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 9,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -7.452892,
+                  -4.945139
+                ],
+                [
+                  8.427847,
+                  -2.99523
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  8.29174,
+                  -3.035326
+                ],
+                [
+                  -7.460413,
+                  -4.953778
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 52.493438,
+              "predictedFt": 52.062198,
+              "absoluteErrorFt": 0.43124,
+              "endpointErrorM": 0.14189
+            },
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 3,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  8.427847,
+                  -2.99523
+                ],
+                [
+                  7.452892,
+                  4.945139
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.486328,
+                  4.839182
+                ],
+                [
+                  8.369391,
+                  -2.849171
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 26.246719,
+              "predictedFt": 25.390161,
+              "absoluteErrorFt": 0.856558,
+              "endpointErrorM": 0.157322
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 7,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  8.427847,
+                  -2.99523
+                ],
+                [
+                  3.970185,
+                  0.487477
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.083442,
+                  0.520066
+                ],
+                [
+                  8.369391,
+                  -2.849171
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 19.067799,
+              "predictedFt": 18.404979,
+              "absoluteErrorFt": 0.662821,
+              "endpointErrorM": 0.157322
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  7.452892,
+                  4.945139
+                ],
+                [
+                  -8.427847,
+                  2.99523
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  7.165658,
+                  5
+                ],
+                [
+                  -8.257226,
+                  3.121649
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 52.493438,
+              "predictedFt": 50.973911,
+              "absoluteErrorFt": 1.519528,
+              "endpointErrorM": 0.292426
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [
+            {
+              "index": 0,
+              "type": "eave",
+              "lineM": [
+                [
+                  7.475957,
+                  5
+                ],
+                [
+                  7.165658,
+                  5
+                ]
+              ],
+              "estimatedFt": 1.018913
+            }
+          ],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 3,
+              "iou": 0.978433
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 2,
+              "iou": 0.97605
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.956034
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.933617
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H2",
+          "rasterSha256": "0419281e492987e1b1adcde0ff42e4314ae9aafcf847197e59cafa1ec2f4eef4",
+          "expectedAreaSqFt": 3177.086272,
+          "candidateAreaSqFt": 3182.22702,
+          "absoluteAreaErrorPct": 0.161807,
+          "edgeMatches": [
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 0,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  6.338612,
+                  10.808423
+                ],
+                [
+                  -12.519069,
+                  -0.522415
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.333322,
+                  10.812683
+                ],
+                [
+                  -12.523045,
+                  -0.524609
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 72.178478,
+              "predictedFt": 72.185701,
+              "absoluteErrorFt": 0.007223,
+              "endpointErrorM": 0.006792
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 7,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -12.519069,
+                  -0.522415
+                ],
+                [
+                  -6.338612,
+                  -10.808423
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -12.523045,
+                  -0.524609
+                ],
+                [
+                  -6.339506,
+                  -10.816901
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 39.370079,
+              "predictedFt": 39.39297,
+              "absoluteErrorFt": 0.022891,
+              "endpointErrorM": 0.008525
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 5,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -6.338612,
+                  -10.808423
+                ],
+                [
+                  12.519069,
+                  0.522415
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  12.507162,
+                  0.523882
+                ],
+                [
+                  -6.339506,
+                  -10.816901
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 72.178478,
+              "predictedFt": 72.164337,
+              "absoluteErrorFt": 0.014141,
+              "endpointErrorM": 0.011997
+            },
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  12.519069,
+                  0.522415
+                ],
+                [
+                  6.338612,
+                  10.808423
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.333322,
+                  10.812683
+                ],
+                [
+                  12.507162,
+                  0.523882
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 39.370079,
+              "predictedFt": 39.366762,
+              "absoluteErrorFt": 0.003317,
+              "endpointErrorM": 0.011997
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 4,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  12.519069,
+                  0.522415
+                ],
+                [
+                  4.285837,
+                  2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.296556,
+                  2.585536
+                ],
+                [
+                  12.507162,
+                  0.523882
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.480921,
+              "absoluteErrorFt": 0.046638,
+              "endpointErrorM": 0.014897
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  6.338612,
+                  10.808423
+                ],
+                [
+                  4.285837,
+                  2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.333322,
+                  10.812683
+                ],
+                [
+                  4.296556,
+                  2.585536
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.520043,
+              "absoluteErrorFt": 0.007516,
+              "endpointErrorM": 0.014897
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 3,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -4.285837,
+                  -2.57519
+                ],
+                [
+                  4.285837,
+                  2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  4.296556,
+                  2.585536
+                ],
+                [
+                  -4.300045,
+                  -2.584392
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 32.808399,
+              "predictedFt": 32.911537,
+              "absoluteErrorFt": 0.103138,
+              "endpointErrorM": 0.016928
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 8,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -6.338612,
+                  -10.808423
+                ],
+                [
+                  -4.285837,
+                  -2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -4.300045,
+                  -2.584392
+                ],
+                [
+                  -6.339506,
+                  -10.816901
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.536796,
+              "absoluteErrorFt": 0.009237,
+              "endpointErrorM": 0.016928
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 6,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -12.519069,
+                  -0.522415
+                ],
+                [
+                  -4.285837,
+                  -2.57519
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -12.523045,
+                  -0.524609
+                ],
+                [
+                  -4.300045,
+                  -2.584392
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.530178,
+              "absoluteErrorFt": 0.002619,
+              "endpointErrorM": 0.016928
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.998102
+            },
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 2,
+              "iou": 0.99806
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.995845
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 3,
+              "iou": 0.995324
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H3",
+          "rasterSha256": "6265bda40b6d973a880633170bb6ac664abbf685c009a9cefac8f22ba2096444",
+          "expectedAreaSqFt": 2457.955959,
+          "candidateAreaSqFt": 2467.382116,
+          "absoluteAreaErrorPct": 0.383496,
+          "edgeMatches": [
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  9.178698,
+                  5.567899
+                ],
+                [
+                  0.607025,
+                  10.71828
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.602768,
+                  10.728201
+                ],
+                [
+                  9.182903,
+                  5.555902
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 32.808399,
+              "predictedFt": 32.869269,
+              "absoluteErrorFt": 0.06087,
+              "endpointErrorM": 0.012713
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 4,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -0.607025,
+                  -10.71828
+                ],
+                [
+                  9.178698,
+                  5.567899
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  9.182903,
+                  5.555902
+                ],
+                [
+                  -0.59725,
+                  -10.706975
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 62.335958,
+              "predictedFt": 62.261023,
+              "absoluteErrorFt": 0.074935,
+              "endpointErrorM": 0.014945
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 3,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  9.178698,
+                  5.567899
+                ],
+                [
+                  2.317671,
+                  3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  9.182903,
+                  5.555902
+                ],
+                [
+                  2.326175,
+                  3.871316
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.653445,
+              "absoluteErrorFt": 0.00594,
+              "endpointErrorM": 0.016434
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  0.607025,
+                  10.71828
+                ],
+                [
+                  2.317671,
+                  3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.602768,
+                  10.728201
+                ],
+                [
+                  2.326175,
+                  3.871316
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.68495,
+              "absoluteErrorFt": 0.037445,
+              "endpointErrorM": 0.016434
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 0,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  0.607025,
+                  10.71828
+                ],
+                [
+                  -9.178698,
+                  -5.567899
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.602768,
+                  10.728201
+                ],
+                [
+                  -9.195353,
+                  -5.568001
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 62.335958,
+              "predictedFt": 62.3851,
+              "absoluteErrorFt": 0.049142,
+              "endpointErrorM": 0.016655
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 8,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -9.178698,
+                  -5.567899
+                ],
+                [
+                  -0.607025,
+                  -10.71828
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -9.195353,
+                  -5.568001
+                ],
+                [
+                  -0.59725,
+                  -10.706975
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 32.808399,
+              "predictedFt": 32.863565,
+              "absoluteErrorFt": 0.055166,
+              "endpointErrorM": 0.016655
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 5,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -2.317671,
+                  -3.857253
+                ],
+                [
+                  2.317671,
+                  3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  2.326175,
+                  3.871316
+                ],
+                [
+                  -2.328743,
+                  -3.874679
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 29.527559,
+              "predictedFt": 29.64919,
+              "absoluteErrorFt": 0.121631,
+              "endpointErrorM": 0.020646
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 7,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -0.607025,
+                  -10.71828
+                ],
+                [
+                  -2.317671,
+                  -3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -2.328743,
+                  -3.874679
+                ],
+                [
+                  -0.59725,
+                  -10.706975
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.606364,
+              "absoluteErrorFt": 0.041141,
+              "endpointErrorM": 0.020646
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 6,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -9.178698,
+                  -5.567899
+                ],
+                [
+                  -2.317671,
+                  -3.857253
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -2.328743,
+                  -3.874679
+                ],
+                [
+                  -9.195353,
+                  -5.568001
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 25.647505,
+              "predictedFt": 25.694307,
+              "absoluteErrorFt": 0.046802,
+              "endpointErrorM": 0.020646
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 2,
+              "iou": 0.996999
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.995737
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.995361
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 3,
+              "iou": 0.993881
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        },
+        {
+          "id": "H4",
+          "rasterSha256": "d6316ef01675edd74c3c6e4cab61032091c73c5e1e538f4f0a2b82f61c188642",
+          "expectedAreaSqFt": 4947.302131,
+          "candidateAreaSqFt": 4969.781845,
+          "absoluteAreaErrorPct": 0.454383,
+          "edgeMatches": [
+            {
+              "truthId": "BC",
+              "expectedType": "eave",
+              "predictedIndex": 1,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  6.932284,
+                  12.265539
+                ],
+                [
+                  -6.059797,
+                  12.719232
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.069531,
+                  12.705579
+                ],
+                [
+                  6.933153,
+                  12.279418
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 42.650919,
+              "predictedFt": 42.682672,
+              "absoluteErrorFt": 0.031753,
+              "endpointErrorM": 0.016768
+            },
+            {
+              "truthId": "AB",
+              "expectedType": "eave",
+              "predictedIndex": 4,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  6.059797,
+                  -12.719232
+                ],
+                [
+                  6.932284,
+                  12.265539
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.933153,
+                  12.279418
+                ],
+                [
+                  6.07579,
+                  -12.710333
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 82.020997,
+              "predictedFt": 82.035624,
+              "absoluteErrorFt": 0.014626,
+              "endpointErrorM": 0.018303
+            },
+            {
+              "truthId": "AX",
+              "expectedType": "hip",
+              "predictedIndex": 6,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  6.059797,
+                  -12.719232
+                ],
+                [
+                  -0.209397,
+                  -5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -0.206599,
+                  -5.972943
+                ],
+                [
+                  6.07579,
+                  -12.710333
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 37.041893,
+              "absoluteErrorFt": 0.105114,
+              "endpointErrorM": 0.023569
+            },
+            {
+              "truthId": "CD",
+              "expectedType": "eave",
+              "predictedIndex": 0,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -6.059797,
+                  12.719232
+                ],
+                [
+                  -6.932284,
+                  -12.265539
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.074287,
+                  12.710966
+                ],
+                [
+                  -6.915898,
+                  -12.285264
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 82.020997,
+              "predictedFt": 82.055113,
+              "absoluteErrorFt": 0.034115,
+              "endpointErrorM": 0.025643
+            },
+            {
+              "truthId": "DA",
+              "expectedType": "eave",
+              "predictedIndex": 8,
+              "predictedType": "eave",
+              "expectedEndsM": [
+                [
+                  -6.932284,
+                  -12.265539
+                ],
+                [
+                  6.059797,
+                  -12.719232
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.915898,
+                  -12.285264
+                ],
+                [
+                  6.07579,
+                  -12.710333
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 42.650919,
+              "predictedFt": 42.64647,
+              "absoluteErrorFt": 0.004449,
+              "endpointErrorM": 0.025643
+            },
+            {
+              "truthId": "DX",
+              "expectedType": "hip",
+              "predictedIndex": 7,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -6.932284,
+                  -12.265539
+                ],
+                [
+                  -0.209397,
+                  -5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -0.206599,
+                  -5.972943
+                ],
+                [
+                  -6.915898,
+                  -12.285264
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 36.981245,
+              "absoluteErrorFt": 0.044466,
+              "endpointErrorM": 0.025643
+            },
+            {
+              "truthId": "XY",
+              "expectedType": "ridge",
+              "predictedIndex": 5,
+              "predictedType": "ridge",
+              "expectedEndsM": [
+                [
+                  -0.209397,
+                  -5.996345
+                ],
+                [
+                  0.209397,
+                  5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  0.210465,
+                  6.055047
+                ],
+                [
+                  -0.206599,
+                  -5.972943
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 39.370079,
+              "predictedFt": 39.485626,
+              "absoluteErrorFt": 0.115547,
+              "endpointErrorM": 0.058712
+            },
+            {
+              "truthId": "BY",
+              "expectedType": "hip",
+              "predictedIndex": 3,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  6.932284,
+                  12.265539
+                ],
+                [
+                  0.209397,
+                  5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  6.933153,
+                  12.279418
+                ],
+                [
+                  0.210465,
+                  6.055047
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 36.885795,
+              "absoluteErrorFt": 0.050984,
+              "endpointErrorM": 0.058712
+            },
+            {
+              "truthId": "CY",
+              "expectedType": "hip",
+              "predictedIndex": 2,
+              "predictedType": "hip",
+              "expectedEndsM": [
+                [
+                  -6.059797,
+                  12.719232
+                ],
+                [
+                  0.209397,
+                  5.996345
+                ]
+              ],
+              "predictedLineM": [
+                [
+                  -6.069531,
+                  12.705579
+                ],
+                [
+                  0.210465,
+                  6.055047
+                ]
+              ],
+              "evidenceStatus": "measured",
+              "expectedFt": 36.936779,
+              "predictedFt": 36.834045,
+              "absoluteErrorFt": 0.102734,
+              "endpointErrorM": 0.058712
+            }
+          ],
+          "missedEdges": [],
+          "extraEdges": [],
+          "facetMatches": [
+            {
+              "truthId": "ABYX",
+              "predictedIndex": 2,
+              "iou": 0.994922
+            },
+            {
+              "truthId": "ADX",
+              "predictedIndex": 3,
+              "iou": 0.991363
+            },
+            {
+              "truthId": "DCYX",
+              "predictedIndex": 0,
+              "iou": 0.990562
+            },
+            {
+              "truthId": "BCY",
+              "predictedIndex": 1,
+              "iou": 0.988572
+            }
+          ],
+          "missedFacets": [],
+          "extraFacets": []
+        }
+      ]
+    }
+  }
+}

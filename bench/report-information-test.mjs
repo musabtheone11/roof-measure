@@ -46,4 +46,19 @@ assert.equal(context.rpPurchaseUnits(120.001), 121);
 assert.equal(context.rpPurchaseUnits(184.000021916), 184);
 assert.equal(context.rpPurchaseUnits(100.00001, 10), 10);
 assert.equal(context.rpPurchaseUnits(100.001, 10), 11);
+// Exercise the material-sheet entry point for the same takeoff under both report kinds.
+const captions = [];
+Object.assign(context, {
+  MATERIAL_CATALOG: [], RP: {L: 32}, GR: n => n,
+  rpHeader: (_doc, _model, _section, title) => captions.push(title),
+  rpTableD: () => 300, rpText: (_doc, text) => captions.push(text)
+});
+vm.runInContext(src.slice(src.indexOf('function rpSheetMaterials('), src.indexOf('// Plan-first report:', src.indexOf('function rpSheetMaterials('))), context);
+const byType = Object.fromEntries(['eave','rake','valley','wall','step','hip','ridge'].map(type => [type, {true:0}]));
+for (const kind of ['illustrative','measured']) {
+  captions.length = 0;
+  context.rpSheetMaterials({}, {kind, line1:'Study', t:{pitched:100, byType, recWaste:10}}, 2, 2);
+  assert.equal(captions[0], kind === 'illustrative' ? 'Illustrative material scenarios' : 'Material order quantities');
+  if (kind === 'illustrative') assert.match(captions[1], /modeled roof/);
+}
 console.log('ok information categories, net area, waste isolation, incomplete scope and orientation');

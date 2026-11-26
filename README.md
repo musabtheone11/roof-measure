@@ -1,5 +1,7 @@
 # Roof Measure
 
+The current supervised preview, known accuracy regressions and outstanding release gates are documented in the [release validation report](docs/RELEASE_VALIDATION.md).
+
 A self-contained roof measurement and takeoff tool, like Roofr Measurements or EagleView, that runs in your browser from satellite imagery. No install needed.
 
 ## What it does

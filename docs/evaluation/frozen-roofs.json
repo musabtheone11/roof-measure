@@ -1,0 +1,987 @@
+{
+  "versions": {
+    "baseline": {
+      "autotrace.js": "aa68c71d79657df90376e0acfb9ebb91490cc4267ef29406dad035b35fdc311b",
+      "autotrace2.js": "5deb5dff839ad26acf11745ef29f80d9a56569aefb59db3598ba27ea62a17762",
+      "obstruction.js": "78a36a9a79aa4e798707870a1ab1e3cbe22d7c53807269c7be17f0acd079b9ea"
+    },
+    "current": {
+      "autotrace.js": "c41a659e75f478ab4024cb3dd7fc4fd1f4435203cfdb8771739498fa58db8dd2",
+      "autotrace2.js": "4567d8034147f7ea20521061ea7ecc612f9f52ea3da5de83fcf9726a7ba7f1c5",
+      "obstruction.js": "78a36a9a79aa4e798707870a1ab1e3cbe22d7c53807269c7be17f0acd079b9ea"
+    }
+  },
+  "revisions": {
+    "baseline": "4806a129bea3fe6aa18d20a613f2cad494485082",
+    "current": "881f78c90ccd1aab477ab2a03d09486a02350cb1"
+  },
+  "scorerHashes": {
+    "bench/run.mjs": "151e74342b76ca558753994f0f96e191d7a4d1bddfb91ea096431e92a369e19f",
+    "bench/synth.mjs": "d5fa1b983fba71ec230a0a5fd12fbd58444a69112aff64de9f3e9f16fcaf9f3a",
+    "bench/score.mjs": "4663be450bcc86f9291eab6f2cee7cb0e47d17c683b04f9c0adf539b6ea253ad",
+    "bench/spatial.mjs": "93c37cf9b8f0c7d3849b7cb12b3bde90d87ff40e2a793969ef7cd3becbf4dba2"
+  },
+  "familyRule": "Existing development seeds 1-120 and a separately frozen synthetic holdout 1100001-1100120. Seed ranges are disjoint. The same parametric generator produces both cohorts.",
+  "cases": [
+    {
+      "split": "development",
+      "seed": 1
+    },
+    {
+      "split": "development",
+      "seed": 2
+    },
+    {
+      "split": "development",
+      "seed": 3
+    },
+    {
+      "split": "development",
+      "seed": 4
+    },
+    {
+      "split": "development",
+      "seed": 5
+    },
+    {
+      "split": "development",
+      "seed": 6
+    },
+    {
+      "split": "development",
+      "seed": 7
+    },
+    {
+      "split": "development",
+      "seed": 8
+    },
+    {
+      "split": "development",
+      "seed": 9
+    },
+    {
+      "split": "development",
+      "seed": 10
+    },
+    {
+      "split": "development",
+      "seed": 11
+    },
+    {
+      "split": "development",
+      "seed": 12
+    },
+    {
+      "split": "development",
+      "seed": 13
+    },
+    {
+      "split": "development",
+      "seed": 14
+    },
+    {
+      "split": "development",
+      "seed": 15
+    },
+    {
+      "split": "development",
+      "seed": 16
+    },
+    {
+      "split": "development",
+      "seed": 17
+    },
+    {
+      "split": "development",
+      "seed": 18
+    },
+    {
+      "split": "development",
+      "seed": 19
+    },
+    {
+      "split": "development",
+      "seed": 20
+    },
+    {
+      "split": "development",
+      "seed": 21
+    },
+    {
+      "split": "development",
+      "seed": 22
+    },
+    {
+      "split": "development",
+      "seed": 23
+    },
+    {
+      "split": "development",
+      "seed": 24
+    },
+    {
+      "split": "development",
+      "seed": 25
+    },
+    {
+      "split": "development",
+      "seed": 26
+    },
+    {
+      "split": "development",
+      "seed": 27
+    },
+    {
+      "split": "development",
+      "seed": 28
+    },
+    {
+      "split": "development",
+      "seed": 29
+    },
+    {
+      "split": "development",
+      "seed": 30
+    },
+    {
+      "split": "development",
+      "seed": 31
+    },
+    {
+      "split": "development",
+      "seed": 32
+    },
+    {
+      "split": "development",
+      "seed": 33
+    },
+    {
+      "split": "development",
+      "seed": 34
+    },
+    {
+      "split": "development",
+      "seed": 35
+    },
+    {
+      "split": "development",
+      "seed": 36
+    },
+    {
+      "split": "development",
+      "seed": 37
+    },
+    {
+      "split": "development",
+      "seed": 38
+    },
+    {
+      "split": "development",
+      "seed": 39
+    },
+    {
+      "split": "development",
+      "seed": 40
+    },
+    {
+      "split": "development",
+      "seed": 41
+    },
+    {
+      "split": "development",
+      "seed": 42
+    },
+    {
+      "split": "development",
+      "seed": 43
+    },
+    {
+      "split": "development",
+      "seed": 44
+    },
+    {
+      "split": "development",
+      "seed": 45
+    },
+    {
+      "split": "development",
+      "seed": 46
+    },
+    {
+      "split": "development",
+      "seed": 47
+    },
+    {
+      "split": "development",
+      "seed": 48
+    },
+    {
+      "split": "development",
+      "seed": 49
+    },
+    {
+      "split": "development",
+      "seed": 50
+    },
+    {
+      "split": "development",
+      "seed": 51
+    },
+    {
+      "split": "development",
+      "seed": 52
+    },
+    {
+      "split": "development",
+      "seed": 53
+    },
+    {
+      "split": "development",
+      "seed": 54
+    },
+    {
+      "split": "development",
+      "seed": 55
+    },
+    {
+      "split": "development",
+      "seed": 56
+    },
+    {
+      "split": "development",
+      "seed": 57
+    },
+    {
+      "split": "development",
+      "seed": 58
+    },
+    {
+      "split": "development",
+      "seed": 59
+    },
+    {
+      "split": "development",
+      "seed": 60
+    },
+    {
+      "split": "development",
+      "seed": 61
+    },
+    {
+      "split": "development",
+      "seed": 62
+    },
+    {
+      "split": "development",
+      "seed": 63
+    },
+    {
+      "split": "development",
+      "seed": 64
+    },
+    {
+      "split": "development",
+      "seed": 65
+    },
+    {
+      "split": "development",
+      "seed": 66
+    },
+    {
+      "split": "development",
+      "seed": 67
+    },
+    {
+      "split": "development",
+      "seed": 68
+    },
+    {
+      "split": "development",
+      "seed": 69
+    },
+    {
+      "split": "development",
+      "seed": 70
+    },
+    {
+      "split": "development",
+      "seed": 71
+    },
+    {
+      "split": "development",
+      "seed": 72
+    },
+    {
+      "split": "development",
+      "seed": 73
+    },
+    {
+      "split": "development",
+      "seed": 74
+    },
+    {
+      "split": "development",
+      "seed": 75
+    },
+    {
+      "split": "development",
+      "seed": 76
+    },
+    {
+      "split": "development",
+      "seed": 77
+    },
+    {
+      "split": "development",
+      "seed": 78
+    },
+    {
+      "split": "development",
+      "seed": 79
+    },
+    {
+      "split": "development",
+      "seed": 80
+    },
+    {
+      "split": "development",
+      "seed": 81
+    },
+    {
+      "split": "development",
+      "seed": 82
+    },
+    {
+      "split": "development",
+      "seed": 83
+    },
+    {
+      "split": "development",
+      "seed": 84
+    },
+    {
+      "split": "development",
+      "seed": 85
+    },
+    {
+      "split": "development",
+      "seed": 86
+    },
+    {
+      "split": "development",
+      "seed": 87
+    },
+    {
+      "split": "development",
+      "seed": 88
+    },
+    {
+      "split": "development",
+      "seed": 89
+    },
+    {
+      "split": "development",
+      "seed": 90
+    },
+    {
+      "split": "development",
+      "seed": 91
+    },
+    {
+      "split": "development",
+      "seed": 92
+    },
+    {
+      "split": "development",
+      "seed": 93
+    },
+    {
+      "split": "development",
+      "seed": 94
+    },
+    {
+      "split": "development",
+      "seed": 95
+    },
+    {
+      "split": "development",
+      "seed": 96
+    },
+    {
+      "split": "development",
+      "seed": 97
+    },
+    {
+      "split": "development",
+      "seed": 98
+    },
+    {
+      "split": "development",
+      "seed": 99
+    },
+    {
+      "split": "development",
+      "seed": 100
+    },
+    {
+      "split": "development",
+      "seed": 101
+    },
+    {
+      "split": "development",
+      "seed": 102
+    },
+    {
+      "split": "development",
+      "seed": 103
+    },
+    {
+      "split": "development",
+      "seed": 104
+    },
+    {
+      "split": "development",
+      "seed": 105
+    },
+    {
+      "split": "development",
+      "seed": 106
+    },
+    {
+      "split": "development",
+      "seed": 107
+    },
+    {
+      "split": "development",
+      "seed": 108
+    },
+    {
+      "split": "development",
+      "seed": 109
+    },
+    {
+      "split": "development",
+      "seed": 110
+    },
+    {
+      "split": "development",
+      "seed": 111
+    },
+    {
+      "split": "development",
+      "seed": 112
+    },
+    {
+      "split": "development",
+      "seed": 113
+    },
+    {
+      "split": "development",
+      "seed": 114
+    },
+    {
+      "split": "development",
+      "seed": 115
+    },
+    {
+      "split": "development",
+      "seed": 116
+    },
+    {
+      "split": "development",
+      "seed": 117
+    },
+    {
+      "split": "development",
+      "seed": 118
+    },
+    {
+      "split": "development",
+      "seed": 119
+    },
+    {
+      "split": "development",
+      "seed": 120
+    },
+    {
+      "split": "holdout",
+      "seed": 1100001
+    },
+    {
+      "split": "holdout",
+      "seed": 1100002
+    },
+    {
+      "split": "holdout",
+      "seed": 1100003
+    },
+    {
+      "split": "holdout",
+      "seed": 1100004
+    },
+    {
+      "split": "holdout",
+      "seed": 1100005
+    },
+    {
+      "split": "holdout",
+      "seed": 1100006
+    },
+    {
+      "split": "holdout",
+      "seed": 1100007
+    },
+    {
+      "split": "holdout",
+      "seed": 1100008
+    },
+    {
+      "split": "holdout",
+      "seed": 1100009
+    },
+    {
+      "split": "holdout",
+      "seed": 1100010
+    },
+    {
+      "split": "holdout",
+      "seed": 1100011
+    },
+    {
+      "split": "holdout",
+      "seed": 1100012
+    },
+    {
+      "split": "holdout",
+      "seed": 1100013
+    },
+    {
+      "split": "holdout",
+      "seed": 1100014
+    },
+    {
+      "split": "holdout",
+      "seed": 1100015
+    },
+    {
+      "split": "holdout",
+      "seed": 1100016
+    },
+    {
+      "split": "holdout",
+      "seed": 1100017
+    },
+    {
+      "split": "holdout",
+      "seed": 1100018
+    },
+    {
+      "split": "holdout",
+      "seed": 1100019
+    },
+    {
+      "split": "holdout",
+      "seed": 1100020
+    },
+    {
+      "split": "holdout",
+      "seed": 1100021
+    },
+    {
+      "split": "holdout",
+      "seed": 1100022
+    },
+    {
+      "split": "holdout",
+      "seed": 1100023
+    },
+    {
+      "split": "holdout",
+      "seed": 1100024
+    },
+    {
+      "split": "holdout",
+      "seed": 1100025
+    },
+    {
+      "split": "holdout",
+      "seed": 1100026
+    },
+    {
+      "split": "holdout",
+      "seed": 1100027
+    },
+    {
+      "split": "holdout",
+      "seed": 1100028
+    },
+    {
+      "split": "holdout",
+      "seed": 1100029
+    },
+    {
+      "split": "holdout",
+      "seed": 1100030
+    },
+    {
+      "split": "holdout",
+      "seed": 1100031
+    },
+    {
+      "split": "holdout",
+      "seed": 1100032
+    },
+    {
+      "split": "holdout",
+      "seed": 1100033
+    },
+    {
+      "split": "holdout",
+      "seed": 1100034
+    },
+    {
+      "split": "holdout",
+      "seed": 1100035
+    },
+    {
+      "split": "holdout",
+      "seed": 1100036
+    },
+    {
+      "split": "holdout",
+      "seed": 1100037
+    },
+    {
+      "split": "holdout",
+      "seed": 1100038
+    },
+    {
+      "split": "holdout",
+      "seed": 1100039
+    },
+    {
+      "split": "holdout",
+      "seed": 1100040
+    },
+    {
+      "split": "holdout",
+      "seed": 1100041
+    },
+    {
+      "split": "holdout",
+      "seed": 1100042
+    },
+    {
+      "split": "holdout",
+      "seed": 1100043
+    },
+    {
+      "split": "holdout",
+      "seed": 1100044
+    },
+    {
+      "split": "holdout",
+      "seed": 1100045
+    },
+    {
+      "split": "holdout",
+      "seed": 1100046
+    },
+    {
+      "split": "holdout",
+      "seed": 1100047
+    },
+    {
+      "split": "holdout",
+      "seed": 1100048
+    },
+    {
+      "split": "holdout",
+      "seed": 1100049
+    },
+    {
+      "split": "holdout",
+      "seed": 1100050
+    },
+    {
+      "split": "holdout",
+      "seed": 1100051
+    },
+    {
+      "split": "holdout",
+      "seed": 1100052
+    },
+    {
+      "split": "holdout",
+      "seed": 1100053
+    },
+    {
+      "split": "holdout",
+      "seed": 1100054
+    },
+    {
+      "split": "holdout",
+      "seed": 1100055
+    },
+    {
+      "split": "holdout",
+      "seed": 1100056
+    },
+    {
+      "split": "holdout",
+      "seed": 1100057
+    },
+    {
+      "split": "holdout",
+      "seed": 1100058
+    },
+    {
+      "split": "holdout",
+      "seed": 1100059
+    },
+    {
+      "split": "holdout",
+      "seed": 1100060
+    },
+    {
+      "split": "holdout",
+      "seed": 1100061
+    },
+    {
+      "split": "holdout",
+      "seed": 1100062
+    },
+    {
+      "split": "holdout",
+      "seed": 1100063
+    },
+    {
+      "split": "holdout",
+      "seed": 1100064
+    },
+    {
+      "split": "holdout",
+      "seed": 1100065
+    },
+    {
+      "split": "holdout",
+      "seed": 1100066
+    },
+    {
+      "split": "holdout",
+      "seed": 1100067
+    },
+    {
+      "split": "holdout",
+      "seed": 1100068
+    },
+    {
+      "split": "holdout",
+      "seed": 1100069
+    },
+    {
+      "split": "holdout",
+      "seed": 1100070
+    },
+    {
+      "split": "holdout",
+      "seed": 1100071
+    },
+    {
+      "split": "holdout",
+      "seed": 1100072
+    },
+    {
+      "split": "holdout",
+      "seed": 1100073
+    },
+    {
+      "split": "holdout",
+      "seed": 1100074
+    },
+    {
+      "split": "holdout",
+      "seed": 1100075
+    },
+    {
+      "split": "holdout",
+      "seed": 1100076
+    },
+    {
+      "split": "holdout",
+      "seed": 1100077
+    },
+    {
+      "split": "holdout",
+      "seed": 1100078
+    },
+    {
+      "split": "holdout",
+      "seed": 1100079
+    },
+    {
+      "split": "holdout",
+      "seed": 1100080
+    },
+    {
+      "split": "holdout",
+      "seed": 1100081
+    },
+    {
+      "split": "holdout",
+      "seed": 1100082
+    },
+    {
+      "split": "holdout",
+      "seed": 1100083
+    },
+    {
+      "split": "holdout",
+      "seed": 1100084
+    },
+    {
+      "split": "holdout",
+      "seed": 1100085
+    },
+    {
+      "split": "holdout",
+      "seed": 1100086
+    },
+    {
+      "split": "holdout",
+      "seed": 1100087
+    },
+    {
+      "split": "holdout",
+      "seed": 1100088
+    },
+    {
+      "split": "holdout",
+      "seed": 1100089
+    },
+    {
+      "split": "holdout",
+      "seed": 1100090
+    },
+    {
+      "split": "holdout",
+      "seed": 1100091
+    },
+    {
+      "split": "holdout",
+      "seed": 1100092
+    },
+    {
+      "split": "holdout",
+      "seed": 1100093
+    },
+    {
+      "split": "holdout",
+      "seed": 1100094
+    },
+    {
+      "split": "holdout",
+      "seed": 1100095
+    },
+    {
+      "split": "holdout",
+      "seed": 1100096
+    },
+    {
+      "split": "holdout",
+      "seed": 1100097
+    },
+    {
+      "split": "holdout",
+      "seed": 1100098
+    },
+    {
+      "split": "holdout",
+      "seed": 1100099
+    },
+    {
+      "split": "holdout",
+      "seed": 1100100
+    },
+    {
+      "split": "holdout",
+      "seed": 1100101
+    },
+    {
+      "split": "holdout",
+      "seed": 1100102
+    },
+    {
+      "split": "holdout",
+      "seed": 1100103
+    },
+    {
+      "split": "holdout",
+      "seed": 1100104
+    },
+    {
+      "split": "holdout",
+      "seed": 1100105
+    },
+    {
+      "split": "holdout",
+      "seed": 1100106
+    },
+    {
+      "split": "holdout",
+      "seed": 1100107
+    },
+    {
+      "split": "holdout",
+      "seed": 1100108
+    },
+    {
+      "split": "holdout",
+      "seed": 1100109
+    },
+    {
+      "split": "holdout",
+      "seed": 1100110
+    },
+    {
+      "split": "holdout",
+      "seed": 1100111
+    },
+    {
+      "split": "holdout",
+      "seed": 1100112
+    },
+    {
+      "split": "holdout",
+      "seed": 1100113
+    },
+    {
+      "split": "holdout",
+      "seed": 1100114
+    },
+    {
+      "split": "holdout",
+      "seed": 1100115
+    },
+    {
+      "split": "holdout",
+      "seed": 1100116
+    },
+    {
+      "split": "holdout",
+      "seed": 1100117
+    },
+    {
+      "split": "holdout",
+      "seed": 1100118
+    },
+    {
+      "split": "holdout",
+      "seed": 1100119
+    },
+    {
+      "split": "holdout",
+      "seed": 1100120
+    }
+  ]
+}

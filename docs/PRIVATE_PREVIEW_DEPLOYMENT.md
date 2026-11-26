@@ -76,7 +76,7 @@ runtime admission limits still apply behind the gateway.
 
 ## Vercel preview option and current access blocker
 
-An ordinary Vercel serverless deployment is not compatible with the in-memory
+An ordinary Vercel serverless deployment is not compatible with this single-process
 background-job lifecycle. A **Vercel Sandbox session** is a viable ephemeral
 preview: run the same Node service continuously, expose port 3000, and set
 `PUBLIC_ORIGIN` to the session's HTTPS route. The process must bind `0.0.0.0`.
