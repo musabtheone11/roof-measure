@@ -24,6 +24,11 @@ var AT2 = {
   minRegionM2: 1.2,    // smaller regions are absorbed by a neighbour
   dpEpsM: 0.38,        // outline simplification tolerance (m)
   snapDeg: 20,
+  outlineMergeDeg: 20,
+  junctionMerge: false,  // refit runs that meet at a junction onto one line (off: it squared a genuine short chamfer, D15)
+  cornerZoneM: 0.6,
+  straightenOutline: true, // final pass: outline runs joined only by shallow turns become one straight line (see reconstruct)
+  straightenTolM: 0.35,  // ... when every vertex between the two real corners lies within this of that line (3.5 source pixels)     // blur rounds a corner over this distance: looser support there when merging outline runs  // outline runs meeting at a shallower turn than this share one line when their pixels support it
   runFitToleranceM: 0.20, // two 10 cm DSM pixels; direction constraints must fit every supporting point
   diagMinM: 2.2,       // outline runs shorter than this never snap to the 45-degree diagonals
   jogM: 0.4,           // parallel outline runs closer than this are one straight line
@@ -485,6 +490,41 @@ function reconstruct(label, regions, w, h, geo, dominantDeg, obstTest) {
     }
     return m;
   });
+  // ---- one straight outline across a junction: two outline runs that meet at a shallow turn (a hip or valley foot on
+  // one straight eave, two facets sharing one rake) are fitted separately from their own pixels, so their directions or
+  // offsets differ slightly and the outline kinks where they meet. When every pixel of both runs supports one shared
+  // line (the same tolerance as any run: two 10 cm source pixels), both take that line. A real corner (porch return,
+  // bay) turns more than AT2.outlineMergeDeg or does not fit one line, and keeps its own runs.
+  if (AT2.outlineMergeDeg > 0 && AT2.junctionMerge) {
+    const ends = new Map(); const at = (j, ch, run) => { if (!ends.has(j)) ends.set(j, []); ends.get(j).push({ ch, run }); };
+    for (const ch of chains) if (ch.kind === 'outline' && ch.runs && ch.runs.length) { at(ch.j0, ch, ch.runs[0]); at(ch.j1, ch, ch.runs[ch.runs.length - 1]); }
+    const cosMax = Math.cos(AT2.outlineMergeDeg * Math.PI / 180);
+    // union-find over runs linked through shallow junctions (several tiny chains can line up along one eave near a corner)
+    const parent = new Map(); const find = (r) => { while (parent.get(r) !== r) { parent.set(r, parent.get(parent.get(r))); r = parent.get(r); } return r; };
+    const add = (r) => { if (!parent.has(r)) parent.set(r, r); };
+    for (const list of ends.values()) {
+      if (list.length !== 2 || list[0].ch === list[1].ch) continue;
+      const [A, B] = list; if (Math.abs(A.run.line.d[0] * B.run.line.d[0] + A.run.line.d[1] * B.run.line.d[1]) < cosMax) continue;
+      add(A.run); add(B.run); parent.set(find(A.run), find(B.run));
+    }
+    const groups = new Map(); for (const r of parent.keys()) { const g = find(r); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); }
+    for (const runs of groups.values()) {
+      if (runs.length < 2) continue;
+      const long = runs.reduce((a, b) => (b.len > a.len ? b : a)); const pts = runs.flatMap((r) => r.pts); if (pts.length < 4) continue;
+      // the longest run's snapped direction wins only when every run of the group is (nearly) along it
+      const line = long.snap ? lineWithDir(pts, long.snap) : lineFromPts(pts);
+      // every run of the group must run along the shared line (a blurred chamfer's pieces turn ~22 deg each and stay out)
+      if (runs.some((r) => Math.abs(r.line.d[0] * line.d[0] + r.line.d[1] * line.d[1]) < Math.cos(AT2.outlineMergeDeg / 2 * Math.PI / 180))) continue;
+      // blur rounds a building corner over a few pixels: within AT2.cornerZoneM of the group's two extreme ends a pixel
+      // may sit up to two run tolerances off the line; everywhere else the ordinary run tolerance applies
+      const ux = line.d, tt = pts.map((q) => q[0] * ux[0] + q[1] * ux[1]), t0 = Math.min(...tt), t1 = Math.max(...tt);
+      const core = pts.filter((q, k) => tt[k] - t0 > AT2.cornerZoneM && t1 - tt[k] > AT2.cornerZoneM);
+      const off = (q) => Math.abs(line.n[0] * q[0] + line.n[1] * q[1] - line.c);
+      const ok = core.length >= 4 && runSupported(core, line) && pts.every((q) => off(q) <= 2 * AT2.runFitToleranceM);
+      if (!ok) continue;
+      for (const r of runs) { r.line = line; r.merged = true; }
+    }
+  }
   // ---- junction placement: least squares over incident end lines, regularised to the raster position
   const jPos = topo.jCorner.map(cornerXY);
   const jLines = jPos.map(() => []);
@@ -520,7 +560,59 @@ function reconstruct(label, regions, w, h, geo, dominantDeg, obstTest) {
       g.push(b); ch.geom = g;
     }
     if (obstTest) for (const ch of chains) if (ch.kind === 'outline') markObstruction(ch);
+    if (AT2.straightenOutline) straightenOutline();
   };
+  // Straight outline runs (the roof outline and height breaks: an upper eave over a lower roof). Where pieces meet only at shallow turns (AT2.outlineMergeDeg) between two real corners,
+  // and every vertex between those corners lies within AT2.straightenTolM of the straight line joining them, the run is
+  // one straight eave or rake that pixel noise, blur-rounded corners or a junction with an interior line bent: its vertices
+  // move onto that line (shared junctions move for every facet and line that uses them). A sharper turn (a porch return,
+  // any real corner) ends a run and is never moved.
+  const turnDeg = (p, q, r) => { const u = [q[0] - p[0], q[1] - p[1]], v = [r[0] - q[0], r[1] - q[1]]; const l = Math.hypot(...u) * Math.hypot(...v); if (l < 1e-12) return 0; return Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / l))) * 180 / Math.PI; };
+  function straightenOutline() {
+    const inc = new Map(); for (const ch of chains) if ((ch.kind === 'outline' || ch.kind === 'fitted') && ch.geom && !ch.obstruction) for (const j of [ch.j0, ch.j1]) { if (!inc.has(j)) inc.set(j, []); inc.get(j).push(ch); }
+    const along = (ch, j) => (ch.j0 === j ? ch.geom : ch.geom.slice().reverse());          // geometry leaving junction j
+    // the two chains at junction j that continue each other most nearly straight (a T from a height break or a third
+    // chain does not stop a straight eave); null when no pair turns by AT2.outlineMergeDeg or less
+    const pairAt = (j) => { const cs = inc.get(j); if (!cs || cs.length < 2) return null; let best = null;
+      for (let a = 0; a < cs.length; a++) for (let b = a + 1; b < cs.length; b++) { if (cs[a] === cs[b]) continue; const g0 = along(cs[a], j), g1 = along(cs[b], j); const t = turnDeg(g0[1], g0[0], g1[1]); if (t <= AT2.outlineMergeDeg && (!best || t < best.t)) best = { t, a: cs[a], b: cs[b] }; }
+      return best; };
+    const shallowJ = (j) => !!pairAt(j);
+    const sharpInside = (g) => g.slice(1, -1).some((q, k) => turnDeg(g[k], q, g[k + 2]) > AT2.outlineMergeDeg);
+    const seen = new Set(); let moved = 0;
+    for (const [j0] of inc) {
+      if (seen.has(j0) || !shallowJ(j0)) continue;
+      // walk both ways from a shallow junction to the first real corner
+      const walk = (j, from) => { const pts = [], js = []; let cur = j, ch = from; for (let guard = 0; guard < 200; guard++) { const g = along(ch, cur); if (sharpInside(g)) { const k = g.slice(1, -1).findIndex((q, i) => turnDeg(g[i], q, g[i + 2]) > AT2.outlineMergeDeg); pts.push(...g.slice(1, k + 1)); return { end: g[k + 1], pts, js }; } pts.push(...g.slice(1, -1)); const nj = ch.j0 === cur ? ch.j1 : ch.j0; if (!shallowJ(nj) || seen.has(nj)) return { end: g[g.length - 1], pts, js }; js.push(nj); const pr = pairAt(nj); const nx = pr && (pr.a === ch ? pr.b : pr.b === ch ? pr.a : null); if (!nx) return { end: g[g.length - 1], pts, js }; cur = nj; ch = nx; } return null; };
+      const pr0 = pairAt(j0), c0 = pr0.a, c1 = pr0.b; const L = walk(j0, c0), R = walk(j0, c1); seen.add(j0); if (!L || !R) continue;
+      for (const j of [...L.js, ...R.js]) seen.add(j);
+      const P = L.end, Q = R.end, dx = Q[0] - P[0], dy = Q[1] - P[1], len = Math.hypot(dx, dy); if (len < 0.5) continue;
+      const juncs = [j0, ...L.js, ...R.js].map((j) => jFinal[j]), all = [...juncs, ...L.pts, ...R.pts];
+      const off = (q) => Math.abs((q[0] - P[0]) * dy - (q[1] - P[1]) * dx) / len;
+      if (all.some((q) => off(q) > AT2.straightenTolM)) continue;
+      // a straight run turns by ~0 overall: every piece of it (0.3 m or longer) must run along P->Q. A blurred chamfer drawn
+      // as two shallow turns (22 + 22 deg) passes the per-vertex test but not this one
+      { const seq = [P, ...[...L.pts].reverse(), jFinal[j0], ...R.pts, Q].filter((q, k, arr) => k === 0 || Math.hypot(q[0] - arr[k - 1][0], q[1] - arr[k - 1][1]) > 1e-9);
+        let bad = false; const cosT = Math.cos(AT2.outlineMergeDeg / 2 * Math.PI / 180);
+        for (let k = 1; k < seq.length && !bad; k++) { const ux = seq[k][0] - seq[k - 1][0], uy = seq[k][1] - seq[k - 1][1], l = Math.hypot(ux, uy); if (l >= 0.3 && Math.abs(ux * dx + uy * dy) / (l * len) < cosT) bad = true; }
+        if (bad) continue; }
+      const proj = (q) => { const t = ((q[0] - P[0]) * dx + (q[1] - P[1]) * dy) / (len * len); q[0] = P[0] + t * dx; q[1] = P[1] + t * dy; };
+      for (const q of all) proj(q); moved++;
+    }
+    // shallow bends inside one chain (between two of its own runs) where its ends are real corners
+    for (const ch of new Set([].concat(...inc.values()))) {
+      const g = ch.geom; if (g.length < 3) continue;
+      const sharp = g.map((q, i) => i === 0 || i === g.length - 1 || turnDeg(g[i - 1], q, g[i + 1]) > AT2.outlineMergeDeg);
+      let a = 0;
+      for (let b = 1; b < g.length; b++) { if (!sharp[b]) continue;
+        if (b - a > 1) { const P = g[a], Q = g[b], dx = Q[0] - P[0], dy = Q[1] - P[1], len = Math.hypot(dx, dy);
+          const mid = g.slice(a + 1, b); const off = (q) => Math.abs((q[0] - P[0]) * dy - (q[1] - P[1]) * dx) / len;
+          const seq = g.slice(a, b + 1), cosT = Math.cos(AT2.outlineMergeDeg / 2 * Math.PI / 180);
+          const along = seq.every((q, k) => { if (!k) return true; const ux = q[0] - seq[k - 1][0], uy = q[1] - seq[k - 1][1], l = Math.hypot(ux, uy); return l < 0.3 || Math.abs(ux * dx + uy * dy) / (l * len) >= cosT; });
+          if (len >= 0.5 && along && mid.every((q) => off(q) <= AT2.straightenTolM)) { for (const q of mid) { const t = ((q[0] - P[0]) * dx + (q[1] - P[1]) * dy) / (len * len); q[0] = P[0] + t * dx; q[1] = P[1] + t * dy; } moved++; } }
+        a = b; }
+    }
+    return moved;
+  }
   // Outline segments that run along a hidden zone are not roof edges. Consecutive ones collapse into one straight chord
   // between the last confirmed points on either side (no canopy-following zigzag). Straightness and alignment
   // cannot establish that a canopy boundary is a roof edge; it stays unresolved until another source locates it.
@@ -612,6 +704,13 @@ function splitRuns(simp, raw, plane, dominantDeg) {
       // a short run squeezed between two parallel runs: remove the jog
       const q = out[i + 1];
       if (p && q && r.len < AT2.shortRunM && parallel(p, q) && Math.abs(p.line.n[0] * q.line.m[0] + p.line.n[1] * q.line.m[1] - p.line.c) < AT2.jogM * 1.6 && runSupported(p.pts.concat(r.pts, q.pts), join(p, q, r).line)) { next[next.length - 1] = join(p, q, r); i++; changed = true; continue; }
+      // consecutive runs meeting at a shallow turn (blur rounds a building corner into a short angled run; a straight eave
+      // split where its pixels wander): one line when every pixel of both supports it. The longer run's snapped
+      // direction wins, so a short corner piece never tilts the eave
+      if (p && AT2.outlineMergeDeg > 0 && Math.abs(p.line.d[0] * r.line.d[0] + p.line.d[1] * r.line.d[1]) >= Math.cos(AT2.outlineMergeDeg / 2 * Math.PI / 180)) {
+        const long = p.len >= r.len ? p : r, pts = p.pts.concat(r.pts), line = long.snap ? lineWithDir(pts, long.snap) : lineFromPts(pts);
+        if (runSupported(pts, line)) { next[next.length - 1] = { start: p.start, end: r.end, line, len: p.len + r.len, pts, snap: long.snap }; changed = true; continue; }
+      }
       next.push(r);
     }
     out = next; if (!changed) break;
