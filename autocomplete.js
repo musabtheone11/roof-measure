@@ -30,19 +30,23 @@ function acRender() {
 function acClose() { ac.items = []; ac.active = -1; if (ac.list) ac.list.hidden = true; }
 async function acChoose(i) {
   const it = ac.items[i]; if (!it) return;
+  const request = ++state.addressRequestEpoch, epoch = locationGeneration();
+  const current = () => request === state.addressRequestEpoch && epoch === locationGeneration();
   acClose(); $('#address').value = it.text;
   try {
     if (it.src === 'google') {
       const place = it.pred.toPlace(); await place.fetchFields({ fields: ['location', 'formattedAddress'] });
+      if (!current()) return;
       ac.token = null;                                  // a choice ends the billing session
       setLocation({ lat: place.location.lat(), lng: place.location.lng() }, place.formattedAddress || it.text);
     } else if (it.magicKey) {
       const q = new URLSearchParams({ SingleLine: it.text, magicKey: it.magicKey, maxLocations: 1, outFields: 'Match_addr', f: 'json' });
       const j = await fetch('https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?' + q).then((r) => r.json());
+      if (!current()) return;
       const c = j.candidates && j.candidates[0]; if (!c) throw new Error('not found');
       setLocation({ lat: c.location.y, lng: c.location.x }, c.address || it.text);
     } else goToAddress();
-  } catch (_) { goToAddress(); }                       // fall back to the normal geocoder
+  } catch (_) { if (current()) goToAddress(); }
 }
 async function acQuery() {
   const inp = $('#address'); const text = inp.value.trim();
@@ -58,7 +62,10 @@ async function acQuery() {
   inp.setAttribute('autocomplete', 'off');
   const L = document.createElement('div'); L.className = 'ac-list'; L.hidden = true; ac.list = L;
   inp.closest('.field').appendChild(L);
-  inp.addEventListener('input', () => { clearTimeout(ac.timer); ac.timer = setTimeout(acQuery, 180); });
+  inp.addEventListener('input', () => {
+    state.addressRequestEpoch++; ac.seq++; acClose();
+    clearTimeout(ac.timer); ac.timer = setTimeout(acQuery, 180);
+  });
   inp.addEventListener('keydown', (e) => {
     if (L.hidden || !ac.items.length) return;
     if (e.key === 'ArrowDown') { ac.active = (ac.active + 1) % ac.items.length; acRender(); e.preventDefault(); }

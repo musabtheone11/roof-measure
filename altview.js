@@ -194,9 +194,15 @@ function avRaster(T, r) {
   return { cv, w, h, o, ux: (ex[0] - o[0]) / w, uy: (ex[1] - o[1]) / w, vx: (ey[0] - o[0]) / h, vy: (ey[1] - o[1]) / h };
 }
 function avBaseRaster() {
-  if (AV.src.base && AV.src.baseFor === (state.trace && state.trace.tracedAt)) return AV.src.base;
-  const cache = window.__layerCache || {}; const keys = Object.keys(cache).filter((k) => state.solar && k.startsWith(state.solar.name + '|')); const T = keys.length ? cache[keys[keys.length - 1]].rgbT : null; const r = avRef();
-  AV.src.base = T && T.bands && r ? avRaster(T, r) : null; AV.src.baseFor = state.trace && state.trace.tracedAt; return AV.src.base;
+  const trace = state.trace, key = trace?.sourceLayerRequest;
+  if (!key || !state.solar || trace.buildingName !== state.solar.name) return null;
+  if (AV.src.base && AV.src.baseFor === trace.tracedAt) return AV.src.base;
+  const entry = (window.__layerCache || {})[key] || (window.__altCache || {})[key];
+  const T = entry?.requestIdentity === key ? entry.rgbT : null;
+  const r = avRef();
+  AV.src.base = T && T.bands && r ? avRaster(T, r) : null;
+  AV.src.baseFor = trace.tracedAt;
+  return AV.src.base;
 }
 // USDA NAIP aerial photos of this spot, newest first (public domain; listed through the Planetary Computer catalogue)
 async function avNaipList() {
@@ -259,13 +265,29 @@ async function avShowDated() {
   if (AV.sel && AV.src[AV.sel]) avSelect(AV.sel); else { const other = (AV.tiers || []).find((q) => !q.current && q.date); if (other) avSelect(other.id); else { avPaint(); avSide(); } }
 }
 async function avSelect(id) {
-  const tier = (AV.tiers || []).find((q) => q.id === id), imp = AV.src[id] && AV.src[id].imported ? AV.src[id] : null, nz = (AV.naip || []).find((q) => q.id === id), fz = (AV.fdot || []).find((q) => q.id === id); AV.sel = id; AV.pick = null; AV.probe = AV.probe && AV.probe.id === id ? AV.probe : null;
+  const tier = (AV.tiers || []).find(q => q.id === id), imp = AV.src[id]?.imported ? AV.src[id] : null;
+  const nz = (AV.naip || []).find(q => q.id === id), fz = (AV.fdot || []).find(q => q.id === id);
+  const epoch = locationGeneration(), request = AV.selectionRequest = (AV.selectionRequest || 0) + 1;
+  const current = () => epoch === locationGeneration() && request === AV.selectionRequest;
+  AV.sel = id; AV.pick = null; AV.probe = AV.probe?.id === id ? AV.probe : null;
   try {
-    if (tier && !AV.src[id]) { avBusy('Downloading ' + tier.source + (tier.date ? ', flown ' + tier.date : '') + '...'); const main = state.solar; const A = await altLoadLayers(tier.quality, main.center.latitude, main.center.longitude, avRadius());
-      AV.src[id] = { ras: A.rgbT ? avRaster(A.rgbT, avRef()) : null, label: tier.source, date: tier.date, georef: true, heights: true, tier }; }
-    if (nz && !AV.src[id]) { avBusy('Downloading the USDA NAIP aerial photo flown ' + nz.date + '...'); AV.src[id] = await avNaipLoad(nz); }
-    if (fz && !AV.src[id]) { avBusy('Downloading the Florida county orthophoto (' + fz.year + ')...'); AV.src[id] = await avFdotLoad(fz); }
-  } catch (e) { toast('Could not load that image: ' + (e.message || e), true); } finally { avBusy(''); }
+    let loaded;
+    if (tier && !AV.src[id]) {
+      avBusy('Downloading ' + tier.source + '...');
+      const main = state.solar;
+      const A = await altLoadLayers(tier.quality, main.center.latitude, main.center.longitude, avRadius());
+      if (!current()) return;
+      loaded = {ras: A.rgbT ? avRaster(A.rgbT, avRef()) : null, label: tier.source, date: tier.date, georef: true, heights: true, tier};
+    } else if (nz && !AV.src[id]) {
+      avBusy('Downloading the USDA NAIP aerial photo flown ' + nz.date + '...'); loaded = await avNaipLoad(nz);
+    } else if (fz && !AV.src[id]) {
+      avBusy('Downloading the Florida county orthophoto (' + fz.year + ')...'); loaded = await avFdotLoad(fz);
+    }
+    if (!current()) return;
+    if (loaded) AV.src[id] = loaded;
+  } catch (e) { if (current()) toast('Could not load that image: ' + (e.message || e), true); }
+  finally { if (current()) avBusy(''); }
+  if (!current()) return;
   const s = AV.src[id];
   if (s) { AV.active = { id, label: s.label, date: s.date, georef: avCanMeasure(s) }; avBadge(`Left: image used for the trace. Right: ${s.label}${s.date ? ', ' + s.date : ', date not reported'}${s.georef ? (avCanMeasure(s) ? '' : ' (comparison only: not sharp or not roof-rectified enough to place an edge)') : ' (not georeferenced: viewing aid)'}.`);
     if (!(tier && tier.current)) avNote(id, { kind: tier ? 'solar' : imp ? imp.kind : nz ? 'naip' : fz ? 'county' : 'ortho', dateText: s.dateText || null, label: s.label, date: s.date, georef: !!s.georef, measurable: avCanMeasure(s), result: (state.altViews.find((q) => q.id === id) || {}).result || 'Compared with the image used for the trace.' }); }
@@ -349,27 +371,38 @@ async function avUncarry() { state.altFusion = null; try { avBusy('Re-tracing fr
 async function avImport(file, name, date, authorised, trueOrtho) {
   if (!file) return; if (!name) { toast('Name the source (who flew or supplied this image)', true); return; }
   if (!authorised) { toast('Only import imagery the company is authorised to use', true); return; }
+  const epoch = locationGeneration();
   const id = 'import:' + (Object.keys(AV.src).filter((k) => k.startsWith('import:')).length + 1); const isTif = /\.tiff?$/i.test(file.name);
   try {
-    avBusy('Reading ' + file.name + '...'); const buf = await file.arrayBuffer(); const r = avRef(), t = AV.tgt;
+    avBusy('Reading ' + file.name + '...');
+    const r = avRef(), t = AV.tgt;
     if (isTif) {
-      const tiff = await GeoTIFF.fromArrayBuffer(buf); const img = await tiff.getImage(); const W = img.getWidth(), H = img.getHeight(); const keys = img.getGeoKeys ? (img.getGeoKeys() || {}) : {};
-      let ox, oy, rx, ry; try { [ox, oy] = img.getOrigin(); [rx, ry] = img.getResolution(); } catch (_) { throw new Error('This TIFF has no georeference. Export it as a GeoTIFF, or import it as a photo (JPG/PNG) to use it as a viewing aid.'); }
-      const epsg = keys.ProjectedCSTypeGeoKey || keys.GeographicTypeGeoKey || 4326; const sy = ry > 0 ? -ry : ry; let def = null;
-      if (!(epsg === 4326 || Math.abs(ox) <= 360)) { if (epsg >= 32601 && epsg <= 32660) def = `+proj=utm +zone=${epsg - 32600} +datum=WGS84 +units=m +no_defs`; else if (epsg >= 32701 && epsg <= 32760) def = `+proj=utm +zone=${epsg - 32700} +south +datum=WGS84 +units=m +no_defs`; else if (epsg >= 26901 && epsg <= 26923) def = `+proj=utm +zone=${epsg - 26900} +datum=NAD83 +units=m +no_defs`; else if (epsg === 3857) def = 'EPSG:3857'; else throw new Error('Unsupported projection EPSG:' + epsg + '. Export the image in WGS84, UTM or Web Mercator.'); }
-      const fwd = (v) => (def ? proj4('EPSG:4326', def, [v.lng, v.lat]) : [v.lng, v.lat]); const inv = (X, Y) => { if (!def) return { lng: X, lat: Y }; const p = proj4(def, 'EPSG:4326', [X, Y]); return { lng: p[0], lat: p[1] }; };
-      // read only the window around the building (orthomosaics are large), reduced to at most 2400 pixels a side
-      const pad = (t.halfM + 30); const cs = [[-pad, -pad], [pad, -pad], [pad, pad], [-pad, pad]].map(([e, n]) => fwd({ lat: t.lat + n / r.ky, lng: t.lng + e / r.kx })).map(([X, Y]) => [(X - ox) / rx, (Y - oy) / sy]);
+      const tiff = await GeoTIFF.fromBlob(file);
+      const img = await tiff.getImage(), W = img.getWidth(), H = img.getHeight();
+      const transform = rmRasterTransform(img);
+      const pad = t.halfM + 30;
+      const cs = [[-pad,-pad],[pad,-pad],[pad,pad],[-pad,pad]].map(([e,n]) =>
+        transform.fromLL({lat: t.lat + n / r.ky, lng: t.lng + e / r.kx}));
+      if (!cs.flat().every(Number.isFinite)) throw new Error('The building is outside the supported raster projection.');
       const x0 = Math.max(0, Math.floor(Math.min(...cs.map((c) => c[0])))), x1 = Math.min(W, Math.ceil(Math.max(...cs.map((c) => c[0])))), y0 = Math.max(0, Math.floor(Math.min(...cs.map((c) => c[1])))), y1 = Math.min(H, Math.ceil(Math.max(...cs.map((c) => c[1]))));
       if (x1 - x0 < 8 || y1 - y0 < 8) throw new Error('This image does not cover the building.');
+      if ((x1-x0)*(y1-y0) > 16000000) throw new Error('Crop the orthomosaic to a smaller area around the building before importing it.');
       const k = Math.max(1, Math.ceil(Math.max(x1 - x0, y1 - y0) / 2400)); const w = Math.floor((x1 - x0) / k), h = Math.floor((y1 - y0) / k);
-      const ras = await img.readRasters({ window: [x0, y0, x1, y1], width: w, height: h }); const n = ras.length; const to8 = (b) => { if (b instanceof Uint8Array) return b; let mx = 1; for (let i = 0; i < b.length; i += 7) if (b[i] > mx) mx = b[i]; const o = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) o[i] = Math.max(0, Math.min(255, b[i] / mx * 255)); return o; };
+      const samples = img.getSamplesPerPixel() >= 3 ? [0,1,2] : [0];
+      const ras = await img.readRasters({ window: [x0, y0, x1, y1], width: w, height: h, samples }); const n = ras.length; const to8 = (b) => { if (b instanceof Uint8Array) return b; let mx = 1; for (let i = 0; i < b.length; i += 7) if (b[i] > mx) mx = b[i]; const o = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) o[i] = Math.max(0, Math.min(255, b[i] / mx * 255)); return o; };
       const bands = n >= 3 ? [to8(ras[0]), to8(ras[1]), to8(ras[2])] : [to8(ras[0]), to8(ras[0]), to8(ras[0])];
-      const T = { w, h, bands, toLL: (x, y) => inv(ox + (x0 + x * k) * rx, oy + (y0 + y * k) * sy) }; const fd = img.fileDirectory || {}; const tagDate = fd.DateTime ? String(fd.DateTime).slice(0, 10).replace(/:/g, '-') : '';
-      AV.src[id] = { imported: true, kind: 'ortho', ras: avRaster(T, r), label: name, date: date || tagDate || null, georef: true, heights: false, trueOrtho: !!trueOrtho, gsdM: Math.abs(rx) * k * (def ? 1 : r.kx), nudge: [0, 0] };
+      const T = {w, h, bands, toLL: (x,y) => transform.toLL(x0 + x*(x1-x0)/w, y0 + y*(y1-y0)/h)};
+      const fd = img.getFileDirectory();
+      const tagDate = fd.DateTime ? String(fd.DateTime).slice(0, 10).replace(/:/g, '-') : '';
+      const raster = avRaster(T, r);
+      const gsdM = Math.max(Math.hypot(raster.ux,raster.uy), Math.hypot(raster.vx,raster.vy));
+      if (epoch !== locationGeneration()) return;
+      AV.src[id] = { imported: true, kind: 'ortho', ras: raster, label: name, date: date || tagDate || null, georef: true, heights: false, trueOrtho: !!trueOrtho, gsdM, nudge: [0, 0] };
       reviewLog({ target: 'source', action: 'georeferenced image imported (authorised by the reviewer)', source: name, date: date || tagDate || '', note: file.name });
       AV.tab = 'dated'; avTab('dated'); await avSelect(id);
     } else {
+      const buf = await file.slice(0, 512 * 1024).arrayBuffer();
+      if (epoch !== locationGeneration()) return;
       const url = URL.createObjectURL(file); const exif = avExifDate(buf);
       AV.src[id] = { imported: true, kind: 'photo', url, label: name, date: date || exif || null, georef: false, heights: false }; AV.photo = id; AV.sel = id;
       AV.active = { id, label: name, date: date || exif || null, georef: false };
