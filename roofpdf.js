@@ -480,8 +480,8 @@ function rpSheetInformation(doc, M, n, total) {
   const I = rpInformation(M); let added = 0, y = 104;
   const header = () => { rpHeader(doc, M, 'Measurement summary', n + added, total); rpTitleBar(doc, 82, 'Measurement summary' + (added ? ' (continued)' : ''), M.kind === 'illustrative' ? 'Illustrative quantities  ·  no property measurement' : I.complete ? 'Net measurements  ·  allowances separate' : 'Supported subtotals  ·  incomplete scope'); };
   const room = (height) => { if (y + height > RP.FOOT - 24) { doc.addPage('letter', 'portrait'); added++; header(); y = 104; } };
-  const table = (title, widths, head, rows, num) => { room(rows.length <= 10 ? 52 + rows.length * 15 : 52); rpTitleBar(doc, y, title); y += 11;
-    let rest = rows.slice(); do { const cap = Math.max(1, Math.floor((RP.FOOT - 30 - y - 19) / 15)); const chunk = rest.slice(0, cap); y = rpTableD(doc, RP.L, y, widths, head, chunk, { rowh: 15, size: 8.3, headsz: 7.8, num }); rest = rest.slice(cap); if (rest.length) { y = RP.FOOT; room(52); rpTitleBar(doc, y, title + ' (continued)'); y += 11; } } while (rest.length); y += 22; };
+  const table = (title, widths, head, rows, num) => { room(rows.length <= 10 ? 44 + rows.length * 13 : 44); rpTitleBar(doc, y, title); y += 11;
+    let rest = rows.slice(); do { const cap = Math.max(1, Math.floor((RP.FOOT - 30 - y - 19) / 13)); const chunk = rest.slice(0, cap); y = rpTableD(doc, RP.L, y, widths, head, chunk, { rowh: 13, size: 8.1, headsz: 7.6, num }); rest = rest.slice(cap); if (rest.length) { y = RP.FOOT; room(52); rpTitleBar(doc, y, title + ' (continued)'); y += 11; } } while (rest.length); y += 18; };
   const val = (x) => x == null ? '' : rpNum(x, 2);
   header();
   table('Area summary' + (I.complete ? '' : ' / supported subtotal'), [157, 104, 183, 104], ['Quantity', 'ft²', 'Quantity', 'Value'], [
@@ -498,9 +498,9 @@ function rpSheetInformation(doc, M, n, total) {
   rows.push(['Hips + ridges', edge(I.combined.hipRidge), 'Eaves + rakes', edge(I.combined.eaveRake)]);
   table('Linear measurement totals', [157, 104, 183, 104], ['Edge category', 'True length', 'Edge category', 'True length'], rows, [1, 3]);
   table('Pitch distribution / net area', [124, 142, 142, 140], ['Pitch', 'Area ft²', 'Squares', 'Scope'], I.pitches.map(([pitch, area]) => [rpPitch(pitch), val(area), rpNum(area / 100, 2), I.estimated ? 'Includes estimates' : I.complete ? 'Net scope' : 'Supported subtotal']), [1, 2]);
-  table('Facet orientation / downhill bearing from true north', [78, 126, 172, 172], ['Facet', 'Pitch', 'Azimuth', 'Facing'], I.directions.map((D) => [D.id, rpPitch(D.pitch), D.azimuth == null ? '' : rpNum(D.azimuth, 1) + '°', D.facing]), [1, 2]);
+  table('Facet orientation / downhill bearing from true north (fitted or modelled plane, not a field compass reading)', [78, 126, 172, 172], ['Facet', 'Pitch', 'Azimuth', 'Facing'], I.directions.map((D) => [D.id, rpPitch(D.pitch), D.azimuth == null ? '' : rpNum(D.azimuth, 1) + '°', D.facing]), [1, 2]);
   table('Waste scenarios / separate from net measurements', [78, 160, 155, 155], ['Waste', 'Scenario', 'Area with waste ft²', 'Squares with waste'], I.waste.map((W) => [W.percent + '%', [W.selected ? 'Selected' : '', W.recommended ? 'Recommended' : '', M.review ? 'On hold' : M.kind === 'illustrative' ? 'Illustrative' : 'Allowance'].filter(Boolean).join(' / '), val(W.area), val(W.squares)]), [0, 2, 3]);
-  room(35); rpText(doc, (I.estimated ? 'Area subtotals include inferred estimates; see keyed facet schedule. ' : '') + 'Unknown values stay blank. Unspecified-pitch area is projected, not a supported sloped area. Two-story and two-layer values follow recorded facet flags. Waste scenarios are allowances, never net measurements.' + (M.review ? ' Order-ready quantities withheld until evidence review closes.' : ''), RP.L, y, { size: 8, maxWidth: 548 });
+  y -= 6; room(26); rpText(doc, (I.estimated ? 'Area subtotals include inferred estimates; see keyed facet schedule. ' : '') + 'Unknown values stay blank. Unspecified-pitch area is projected, not a supported sloped area. Two-story and two-layer values follow recorded facet flags. Waste scenarios are allowances, never net measurements.' + (M.review ? ' Order-ready quantities withheld until evidence review closes.' : ''), RP.L, y, { size: 8, maxWidth: 548 });
   return 1 + added;
 }
 

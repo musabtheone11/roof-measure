@@ -67,6 +67,7 @@ jobs:
           node layer-cache-test.mjs
           node map-label-test.mjs
           node trace-evidence-test.mjs
+          node bump-regression-test.mjs
         working-directory: bench
       - name: Server-side AI geometry and orchestration contracts
         run: |
