@@ -63,7 +63,7 @@ function rpModel() {
   // buildings: the main house and each detached building, never merged silently
   const names = (src && src.buildingNames) || {};
   const structs = t.structures.map((g) => { const b = g.byType, zs = zones.filter((z) => z.group === g.index); const fs = facets.filter((F) => F.structure === g.index && !F.f.excluded);
-    return { index: g.index, name: names[g.index] || (g.index === 1 ? 'Main house' : `Detached building ${g.index - 1}`), short: (() => { const nm = names[g.index] ? names[g.index].replace(/^(Main|Detached)\s+/i, '') : (g.index === 1 ? 'House' : `Bldg ${g.index}`); return nm.charAt(0).toUpperCase() + nm.slice(1); })(), facets: g.facetCount,
+    return { index: g.index, name: names[g.index] || (g.index === 1 ? 'Main house' : t.structures.length > 2 ? `Detached building ${g.index - 1}` : 'Detached building'), short: (() => { const nm = names[g.index] ? names[g.index].replace(/^(Main|Detached)\s+/i, '') : (g.index === 1 ? 'House' : `Bldg ${g.index}`); return nm.charAt(0).toUpperCase() + nm.slice(1); })(), facets: g.facetCount,
       sloped: g.sloped, confirmed: g.areaByStatus.measured, estimate: g.areaByStatus.inferred, unresolved: g.areaByStatus.unresolved, unresolvedFacets: fs.filter((F) => F.status === 'unresolved').length, zones: zs.length, zoneUpper: zs.reduce((a, z) => a + (z.upperSqft || 0), 0),
       predominant: g.predominant, eave: b.eave.true, rake: b.rake.true, ridge: b.ridge.true, hip: b.hip.true, valley: b.valley.true, step: b.step.true, wall: b.wall.true, transition: b.transition.true, flashing: b.step.true + b.wall.true }; });
   const kind = src ? (src.kind === 'illustrative' ? 'illustrative' : 'source') : 'measured';
@@ -77,14 +77,6 @@ function rpModel() {
   M.keys = rpKeys(M); return M;
 }
 // a descriptive sheet title from the geometry (the handoff examples carry their own)
-function rpTitle(M) {
-  if (M.src && M.src.title) return M.src.title;
-  const b = M.t.byType; if (M.zones.length || M.area.unresolvedTraced > 0.5) return 'Roof with unresolved sections';
-  if (b.valley.true > 10) return 'Intersecting roof planes';
-  if ((M.t.predominant || 0) <= 2) return 'Low-slope roof';
-  return b.hip.true > b.rake.true ? 'Residential hip roof' : 'Residential gable roof';
-}
-
 // ------------------------------------------------------------------ drawing primitives (gray levels 0 = black, 1 = white)
 function rpDoc() {
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait', compress: true });
@@ -159,7 +151,7 @@ function rpRotText(doc, s, x, y, deg, size, color, bold) {
   doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); rpColor(doc, 'text', color);
   const w = doc.getTextWidth(s), a = deg * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a), up = size * 0.34;
   doc.text(s, x - ca * w / 2 + sa * up, y + sa * w / 2 + ca * up, { angle: deg });
-  if (doc.__rpText) { let pg = 1; try { pg = doc.internal.getCurrentPageInfo().pageNumber; } catch (_) { /* older jsPDF */ } const q = [[-w / 2, -size * 0.5], [w / 2, -size * 0.5], [w / 2, size * 0.5], [-w / 2, size * 0.5]].map(([u, v]) => [x + u * ca + v * sa, y - u * sa + v * ca]); doc.__rpText.push({ pg, s, x0: Math.min(...q.map((p) => p[0])), y0: Math.min(...q.map((p) => p[1])), x1: Math.max(...q.map((p) => p[0])), y1: Math.max(...q.map((p) => p[1])) }); }
+  if (doc.__rpText) { let pg = 1; try { pg = doc.internal.getCurrentPageInfo().pageNumber; } catch (_) { /* older jsPDF */ } const q = [[-w / 2, -size * 0.5], [w / 2, -size * 0.5], [w / 2, size * 0.5], [-w / 2, size * 0.5]].map(([u, v]) => [x + u * ca + v * sa, y - u * sa + v * ca]); doc.__rpText.push({ pg, s, q, x0: Math.min(...q.map((p) => p[0])), y0: Math.min(...q.map((p) => p[1])), x1: Math.max(...q.map((p) => p[0])), y1: Math.max(...q.map((p) => p[1])) }); }
   return w;
 }
 const rpInside = (p, r) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) if ((r[i][1] > p[1]) !== (r[j][1] > p[1]) && p[0] < (r[j][0] - r[i][0]) * (p[1] - r[i][1]) / (r[j][1] - r[i][1]) + r[i][0]) c = !c; return c; };
@@ -258,57 +250,6 @@ function rpChooseRotation(M, box) {
 
 // ------------------------------------------------------------------ the plan drawing (facets, zones, lines, keys, dimensions)
 function rpFacetFill(M, F, i) { if (F.status === 'inferred') return 0.965; return RP.FACET[i % RP.FACET.length]; }
-function rpDrawPlan(doc, M, V, o = {}) {
-  const P = V.P; const k = o.k || 1; const inWin = (p) => !V.ftBox || (p[0] >= V.box.x + 4 && p[0] <= V.box.x + V.box.w - 4 && p[1] >= V.box.y + 4 && p[1] <= V.box.y + V.box.h - 4);
-  if (V.ftBox) rpClip(doc, V.box.x, V.box.y, V.box.w, V.box.h);
-  // facets: gray planes; an unresolved facet is hatched (its area is not supported); a cut-out is white with a dotted edge
-  M.facets.forEach((F, i) => { const pts = F.xy.map(P);
-    if (F.f.excluded) { rpPolyG(doc, pts, 1, 0.5, 0.5, [1.5, 1.5]); return; }
-    if (F.status === 'unresolved') { rpPolyG(doc, pts, 0.985, null); rpHatch(doc, pts, 5.5 * k, 0.5, 0.35); return; }
-    rpPolyG(doc, pts, rpFacetFill(M, F, i), null); });
-  // review / hidden zones: hatched envelopes, in no total
-  for (const Z of M.zones) rpHatch(doc, Z.xy.map(P), 5.5 * k, 0.48, 0.37);
-  // facet outlines (thin), with a real gap where the visible roof stops at an obstruction boundary
-  rpColor(doc, 'draw', GR(0.55)); doc.setLineWidth(0.4 * k); doc.setLineDashPattern([], 0);
-  for (const F of M.facets) if (!F.f.excluded) rpRingGap(doc, F.xy, M.obLines, P);
-  // lines, each in the style of its type and status; the lower line of a height break is offset a hair so both show
-  for (const L of M.lines) { rpLineStyle(doc, L.type, L.status, k); let pts = L.xy.map(P);
-    if (L.e.paired === 'lower' && pts.length >= 2) { const dx = pts[pts.length - 1][0] - pts[0][0], dy = pts[pts.length - 1][1] - pts[0][1], l = Math.hypot(dx, dy) || 1; pts = pts.map((p) => [p[0] - dy / l * 1.8, p[1] + dx / l * 1.8]); }
-    rpPolyline(doc, pts); }
-  doc.setLineDashPattern([], 0);
-  // labels: facet IDs (solid tags) first, then one key tag per line (or per source reference), then zone tags
-  const placed = (o.reserve || []).map((b) => ({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 })); const hit = (b) => placed.some((q) => !(b.x1 + 1 < q.x0 || b.x0 - 1 > q.x1 || b.y1 + 1 < q.y0 || b.y0 - 1 > q.y1)); const fits = (b) => inWin([b.x0, b.y0]) && inWin([b.x1, b.y1]);
-  const tagBox = (x, y, s, size) => { const w = rpWidth(doc, s, size, true) + 7; return { x0: x - w / 2, y0: y - 6.6, x1: x + w / 2, y1: y + 5.4 }; };
-  for (const F of M.facets) { if (F.f.excluded) continue; const lp = rpLabelPoint(F.xy); const c = P(lp.p); if (!inWin(c)) continue; const b = tagBox(c[0], c[1], F.id, 8.1); if (hit(b)) continue; rpTag(doc, c[0], c[1], F.id, 8.1, true); placed.push(b); }
-  // review-zone tags next: inside the hatched envelope, sliding off the label point when a facet tag already sits there
-  for (const Z of M.zones) { const xs = Z.xy.map((p) => p[0]), ys = Z.xy.map((p) => p[1]); const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    const cands = [rpLabelPoint(Z.xy).p]; for (const fy of [0.5, 0.3, 0.7, 0.15, 0.85]) for (const fx of [0.5, 0.3, 0.7, 0.15, 0.85]) cands.push([x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy]);
-    for (const q of cands) { if (!rpInside(q, Z.xy)) continue; const c = P(q); const b = tagBox(c[0], c[1], Z.id, 8.7); if (!fits(b) || hit(b)) continue; rpTag(doc, c[0], c[1], Z.id, 8.7); placed.push(b); break; } }
-  // overall dimensions before the keys, so the keys move out of their way (dimension lines have one place to be)
-  const dims = o.dims ? rpDrawDims(doc, M, V, placed) : 0;
-  const missed = [], outside = [], placedKeys = [];
-  // one tag per source reference (D1 ...) when the job carries them, else per line key
-  const refMode = M.lines.some((L) => L.ref); const groups = new Map(); for (const L of M.lines) { if (refMode && !L.ref) continue; const g = L.ref || L.tag || L.key; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(L); }
-  const order = [...groups.entries()].sort((a, b) => b[1].reduce((s, L) => s + L.m.planFt, 0) - a[1].reduce((s, L) => s + L.m.planFt, 0));
-  for (const [label, Ls] of order) {
-    // the longest straight piece of the group carries the tag
-    let bi = null, bl = -1; for (const L of Ls) for (let i = 1; i < L.xy.length; i++) { const d = Math.hypot(L.xy[i][0] - L.xy[i - 1][0], L.xy[i][1] - L.xy[i - 1][1]); if (d > bl) { bl = d; bi = [L.xy[i - 1], L.xy[i]]; } }
-    if (!bi) continue; const a = P(bi[0]), b = P(bi[1]); const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len], n = [-u[1], u[0]]; const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-    if (!inWin([mx, my])) { outside.push(label); continue; }
-    if (o.noKeys) { missed.push(label); continue; }   // overview plan of a dense roof: keys live on the detail sheets
-    const size = label.length > 2 ? 7.5 : 7.25; let done = false;
-    // on the line first, then beside it, then further out on a leader (detail sheets allow longer leaders)
-    const cands = [[0, 0], [0, 0.3], [0, -0.3]]; for (const d of (V.ftBox ? [9, 15, 21, 27, 33, 39, 45, 51, 57, 63] : [9, 15, 21, 27, 33])) for (const sh of [0, 0.28, -0.28, 0.45, -0.45]) cands.push([d, sh], [-d, sh]);
-    for (const [d, sh] of cands) {
-      const x = mx + n[0] * d + u[0] * sh * len, y = my + n[1] * d + u[1] * sh * len; const bx = tagBox(x, y, label, size); if (!fits(bx) || hit(bx)) continue;
-      if (Math.abs(d) > 9.5) rpLn(doc, [mx + u[0] * sh * len, my + u[1] * sh * len], [x, y], 0.42, 0.44);
-      rpTag(doc, x, y, label, size); placed.push(bx); placedKeys.push(label); done = true; break; }
-    if (!done) missed.push(label);
-  }
-  if (V.ftBox) rpUnclip(doc);
-  return { missed, outside, placed, placedKeys, keys: groups.size, dims };
-}
-// facet outline with a gap wherever it runs along an obstruction boundary
 function rpRingGap(doc, ring, obLines, P) {
   const onOb = (p) => obLines.some((L) => { for (let i = 1; i < L.xy.length; i++) if (RM.pointSeg(p, L.xy[i - 1], L.xy[i]) < 0.9) return true; return false; });
   let run = []; const flush = () => { if (run.length > 1) rpPolyline(doc, run.map(P)); run = []; };
@@ -318,44 +259,6 @@ function rpRingGap(doc, ring, obLines, P) {
   flush();
 }
 // overall dimensions for a simple roof: each outline run of 10 ft or more gets a dimension line outside the roof
-function rpDrawDims(doc, M, V, placed) {
-  let count = 0; const done = new Set(); const axis = {};   // per structure: has a horizontal / vertical dimension yet
-  const inside = (b) => !V.limit || (b.x0 >= V.limit.x0 && b.x1 <= V.limit.x1 && b.y0 >= V.limit.y0 && b.y1 <= V.limit.y1);
-  const tryDim = (a, b, side, ft, structure, dk) => {
-    if (dk && done.has(dk)) return false; const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1; const n = [-dy / len, dx / len], w = [dx / len, dy / len];
-    // the label runs along the line, so its footprint is long along the line and shallow across it
-    const txt = rpDimTxt(ft); const hw = rpWidth(doc, txt, 8.7, true) / 2 + 3, hh = 5.5;
-    const off = 17 * side; const mid = [(a[0] + b[0]) / 2 + n[0] * off, (a[1] + b[1]) / 2 + n[1] * off]; const ex = Math.abs(w[0]) * hw + Math.abs(n[0]) * hh, ey = Math.abs(w[1]) * hw + Math.abs(n[1]) * hh;
-    const bx = { x0: mid[0] - ex, y0: mid[1] - ey, x1: mid[0] + ex, y1: mid[1] + ey };
-    // the strip between the roof edge and the dimension line is kept clear of key tags too
-    const sg = Math.sign(off), corners = [a, b, [a[0] + n[0] * (off + 3 * sg), a[1] + n[1] * (off + 3 * sg)], [b[0] + n[0] * (off + 3 * sg), b[1] + n[1] * (off + 3 * sg)]];
-    const strip = { x0: Math.min(...corners.map((p) => p[0])), y0: Math.min(...corners.map((p) => p[1])), x1: Math.max(...corners.map((p) => p[0])), y1: Math.max(...corners.map((p) => p[1])) };
-    if (!inside(bx) || !inside(strip)) return false;
-    if (placed.some((q) => !(bx.x1 < q.x0 || bx.x0 > q.x1 || bx.y1 < q.y0 || bx.y0 > q.y1))) return false;
-    rpDim(doc, a, b, off, txt); placed.push(bx, strip); if (dk) done.add(dk); count++;
-    (axis[structure] = axis[structure] || {})[Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v'] = true; return true;
-  };
-  // outline runs of 10 ft or more on a simple roof (a busy plan carries its lengths in the keyed schedule)
-  if (M.lines.length <= 16) {
-    const outline = M.lines.filter((L) => ['eave', 'rake'].includes(L.type) && !L.e.paired && L.status === 'measured' && L.m.planFt >= 10);
-    for (const L of outline) { const dk = [L.structure, Math.round(L.m.planFt * 10), Math.round(Math.abs(Math.atan2(L.xy[L.xy.length - 1][1] - L.xy[0][1], L.xy[L.xy.length - 1][0] - L.xy[0][0]) * 180 / Math.PI) % 180)].join('|'); if (done.has(dk)) continue; const a = V.P(L.xy[0]), b = V.P(L.xy[L.xy.length - 1]); const F = M.facets.find((q) => L.facets.includes(q.id)); if (!F) continue;
-      const c = V.P(rpLabelPoint(F.xy).p); const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1; const n = [-dy / len, dx / len]; const side = (c[0] - a[0]) * n[0] + (c[1] - a[1]) * n[1] > 0 ? -1 : 1;   // away from the facet
-      tryDim(a, b, side, L.m.planFt, L.structure, dk); }
-  }
-  // overall width and depth of each building whose outline is axis-aligned in this view and whose facets were all measured
-  // (a sketch from a source document keeps that document's references; an estimated or unresolved plane gets no overall figure)
-  if (!(M.src && M.src.kind === 'source')) for (const S of M.structs) {
-    const Fs = M.facets.filter((F) => F.structure === S.index && !F.f.excluded); if (!Fs.length || Fs.some((F) => F.status !== 'measured')) continue;
-    const pts = Fs.flatMap((F) => F.xy.map(V.P)); const x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0])), y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
-    let best = null; for (const L of M.lines) { if (L.structure !== S.index || !['eave', 'rake', 'ridge'].includes(L.type)) continue; const a = V.P(L.xy[0]), b = V.P(L.xy[L.xy.length - 1]); const len = Math.hypot(b[0] - a[0], b[1] - a[1]); if (!best || len > best.len) best = { len, ang: Math.abs(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI) % 180 }; }
-    if (!best || !(best.ang < 3 || best.ang > 177 || Math.abs(best.ang - 90) < 3)) continue;
-    const ax = axis[S.index] || {}; const wFt = (x1 - x0) / V.k, dFt = (y1 - y0) / V.k;
-    if (!ax.h && wFt >= 6 && !tryDim([x0, y1], [x1, y1], 1, wFt, S.index, null)) tryDim([x1, y0], [x0, y0], 1, wFt, S.index, null);
-    if (!ax.v && dFt >= 6 && !tryDim([x1, y1], [x1, y0], 1, dFt, S.index, null)) tryDim([x0, y0], [x0, y1], 1, dFt, S.index, null);
-  }
-  return count;
-}
-
 // ------------------------------------------------------------------ the axonometric sketch
 // Faces are 3D polygons in feet (x east, y north, z up). Heights come from the fitted roof planes of the height model
 // (walls drawn to the ground), from the pitch and down-slope direction of each facet (relative heights, no walls, labelled
@@ -445,316 +348,25 @@ function rpIsCutEdge(M, F, p, q) {
   return M.facets.some((G) => G !== F && !G.f.excluded && G.status === 'unresolved' && near(G.xy)) || M.obLines.some((L) => { for (let i = 1; i < L.xy.length; i++) if (RM.pointSeg(m, L.xy[i - 1], L.xy[i]) < 0.9) return true; return false; });
 }
 // a small plan key (outlines only) for the hero panel when there is no aerial
-function rpPlanKey(doc, M, box) {
-  const V = rpView(M, box, { padFt: 2 }); for (const F of M.facets) if (!F.f.excluded) rpPolyG(doc, F.xy.map(V.P), F.status === 'unresolved' ? 0.97 : 0.95, 0.22, 0.8);
-  for (const L of M.lines) if (['ridge', 'hip', 'valley'].includes(L.type)) { rpLineStyle(doc, L.type, L.status, 0.9); rpPolyline(doc, L.xy.map(V.P)); } doc.setLineDashPattern([], 0);
-}
-
-// ------------------------------------------------------------------ sheet frame
-function rpHeader(doc, M, sheet, title, eyebrow, n, total) {
-  rpLogo(doc, RP.L, 21, 92, 45); rpLn(doc, [137, 24], [137, 64], 0.65, 0.65);
-  rpCap(doc, 'Roof Measure', 149, 31, 7.8); rpText(doc, M.line1, 149, 48, { size: 14, bold: true }); rpText(doc, M.line2, 149, 62, { size: 9, color: RP.MUTE });
-  const dark = M.statusLabel === 'REVIEW REQUIRED'; const sw = rpWidth(doc, M.statusLabel, 8.2, true) + 16;
-  rpRect(doc, RP.R - sw, 25, sw, 18, dark ? 0.13 : 0.93, dark ? 0.13 : 0.43, 0.6); rpText(doc, M.statusLabel, RP.R - sw / 2, 37.4, { size: 8.2, bold: true, color: dark ? GR(1) : GR(0.13), align: 'center' });
-  rpText(doc, 'Imagery  /  ' + M.imagery.label, RP.R, 59, { size: 8.4, color: GR(0.3), align: 'right' });
-  rpRule(doc, 77); rpCap(doc, eyebrow, RP.L, 98, 8.4); rpText(doc, title, RP.L, 129, { size: 26, bold: true });
-  rpLn(doc, [RP.L, RP.FOOT], [RP.R, RP.FOOT], 0.65, 0.29); rpCap(doc, 'Diversity Contracting  /  Roof Measure', RP.L, 766, 7.6);
-  rpText(doc, `${sheet}     /     ${n} of ${total}`, RP.R, 766, { size: 8.2, bold: true, color: GR(0.24), align: 'right' });
-}
-const rpBand = (doc, y, items) => { rpRect(doc, RP.L, y, 548, 60, 0.943); let x = RP.L; items.forEach(([w, title, val, note], i) => { if (i) rpLn(doc, [x, y + 10], [x, y + 50], 0.5, 0.7); rpCap(doc, title, x + 11, y + 15, 7.7); rpText(doc, val, x + 11, y + 36, { size: 17.7, bold: true }); rpText(doc, note, x + 11, y + 51, { size: 8.4, color: GR(0.3) }); x += w; }); return y + 60; };
-const rpTitleBar = (doc, y, t, right) => { rpText(doc, t, RP.L, y, { size: 14, bold: true }); if (right) rpText(doc, right, RP.R, y, { size: 8.5, color: GR(0.32), align: 'right' }); };
-const rpFootnote = (doc, y, title, body) => { rpCap(doc, title, RP.L, y, 7.7); return rpText(doc, body, RP.L, y + 14, { size: 8.8, color: GR(0.23), maxWidth: 548, lh: 1.36 }); };
-
-// ------------------------------------------------------------------ sheet 1: roof overview & takeoff
-function rpSheetOverview(doc, M, hero, n, total) {
-  rpHeader(doc, M, 'Overview & takeoff', rpTitle(M), 'Roof overview & takeoff', n, total);
-  const t = M.t, R = M.area, src = M.src, est = src && src.estimate;
-  // hero: the sketch (left) and the aerial or plan key (right)
-  rpRect(doc, RP.L, 145, 548, 225, 0.982, 0.72); rpLn(doc, [410, 158], [410, 357], 0.55, 0.72);
-  const AX = rpAxonModel(M);
-  if (AX) { rpCap(doc, AX.caption, 44, 162, 7.8); rpDrawAxon(doc, M, AX, { x: 52, y: 178, w: 340, h: 146 });
-    // the two note lines flow: a wrapped first line pushes the second down, both stay inside the hero box
-    const l0 = doc.splitTextToSize(AX.note[0], 352).length, l1 = doc.splitTextToSize(AX.note[1], 352).length; const ny = Math.min(343, 366 - (l0 - 1) * 11.6 - (l1 - 1) * 11 - 14);
-    const ny1 = rpText(doc, AX.note[0], 44, ny, { size: 8.9, bold: true, maxWidth: 352, lh: 1.3 }); rpText(doc, AX.note[1], 44, ny1 + 2.4, { size: 8.5, color: GR(0.32), maxWidth: 352, lh: 1.3 }); }
-  else { rpCap(doc, 'Roof plan  /  no elevations', 44, 162, 7.8); rpPlanKey(doc, M, { x: 60, y: 178, w: 320, h: 150 }); rpText(doc, 'No plane heights are available for a sketch.', 44, 343, { size: 8.9, bold: true }); rpText(doc, 'The to-scale plan is on sheet 2.', 44, 357, { size: 8.5, color: GR(0.32) }); }
-  if (hero) { rpCap(doc, 'Property aerial', 422, 162); const k = Math.min(149 / hero.w, 136 / hero.h), w = hero.w * k, h = hero.h * k; doc.addImage(hero.src, 'JPEG', 421 + (149 - w) / 2, 176 + (136 - h) / 2, w, h, 'heroAerial', 'FAST');
-    rpText(doc, hero.caption, 422, 327, { size: 8, bold: true, maxWidth: 152 }); if (hero.credit) rpText(doc, hero.credit, 422, 340, { size: 7.8, color: GR(0.36), maxWidth: 152, lh: 1.35 }); }
-  else { rpCap(doc, 'Roofline key', 422, 162); rpPlanKey(doc, M, { x: 426, y: 182, w: 140, h: 122 }); rpText(doc, M.structs.length > 1 ? M.structs[0].name + ' + ' + M.structs.slice(1).map((q) => q.name.toLowerCase()).join(' + ') : M.structs[0].name, 427, 328, { size: 8.5, bold: true, maxWidth: 150 }); rpText(doc, 'Same model as sheet 2', 427, 343, { size: 8.1, color: GR(0.35) }); }
-  // the band: what the area is based on
-  const sq = (v) => rpNum(v / 100, 2) + ' SQ'; const net = t.sloped; let y = 381;
-  if (est) { const bal = est.netSqft - R.confirmed;
-    y = rpBand(doc, y, [[190, 'Sketch-verified subtotal', rpNum(R.confirmed, 2) + ' ft²', (M.facets.filter((F) => F.status === 'measured' && !F.f.excluded).map((F) => F.id).join(', ') || 'none') + ' only · ' + sq(R.confirmed)], [185, est.label || 'Reported net estimate', rpNum(est.netSqft, 2) + ' ft²', (est.scope || 'Whole main roof') + ' · ' + sq(est.netSqft)], [173, 'Balance to review', rpNum(bal, 2) + ' ft²', 'Estimate less verified subtotal']]); }
-  else if (M.kind === 'source' && src.totals && src.totals.netSqft != null) { const T0 = src.totals;
-    y = rpBand(doc, y, [[196, 'Reported net sloped area', rpNum(T0.netSqft) + ' ft²', T0.areaNote || ('Main roof · ' + (src.document || 'source'))], [148, 'Net squares', sq(T0.netSqft), 'Calculated from ' + rpNum(T0.netSqft) + ' ft²'], [204, 'Predominant pitch', rpPitch(T0.pitch != null ? T0.pitch : t.predominant), `${T0.facets || t.facetCount} reported facets`]]); }
-  else if (!R.fullKnown || R.estimate > 0.5) {
-    y = rpBand(doc, y, [[196, 'Confirmed area', rpNum(R.confirmed, 2) + ' ft²', 'Seen and measured · ' + sq(R.confirmed)], [176, R.estimate > 0.5 ? 'Confirmed + estimate' : 'Net squares', R.estimate > 0.5 ? rpNum(net, 2) + ' ft²' : sq(net), R.estimate > 0.5 ? `+ ${rpNum(R.estimate)} ft² under canopy` + (R.ranged ? ` (range ${rpNum(R.confirmed + R.estLo)}-${rpNum(R.confirmed + R.estHi)})` : '') : '100 ft² per square'],
-      [176, 'Unresolved', R.zoneCount ? (R.zoneUnknown ? `${R.zoneCount} zone${R.zoneCount > 1 ? 's' : ''}` : `0-${rpNum(R.zoneUpper)} ft²`) : (R.unresolvedTraced > 0.5 ? 'traced, unverified' : 'none'), R.zoneCount ? (R.zoneUnknown ? 'extent not measured; in no total' : 'hidden zones, in no total') : (R.unresolvedTraced > 0.5 ? `${rpNum(R.unresolvedTraced)} ft² not supported` : 'every plane was measured')]]); }
-  else y = rpBand(doc, y, [[196, 'Net sloped area', rpNum(net, 2) + ' ft²', M.structs.length > 1 ? 'All buildings' : 'Main roof'], [148, 'Net squares', sq(net), '100 ft² per square'], [204, 'Main roof pitch', rpPitch(t.predominant), M.structs.length > 1 && M.structs[1].predominant != null ? `${M.structs[1].name} at ${rpPitch(M.structs[1].predominant)}` : (t.pitches.length > 1 ? `Facets range ${rpPitch(t.pitches[0])} to ${rpPitch(t.pitches[t.pitches.length - 1])}` : 'Predominant · all facets')]]);
-  // building takeoff
-  y += 25; const notes = [];
-  if (est) { rpTitleBar(doc, y, 'Building takeoff', (M.facets.filter((F) => F.status === 'measured' && !F.f.excluded).map((F) => F.id).join(', ') || 'Verified part') + ' is included in the estimate'); y += 10;
-    const rows = [[src.mainLabel || (M.structs[0] ? M.structs[0].name : 'Main house'), rpNum(R.confirmed, 2), rpNum(est.netSqft, 2), rpNum(est.netSqft / 100, 2), est.perimeterFt != null ? rpNum(est.perimeterFt, 2) + ' ft' : '', est.ridgeFt != null ? rpNum(est.ridgeFt, 2) + ' ft' : '']];
-    for (const S of M.structs.slice(1)) rows.push([S.name, S.confirmed > 0.5 ? rpNum(S.confirmed, 2) : '', '', '', '', '']);
-    if (M.structs.length === 1) rows.push([src.detachedLabel || 'Detached structures', '', '', '', '', '']);
-    y = rpTableD(doc, RP.L, y, [136, 91, 85, 65, 84, 87], ['Building', 'Checked ft²', 'Est. net ft²', 'Est. SQ', 'Perimeter', 'Ridge'], rows, { rowh: 21, size: 9.35, num: [1, 2, 3, 4, 5] });
-    if (src.checkedNote) notes.push([src.checkedNote, 9, 0.25]); notes.push(['Blank cells indicate quantities without a supported takeoff.' + (M.structs.length === 1 ? ' Detached scope is unconfirmed.' : ''), 8.8, 0.31]); }
-  else {
-    const T0 = M.kind === 'source' && src.totals ? src.totals : null; const li = T0 && T0.lines ? T0.lines : null; const lf = (v) => (v == null ? '' : li ? rpFtIn(v) : rpNum(v, 2));
-    rpTitleBar(doc, y, 'Building takeoff', T0 ? (src.document || 'Source report') + (src.pages ? '  /  ' + src.pages : '') : 'Roof-surface quantities  /  before waste'); y += 10;
-    const rows = M.structs.map((S) => { const one = M.structs.length === 1 && T0; const netS = one && T0.netSqft != null ? T0.netSqft : (S.unresolvedFacets && !S.confirmed && !S.estimate ? null : S.sloped);
-      return [S.name, netS == null ? '' : rpNum(netS, one ? 0 : 2), netS == null ? '' : rpNum(netS / 100, 2), rpPitch(one && T0.pitch != null ? T0.pitch : S.predominant), lf(li ? li.eave : S.eave), lf(li ? li.rake : S.rake), lf(li ? li.hip : S.hip), lf(li ? li.ridge : S.ridge)]; });
-    if (M.structs.length > 1) rows.push(['Total', rpNum(net, 2), rpNum(net / 100, 2), '', rpNum(t.byType.eave.true, 2), rpNum(t.byType.rake.true, 2), rpNum(t.byType.hip.true, 2), rpNum(t.byType.ridge.true, 2)]);
-    y = rpTableD(doc, RP.L, y, [119, 74, 54, 55, 61, 66, 55, 64], ['Building', 'Net ft²', 'SQ', T0 ? 'Pitch¹' : 'Pitch', li ? 'Eave' : 'Eave ft', li ? 'Rake' : 'Rake ft', li ? 'Hip' : 'Hip ft', li ? 'Ridge' : 'Ridge ft'], rows, { rowh: 22, size: 9.2, num: [1, 2, 3, 4, 5, 6, 7], lastBold: M.structs.length > 1 });
-    const other = li ? [['Valleys', li.valley], ['Step flashing', li.step], ['Wall flashing', li.wall], ['Transitions', li.transition]].filter(([, v]) => v != null && v > 0).map(([k, v]) => `${k}  ${rpFtIn(v)}`) : [['Valleys', t.byType.valley.true], ['Step flashing', t.byType.step.true], ['Wall flashing', t.byType.wall.true], ['Transitions', t.byType.transition.true], ['Parapet', t.byType.parapet.true]].filter(([, v]) => v > 0.05).map(([k, v]) => `${k}  ${rpNum(v, 2)} ft`);
-    if (other.length) { y += 16; rpText(doc, other.join('      '), RP.L, y, { size: 9.6, bold: true }); y += 2; }
-    if (T0) notes.push([`¹ Predominant pitch. Individual facets range from ${rpPitch(t.pitches[0])} to ${rpPitch(t.pitches[t.pitches.length - 1])}.` + (M.structs.length === 1 ? ' No detached roof is scheduled.' : ''), 8.7, 0.3]);
-    else { const vt = t.byType.valley.true; notes.push([(vt < 0.05 ? (M.structs.length > 1 ? 'Each building has 0 ft of valley. ' : 'This roof has 0 ft of valley. ') : '') + 'Totals use unrounded geometry.' + (R.estimate > 0.5 ? ` Net ft² includes ${rpNum(R.estimate)} ft² estimated under canopy (dashed on the plan).` : '') + (R.unresolvedTraced > 0.5 ? ` ${M.facets.filter((F) => F.status === 'unresolved').map((F) => F.id).join(', ')}: area not supported, left out.` : ''), 8.8, 0.32]); }
-  }
-  for (const [txt, size, g] of notes) { y += 12; y = rpText(doc, txt, RP.L, y, { size, color: GR(g), maxWidth: 548 }) - size * 0.3 - 2; }
-  // discrepancies the source carries (never silently reconciled)
-  for (const dsc of (src && src.discrepancies) || []) { y += 8; rpRect(doc, RP.L, y, 548, 37, 0.94); rpRect(doc, RP.L, y, 2, 37, 0.22); rpText(doc, dsc.title, RP.L + 10, y + 15, { size: 9.3, bold: true }); rpText(doc, dsc.text, RP.L + 10, y + 28, { size: 8.7, maxWidth: 530 }); y += 37; }
-  // The rest of the sheet shares one vertical budget: review items, the waste block and the measurement-basis footnote.
-  // A crowded sheet compresses in stages (one-line waste block, then the shorter footnote wording) before any review
-  // item is held back; a held-back item is counted on the sheet, never dropped silently.
-  const basisFull = M.kind === 'illustrative' ? ['Model basis', (src.notes && src.notes[0]) || 'All coordinates, elevation profiles and quantities are illustrative. The order assumes three equal-coverage bundles per square and rounds up once across all buildings.']
-    : M.kind === 'source' ? ['Measurement source', (src.notes && src.notes[0]) || `${src.document || 'The source report'} supplies the net area, pitches, line totals and waste scenario.`]
-    : ['Measurement basis', `Traced on ${M.imagery.source}${M.imagery.date ? ', flown ' + rpDate(M.imagery.date) : ''}${M.imagery.quality ? ' (' + String(M.imagery.quality).toLowerCase() + ' quality)' : ''}. Facet areas are plan area times the slope factor of the fitted plane; line lengths are true (sloped) lengths. Nothing is rounded before it is summed.` + (M.alt ? ` ${rpNum(M.facets.reduce((a, F) => a + (F.f.altSqft || 0), 0))} ft² under canopy was taken from ${M.alt.label} after the roof configuration check.` : '')];
-  const basisShort = M.kind === 'measured' || !M.src ? ['Measurement basis', `Traced on ${M.imagery.source}${M.imagery.date ? ' flown ' + rpDate(M.imagery.date) : ''}${M.imagery.quality ? ' (' + String(M.imagery.quality).toLowerCase() + ' quality)' : ''}. Facet area = plan area × the fitted plane's slope factor; line lengths are true (sloped) lengths; nothing is rounded before it is summed.` + (M.alt ? ` ${rpNum(M.facets.reduce((a, F) => a + (F.f.altSqft || 0), 0))} ft² under canopy came from ${M.alt.label}.` : '')] : basisFull;
-  const footHeight = (b) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); return 14 + doc.splitTextToSize(b[1], 548).length * 8.8 * 1.36; };
-  const w = state.waste != null ? +state.waste : 10; const withWaste = net * (1 + w / 100); const bundles = Math.ceil(withWaste / 100 * 3);
-  const hold = M.review && !est ? 'On hold until review items are closed' : null; const wastePending = est || (M.review && R.confirmed < 1);
-  const fields = wastePending ? null : M.kind === 'source' && src.totals && src.totals.waste != null
-    ? [[160, 'Source allowance', `${src.totals.waste}%`], [185, 'With waste · ' + (src.document || 'source'), src.totals.sqftWithWaste != null ? `${rpNum(src.totals.sqftWithWaste)} ft²  /  ${rpNum(src.totals.sqftWithWaste / 100, 1)} SQ` : `${rpNum(src.totals.netSqft * (1 + src.totals.waste / 100))} ft²`], [203, 'Order status', src.orderStatus || 'Ready to order']]
-    : [[175, (M.kind === 'illustrative' ? 'Illustrative' : 'Job') + ' allowance', `${w}%  /  ${rpNum(net * w / 100, 2)} ft²`], [188, hold ? 'Provisional area with waste' : 'Area with waste', `${rpNum(withWaste, 2)} ft²  /  ${rpNum(withWaste / 100, 2)} SQ`], [185, hold ? 'Order status' : 'Example purchase', hold ? 'On hold' : `${bundles} bundles  /  ${rpNum(bundles / 3, bundles % 3 ? 2 : 0)} SQ`]];
-  const items = rpReviewItems(M);
-  // each review row is as tall as its wrapped text (measured in the fonts it is drawn with)
-  const rowH = (it) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.2); const a = doc.splitTextToSize(it.action, 333).length; doc.setFont('helvetica', 'bold'); doc.setFontSize(9.8); const tl = doc.splitTextToSize(`${it.key}   ${it.title}`, 210).length; return Math.max(a * 9.2 * 1.25, tl * 9.8 * 1.25) + 3; };
-  const itemsH = items.length ? 44 + items.reduce((a, it) => a + rowH(it), 0) : 0;
-  const wasteFull = wastePending ? 10 : 76 + (hold ? 14 : 0), wasteLine = wastePending ? 10 : 30; const gap = 18;
-  let compact = false, basis = basisFull, footH = footHeight(basisFull);
-  if (itemsH + wasteFull + gap + footH > RP.FOOT - 8 - y) { compact = !wastePending; if (itemsH + wasteLine + gap + footH > RP.FOOT - 8 - y) { basis = basisShort; footH = footHeight(basis); } }
-  const wasteH = compact ? wasteLine : wasteFull; const limitY = RP.FOOT - 8 - footH - gap - wasteH;
-  if (items.length) { y += 10; rpRule(doc, y); y += 18; rpTitleBar(doc, y, 'Items for field review'); y += 16;
-    let shown = 0; for (const it of items) { const h = rowH(it); const last = shown === items.length - 1; if (y + h - 3 > limitY - (last ? 0 : 12)) break; rpText(doc, `${it.key}   ${it.title}`, RP.L, y, { size: 9.8, bold: true, maxWidth: 210, lh: 1.25 }); rpText(doc, it.action, RP.L + 215, y, { size: 9.2, maxWidth: 333, lh: 1.25 }); y += h; shown++; }
-    if (shown < items.length) { rpText(doc, `+ ${items.length - shown} more review item${items.length - shown > 1 ? 's' : ''}: hatched or dashed on the plan and listed in the app's review panel.`, RP.L, y, { size: 8.5, color: GR(0.32), maxWidth: 548 }); y += 12; } }
-  // waste & order quantities, separate from the net area
-  if (wastePending) { y += 4; rpText(doc, 'Waste allowance   Pending', RP.L, y, { size: 9.4, bold: true }); rpText(doc, 'Order quantity   On hold', RP.L + 225, y, { size: 9.4, bold: true }); y += 6; }
-  else if (compact) { y += 12; rpRule(doc, y); y += 18; const short = [['Allowance', fields[0][2]], ['With waste', fields[1][2]], [hold ? 'Order' : fields[2][1], hold ? 'On hold until review items are closed' : fields[2][2]]];
-    let x = RP.L; for (const [kk, v] of short) { rpText(doc, kk, x, y, { size: 8.3, color: GR(0.35) }); x += rpWidth(doc, kk, 8.3) + 5; rpText(doc, v, x, y, { size: 9.2, bold: true }); x += rpWidth(doc, v, 9.2, true) + 18; } }
-  else { y += 14; rpRule(doc, y); rpTitleBar(doc, y + 20, 'Waste & order quantities');
-    let x = RP.L; for (const [fw, kk, v] of fields) { rpCap(doc, kk, x, y + 38, 7.6); rpText(doc, v, x, y + 54, { size: 12, bold: true }); x += fw; } y += 62;
-    if (hold) { y += 10; rpText(doc, hold + '.', RP.L, y, { size: 8.5, color: GR(0.32) }); y += 4; } }
-  // measurement basis: low on the sheet, below the content and clear of the footer
-  y = Math.min(Math.max(y + gap, 684), RP.FOOT - 8 - footH);
-  rpFootnote(doc, y, basis[0], basis[1]);
-}
-// what still needs a field check: review zones, unresolved items, verification marks, and the status reasons
 function rpReviewItems(M) {
   const out = []; const seen = new Set();
   for (const Z of M.zones) { out.push({ key: Z.id, title: Z.label || `Hidden section${Z.facetName ? ' beside ' + Z.facetName : ''}`, action: Z.action || (Z.upperSqft != null ? `Up to ${rpNum(Z.upperSqft)} ft² of roof may continue under the canopy. Measure the edge on site or on an image without the canopy.` : 'Locate the edges and confirm the extent on site.') }); seen.add(Z.id); }
   const byNote = new Map(); if (!(M.src && M.src.zones && M.src.zones.length)) for (const F of M.facets) if (F.status === 'unresolved' && !F.f.excluded) { const k = F.f.missing || F.f.note || ''; if (!byNote.has(k)) byNote.set(k, []); byNote.get(k).push(F); }
   for (const [k, Fs] of byNote) out.push({ key: Fs.map((F) => F.id).join(', '), title: Fs[0].f.label || 'Roof plane not supported', action: k || 'Measure the footprint and pitch. Confirm inclusion in scope.' });
   if (M.rv) for (const v of M.rv.verify) out.push({ key: v.label.split(' ')[0], title: 'Marked for verification', action: v.note || `Seen on ${v.source}${v.date ? ' (' + v.date + ')' : ''}; confirm the measurement on site.` });
-  for (const r of M.status.reasons) if (!['hidden', 'unresolved', 'verify', 'estimate'].includes(r.code)) out.push({ key: '•', title: r.text, action: r.needs });
+  const SHORT = { 'imagery-change': 'Newer imagery', 'imagery-quality': 'Image quality', selection: 'Building selection', geometry: 'Geometry check', reconcile: 'Sketch reconciliation', 'no-roof': 'No roof traced' };
+  for (const r of M.status.reasons) if (!['hidden', 'unresolved', 'verify', 'estimate'].includes(r.code)) out.push({ key: '•', title: SHORT[r.code] || 'Review', action: r.text + (r.needs ? ' Needed: ' + r.needs : '') });
   return out;
 }
 
-// ------------------------------------------------------------------ sheet 2: scaled measurement plan (+ detail and schedule sheets)
-// plan keys: repeated equal edges of a simple roof share one letter key (E1, H1 ...); busy roofs get one two-digit
-// number per line; a job imported from a source document keeps that document's references (D1 ...)
-function rpKeys(M) {
-  // letter keys only when the grouped schedule stays short (12 rows fit beside the facet table on the plan sheet)
-  const refMode = M.lines.some((L) => L.ref); let grouped = !refMode && M.lines.length <= 16;
-  if (grouped) { const LET = { eave: 'E', rake: 'K', ridge: 'R', hip: 'H', valley: 'V', step: 'S', wall: 'W', transition: 'T', parapet: 'P', unspecified: 'U' }; const counters = {}; const groups = new Map();
-    for (const L of M.lines) { const gk = [L.type, L.structure, L.status, L.e.paired || '', Math.round(L.m.trueFt * 100)].join('|'); if (!groups.has(gk)) { const c = (counters[L.type] || 0) + 1; counters[L.type] = c; groups.set(gk, LET[L.type] + c); } L.tag = groups.get(gk); }
-    if (groups.size > 12) grouped = false; }
-  if (!grouped) for (const L of M.lines) L.tag = L.key;
-  return { grouped, refMode };
-}
-function rpSchedules(M) {
-  // edge rows: one per source reference when the job carries them, else one per line key
-  const refs = new Map(); for (const L of M.lines) if (L.ref) { if (!refs.has(L.ref)) refs.set(L.ref, []); refs.get(L.ref).push(L); }
-  let edgeRows, edgeHead, edgeNum, edgeWidths;
-  if (refs.size) { edgeHead = ['Key', 'Reference', 'Source length', 'Current']; edgeWidths = [38, 111, 78, 63]; edgeNum = [2];
-    edgeRows = [...refs.entries()].map(([ref, Ls]) => { const st = Ls.every((L) => L.status === 'measured') ? 'Visible' : Ls.every((L) => L.status === 'inferred') ? 'Inferred' : Ls.some((L) => L.status === 'unresolved') ? 'Unresolved' : 'Partial'; const d = Ls.find((L) => L.displayedFt != null);
-      return [ref, Ls[0].e.label || EDGE_TYPES[Ls[0].type].label, d ? rpFtIn(d.displayedFt) : '', st]; });
-    for (const Z of M.zones) edgeRows.push([Z.id, Z.label || 'Review zone', '', '']); }
-  else if (M.keys.grouped) { edgeHead = ['Key', 'Edge', 'Qty', 'Each ft', 'Total ft']; edgeWidths = [40, 78, 35, 59, 64]; edgeNum = [2, 3, 4]; const seen = new Map();
-    for (const L of M.lines) { if (!seen.has(L.tag)) seen.set(L.tag, []); seen.get(L.tag).push(L); }
-    edgeRows = [...seen.entries()].map(([tag, Ls]) => { const S = M.structs.find((q) => q.index === Ls[0].structure); const name = (M.structs.length > 1 && S ? S.short + ' ' : '') + EDGE_TYPES[Ls[0].type].label.toLowerCase(); const un = Ls[0].status === 'unresolved';
-      return [tag, name.charAt(0).toUpperCase() + name.slice(1), String(Ls.length), un ? '' : rpNum(Ls[0].m.trueFt, 2), un ? '' : rpNum(Ls.reduce((a, L) => a + L.m.trueFt, 0), 2) + (Ls[0].status === 'inferred' ? ' est.' : '')]; }); }
-  else { const srcFt = M.lines.some((L) => L.displayedFt != null); edgeHead = ['Key', 'Edge', 'ft']; edgeWidths = [30, 102, 44]; edgeNum = [2];
-    edgeRows = M.lines.map((L) => [L.key, EDGE_TYPES[L.type].label, L.status === 'unresolved' ? '' : srcFt ? (L.displayedFt == null ? '' : rpNum(L.displayedFt, Number.isInteger(L.displayedFt) ? 0 : 2)) : rpNum(L.m.trueFt, 2) + (L.status === 'inferred' ? ' est.' : '')]); }
-  const bySt = (i) => M.structs.find((S) => S.index === i);
-  const facetRows = M.facets.filter((F) => !F.f.excluded).map((F) => { const S = bySt(F.structure); const rep = F.f.reportedSqft; const noArea = F.status === 'unresolved' || F.f.areaUnsupported || F.f.pitchUnknown;
-    const assigned = M.kind === 'measured' && F.m.basis !== 'fitted' && F.f.reportedPitch == null && !F.f.pitchUnknown;   // a pitch set by hand or by default, not fitted from the height model
-    return [F.id, F.f.label || (S ? S.short : ''), F.f.pitchUnknown ? '' : rpPitch(F.f.reportedPitch != null ? F.f.reportedPitch : (F.m.basis === 'fitted' ? Math.round(F.m.slope12 * 10) / 10 : F.f.pitch)) + (assigned ? '*' : ''), noArea ? '' : rep != null ? rpNum(rep, Number.isInteger(rep) ? 0 : 2) : rpNum(F.m.sloped, 2)]; });
-  const est = M.src && M.src.estimate; const facetHead = est ? ['Facet', 'Roof plane', 'Net ft²', 'Pitch¹'] : ['Facet', 'Building', 'Pitch', 'Net ft²']; if (est) for (const r of facetRows) { const p = r[2]; r[2] = r[3]; r[3] = p; }
-  if (est) { const merged = []; for (const r of facetRows) { const last = merged[merged.length - 1]; if (last && last[1] === r[1] && !r[2] && !r[3] && !last[2] && !last[3]) { last[0] = last[0].split('–')[0] + '–' + r[0].replace(/^F/, ''); last.n = (last.n || 1) + 1; } else merged.push(r); } facetRows.length = 0; facetRows.push(...merged); }
-  const facetNum = est ? [2, 3] : [2, 3];
-  return { edgeRows, edgeHead, edgeNum, edgeWidths, facetRows, facetHead, facetNum, refs: refs.size > 0, grouped: M.keys.grouped };
-}
-// how many rows rpLegendKey will draw (the panel budget needs it before anything is drawn)
-function rpLegendRows(M) { const used = ROOF_LINE_TYPES.filter((k) => M.t.byType[k] && M.t.byType[k].count); const seen = new Set(); let n = 0; for (const k of used) { const tag = k === 'wall' || k === 'step' ? 'flashing' : k; if (!seen.has(tag)) { seen.add(tag); n++; } }
-  if (M.lines.some((L) => L.status === 'inferred')) n++; if (M.lines.some((L) => L.status === 'unresolved')) n++; if (M.zones.length || M.facets.some((F) => F.status === 'unresolved')) n++; return n + 1; }
-function rpLegendKey(doc, M, x, y) {
-  const used = ROOF_LINE_TYPES.filter((k) => M.t.byType[k] && M.t.byType[k].count); const merged = []; const seen = new Set();
-  for (const k of used) { const tag = k === 'wall' || k === 'step' ? 'flashing' : k; if (seen.has(tag)) continue; seen.add(tag); merged.push([k, tag === 'flashing' ? 'Flashing' : EDGE_TYPES[k].label]); }
-  for (const [k, label] of merged) { rpLineStyle(doc, k, 'measured'); doc.line(x, y - 3, x + 23, y - 3); doc.setLineDashPattern([], 0); rpText(doc, label, x + 30, y, { size: 8.5, color: GR(0.22) }); y += 15; }
-  if (M.lines.some((L) => L.status === 'inferred')) { rpLineStyle(doc, 'eave', 'inferred'); doc.line(x, y - 3, x + 23, y - 3); doc.setLineDashPattern([], 0); rpText(doc, 'Continuation (dashed)', x + 30, y, { size: 8.5, color: GR(0.22) }); y += 15; }
-  if (M.lines.some((L) => L.status === 'unresolved')) { rpLineStyle(doc, 'eave', 'unresolved'); doc.line(x, y - 3, x + 23, y - 3); doc.setLineDashPattern([], 0); rpText(doc, 'Unresolved line', x + 30, y, { size: 8.5, color: GR(0.22) }); y += 15; }
-  if (M.zones.length || M.facets.some((F) => F.status === 'unresolved')) { rpHatch(doc, [[x, y - 8], [x + 23, y - 8], [x + 23, y + 1], [x, y + 1]], 3.5, 0.48); rpText(doc, 'Unresolved zone (hatched)', x + 30, y, { size: 8.5, color: GR(0.22) }); y += 15; }
-  rpTag(doc, x + 12, y - 3, 'F1', 8, true); rpText(doc, 'Sloped plane', x + 30, y, { size: 8.5 }); y += 15;
-  return y;
-}
-function rpSheetPlan(doc, M, S, n, total, ctx) {
-  const eyebrow = `${M.src && M.src.shortName ? M.src.shortName : M.line1}  /  ${M.kind === 'illustrative' ? 'Illustrative geometry' : M.kind === 'source' ? (M.review ? 'Evidence review' : 'Source geometry') : M.review ? 'Evidence review' : 'Measured geometry'}`;
-  rpHeader(doc, M, 'Measurement plan', 'Scaled measurement plan', eyebrow, n, total);
-  const nF = S.facetRows.length, nE = S.edgeRows.length;
-  // three layouts: simple roofs (grouped keys; north, scale and key beside the plan; edge and facet tables side by side),
-  // busy roofs (facet schedule and legend beside the plan, north and scale inside it, three schedule columns below),
-  // and reference-keyed source sketches (full-width plan, keyed dimensions and facets below). Long schedules continue.
-  const mode = S.refs ? 'refs' : S.grouped ? 'simple' : 'busy';
-  const rowh = mode === 'refs' ? 21 : mode === 'simple' ? 20 : 13.5, headH = 19, titleH = 33, footH = 56;
-  // The busy layout's right panel (facet schedule, legend, scale text, and the north arrow with the scale bar when no corner
-  // of the drawing is free) is budgeted in its fonts before anything is drawn; what does not fit moves below the plan.
-  const legendRows = mode === 'busy' ? rpLegendRows(M) : 0; const scaleLines = 3;
-  const panelNeed = (withFacets, withNorth) => (withFacets && nF ? 19 + 15 * nF + 18 : 0) + 17 + 15 * legendRows + 6 + 16 + 15 + scaleLines * 7.9 * 1.3 + 4 + (withNorth ? 62 : 0);
-  let facetsInPanel = mode === 'busy' && nF <= 12 && panelNeed(true, false) <= 368 - 41;
-  // Height budget: what the sheet needs below the plan is measured first (schedules; in the refs layout also the pitch note
-  // and the evidence paragraphs, in their fonts), and the plan gets what is left. It shrinks when the content needs the room,
-  // keeps its compact size when the schedule continues on another sheet anyway, and grows only when a taller window buys a
-  // larger architectural scale.
-  const evid = mode === 'refs' && M.src && M.src.evidence && M.src.evidence.length ? M.src.evidence : null;
-  const Hcompact = mode === 'simple' ? 314 : mode === 'refs' ? 327 : 368, Hmin = 260, Hmax = mode === 'busy' ? 368 : mode === 'refs' ? 420 : 400;
-  const padFt = mode === 'simple' ? 3 : 2; const innerFor = (h) => (mode === 'refs' ? { x: 44, y: 165, w: 524, h: h - 48 } : mode === 'busy' ? { x: 44, y: 160, w: 318, h: h - 28 } : { x: 48, y: 170, w: 318, h: h - 36 });
-  const viewFor = (h) => { const inner = innerFor(h); const rot = M.src && !M.src.rotateToAxis ? 0 : rpChooseRotation(M, inner); return { inner, rot, V: rpView(M, inner, { rotDeg: rot, padFt }) }; };
-  const stepFor = (k) => (k >= 4 ? 5 : k >= 2 ? 10 : 20);
-  // a corner of the drawing for the north arrow and scale bar: its footprint must hold no roof geometry (vertices and
-  // points along every edge); the corner is then reserved so no key tag or dimension lands on it
-  const cornerRect = (c, k, h) => { const nx = c === 'bl' || c === 'tl' ? 65 : 290, ny = c === 'bl' || c === 'br' ? 145 + h - 66 : 145 + 58; const barW = 2 * stepFor(k) * k; return { c, nx, ny, x0: nx - 16, y0: ny - 27, x1: Math.max(nx + 12, nx - 5 + barW + 16), y1: ny + 47 }; };
-  const geomPts = (V2) => { const out = []; const add = (ring, closed) => { const P = ring.map(V2.P); for (let i = 0; i < P.length - (closed ? 0 : 1); i++) { const a = P[i], b = P[(i + 1) % P.length]; const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 8)); for (let t = 0; t <= n; t++) out.push([a[0] + (b[0] - a[0]) * t / n, a[1] + (b[1] - a[1]) * t / n]); } }; for (const F of M.facets) add(F.xy, true); for (const Z of M.zones) add(Z.xy, true); for (const L of M.lines) add(L.xy, false); return out; };
-  const freeRect = (r, pts) => !pts.some((q) => q[0] > r.x0 - 3 && q[0] < r.x1 + 3 && q[1] > r.y0 - 3 && q[1] < r.y1 + 3);
-  let needRows, Hfit, H, inner, rot, V, corner = null;
-  for (let pass = 0; pass < 2; pass++) {
-    const cols = mode === 'busy' ? (facetsInPanel ? 3 : 2) : 1;
-    needRows = mode === 'simple' ? Math.max(nE, nF) : mode === 'busy' && !facetsInPanel ? Math.max(Math.ceil(nE / 2), nF) : Math.ceil(nE / cols);
-    if (mode === 'refs') { const facetSide = headH + 20 * nF + (M.src && M.src.pitchNote ? 27 + rpLines(doc, M.src.pitchNote, 235, 8.5) * 8.5 * 1.3 : 0); const edgeSide = headH + rowh * nE;
-      const below = 24 + Math.max(facetSide, edgeSide) + 20 + (evid ? 17 + evid.reduce((a, q) => a + rpLines(doc, q, 548, 8.65) * 8.65 * 1.3 + 6, 0) : 26 + 2 * 8.45 * 1.3); Hfit = RP.FOOT - 40 - 145 - titleH + 24 - below; }
-    else Hfit = RP.FOOT - footH - titleH - headH - rowh * needRows - 145;
-    H = Hfit >= Hmin ? Math.min(Hcompact, Math.floor(Hfit)) : Hcompact;
-    if (Hfit > H + 12) { const top = Math.min(Hmax, Math.floor(Hfit)); const best = viewFor(top).V.perIn; if (best < viewFor(H).V.perIn) { let h = H + 6; while (h < top && viewFor(h).V.perIn > best) h += 6; H = Math.min(top, h); } }
-    ({ inner, rot, V } = viewFor(H));
-    // room for dimension lines outside the outline (about 26 pt), taken only when it does not cost a scale step
-    if (!(M.src && M.src.kind === 'source')) { const padDim = 26 / V.k; if (padDim > padFt) { const V2 = rpView(M, inner, { rotDeg: rot, padFt: padDim }); if (V2.perIn === V.perIn) V = V2; } }
-    if (mode !== 'busy') break;
-    const pts = geomPts(V); corner = ['bl', 'br', 'tl', 'tr'].map((c) => cornerRect(c, V.k, H)).find((r) => freeRect(r, pts)) || null;
-    if (corner || !facetsInPanel || panelNeed(true, true) <= H - 41) break;
-    facetsInPanel = false;   // the panel must also hold the north arrow and scale bar: the facet schedule moves below the plan
-  }
-  const edgeCols = mode === 'busy' ? (facetsInPanel ? 3 : 2) : 1;
-  const box = { x: RP.L, y: 145, w: 548, h: H }; rpRect(doc, box.x, box.y, box.w, box.h, 0.993, 0.72);
-  rpCap(doc, (M.src && M.src.planCaption) || (M.kind === 'source' ? 'Reported roof plan' : 'Roof plan'), 44, 162);
-  // a dry run on a throwaway document decides whether the keys fit this plan; when most would collide, the overview plan
-  // carries facet IDs and dimensions only and every key goes to the detail sheets (same fonts, so the same placement)
-  V.limit = { x0: box.x + 5, y0: box.y + 24, x1: mode === 'refs' ? box.x + box.w - 5 : mode === 'busy' ? 359 : 372, y1: box.y + box.h - (mode === 'refs' ? 30 : 5) };   // dimensions stay inside the drawing area
-  const reserve = corner ? [corner] : [];
-  const dry = rpDrawPlan(rpDoc(), M, V, { dims: true, reserve }); const noKeys = dry.keys > 0 && dry.missed.length > 0.35 * dry.keys;
-  const res = rpDrawPlan(doc, M, V, { noKeys, dims: true, reserve }); res.noKeys = noKeys;
-  const step = stepFor(V.k); const rotNote = rot ? ` The plan is turned ${Math.round(Math.abs(rot))}° to the roof's long axis; the arrow is true north.` : '';
-  const barIn = (2 * step * V.k / 72).toFixed(2).replace(/\.?0+$/, '');
-  // layout self-check, reported to the caller: the longest straight measured piece must draw at exactly k points per foot
-  let chk = null; for (const L of M.lines) for (let i = 1; i < L.xy.length; i++) { const ft = Math.hypot(L.xy[i][0] - L.xy[i - 1][0], L.xy[i][1] - L.xy[i - 1][1]); if (!chk || ft > chk.segmentFt) { const a = V.P(L.xy[i - 1]), b = V.P(L.xy[i]); chk = { key: L.tag || L.key, segmentFt: ft, segmentPt: Math.hypot(b[0] - a[0], b[1] - a[1]) }; } }
-  if (chk) { chk.expectedPt = chk.segmentFt * V.k; chk.ok = Math.abs(chk.segmentPt - chk.expectedPt) < 1e-6 * Math.max(1, chk.expectedPt); }
-  ctx.layout = { scale: V.label, perIn: V.perIn, ptPerFt: V.k, rotationDeg: rot, bar: { ft: 2 * step, pt: 2 * step * V.k, inches: +barIn }, dims: res.dims, keysOnOverview: !noKeys, keys: { total: res.keys, placed: res.placedKeys.slice(), missed: res.missed.slice() }, scaleCheck: chk };
-  if (mode === 'simple') {
-    rpLn(doc, [380, 158], [380, box.y + box.h - 12], 0.5, 0.72); let py = 206; rpNorth(doc, 408, py, rot); rpBar(doc, 444, py - 9, V.k, step); py += 26;
-    rpCap(doc, 'Drawing scale', 393, py); py += 16; rpText(doc, V.label, 393, py, { size: 12, bold: true }); py += 17; py = rpText(doc, 'Print at 100% on US Letter; the scale bar measures ' + barIn + ' in.' + rotNote, 393, py, { size: 8.4, color: GR(0.32), maxWidth: 178 }) + 8;
-    rpCap(doc, 'Line & facet key', 393, py); py += 20; py = rpLegendKey(doc, M, 393, py);
-    if (py + 10 < box.y + box.h) rpText(doc, 'Repeated equal edges share one key. Counts appear below.', 393, py + 4, { size: 8.3, color: GR(0.3), maxWidth: 175 });
-  } else if (mode === 'busy') {
-    rpLn(doc, [367, 158], [367, box.y + box.h - 12], 0.5, 0.71); let py = 174;
-    if (facetsInPanel && nF) { rpCap(doc, 'Facet schedule', 379, py - 12); py = rpTableD(doc, 377, py, [40, 60, 48, 55], S.facetHead, S.facetRows, { rowh: 15, size: 8.4, headsz: 7.8, num: S.facetNum }) + 18; }
-    rpCap(doc, 'Plan legend', 379, py); py += 17; py = rpLegendKey(doc, M, 379, py) + 6;
-    rpCap(doc, M.src && M.src.scaleNote ? 'Approximate scale' : 'Drawing scale', 379, py); py += 16; rpText(doc, V.label + ' at 100%', 379, py, { size: 10, bold: true }); py += 15;
-    py = rpText(doc, (M.src && M.src.scaleNote ? M.src.scaleNote + ' ' : 'Print at 100% on US Letter. ') + 'Scale bar ' + barIn + ' in.' + rotNote, 379, py, { size: 7.9, color: GR(0.3), maxWidth: 190 });
-    // north arrow and scale bar: in the corner reserved before the keys were placed, else under the scale text in the panel
-    if (corner) { rpNorth(doc, corner.nx, corner.ny, rot); rpBar(doc, corner.nx - 5, corner.ny + 28, V.k, step); }
-    else if (py + 62 < box.y + box.h - 12) { rpNorth(doc, 395, py + 34, rot); rpBar(doc, 428, py + 25, V.k, step); }
-    else { rpNorth(doc, 290, box.y + 58, rot); rpBar(doc, 285, box.y + 86, V.k, step); }
-  } else {
-    rpNorth(doc, box.x + box.w - 44, box.y + 60, rot); rpBar(doc, box.x + box.w - 150, box.y + box.h - 74, V.k, step); rpText(doc, V.label + ' at 100%', box.x + box.w - 150 + V.k * step, box.y + box.h - 44, { size: 8.5, bold: true, color: GR(0.25), align: 'center' }); rpText(doc, 'scale bar ' + barIn + ' in', box.x + box.w - 150 + V.k * step, box.y + box.h - 32, { size: 7.8, color: GR(0.35), align: 'center' });
-    rpText(doc, 'Solid = visible edge     Dashed = documented continuation     Hatched = unresolved review zone', 44, box.y + box.h - 14, { size: 8.7, bold: true });
-  }
-  // schedules below the plan
-  let y = box.y + box.h + 24; let yEnd = y + 9; const rowsAvail = Math.max(3, Math.floor((RP.FOOT - footH - (y + 9) - headH) / rowh));
-  if (mode === 'refs') { rpTitleBar(doc, y, 'Keyed dimensions & facets', 'Blank cells await field confirmation'); y += 9;
-    yEnd = rpTableD(doc, RP.L, y, S.edgeWidths, S.edgeHead, S.edgeRows.slice(0, rowsAvail), { rowh, size: 8.9, headsz: 8, num: S.edgeNum });
-    if (nF) { const fe = rpTableD(doc, 341, y, [39, 86, 59, 55], S.facetHead, S.facetRows.slice(0, rowsAvail), { rowh: 20, size: 8.7, headsz: 8, num: S.facetNum }); yEnd = Math.max(yEnd, fe);
-      if (M.src && M.src.pitchNote) { rpCap(doc, '¹ Derived pitch', 341, fe + 14); yEnd = Math.max(yEnd, rpText(doc, M.src.pitchNote, 341, fe + 27, { size: 8.5, color: GR(0.23), maxWidth: 235 }) - 4); } }
-    if (nE > rowsAvail) ctx.spill.edges = S.edgeRows.slice(rowsAvail); if (nF > rowsAvail) ctx.spill.facets = S.facetRows.slice(rowsAvail); }
-  else if (mode === 'simple') { rpTitleBar(doc, y, 'Edge lengths'); rpText(doc, 'Facet areas & pitches', 337, y, { size: 14, bold: true }); y += 9;
-    yEnd = rpTableD(doc, RP.L, y, S.edgeWidths, S.edgeHead, S.edgeRows.slice(0, rowsAvail), { rowh, size: 8.9, headsz: 8, num: S.edgeNum });
-    yEnd = Math.max(yEnd, rpTableD(doc, 330, y, [40, 65, 62, 83], S.facetHead, S.facetRows.slice(0, rowsAvail), { rowh, size: 8.9, headsz: 8, num: S.facetNum }));
-    if (nE > rowsAvail) ctx.spill.edges = S.edgeRows.slice(rowsAvail); if (nF > rowsAvail) ctx.spill.facets = S.facetRows.slice(rowsAvail); }
-  else { const edgeW = facetsInPanel ? 548 : 360; rpTitleBar(doc, y, 'Edge schedule', facetsInPanel ? 'Numbers on plan match keys below  /  ' + (M.lines.some((L) => L.displayedFt != null) ? 'displayed feet' : 'true length, feet') : null); if (!facetsInPanel) rpText(doc, 'Facet areas & pitches', RP.L + edgeW + 14, y, { size: 14, bold: true }); y += 9;
-    const cw = 176, stride = (edgeW - cw * edgeCols) / (edgeCols - 1) + cw; const first = S.edgeRows.slice(0, rowsAvail * edgeCols);
-    for (let c = 0; c < edgeCols; c++) { const chunk = first.slice(c * rowsAvail, (c + 1) * rowsAvail); if (!chunk.length) break; yEnd = Math.max(yEnd, rpTableD(doc, RP.L + c * stride, y, [30, 102, 44], S.edgeHead, chunk, { rowh, size: 8.4, headsz: 8, num: S.edgeNum })); }
-    if (!facetsInPanel) { const frows = S.facetRows.slice(0, rowsAvail); yEnd = Math.max(yEnd, rpTableD(doc, RP.L + edgeW + 14, y, [34, 56, 44, 40], S.facetHead, frows, { rowh, size: 8.4, headsz: 8, num: S.facetNum })); if (nF > frows.length) ctx.spill.facets = S.facetRows.slice(frows.length); }
-    if (nE > first.length) ctx.spill.edges = S.edgeRows.slice(first.length); }
-  // evidence used (source sketches carry it on this sheet), else the geometry note
-  y = yEnd + 20;
-  if (M.src && M.src.evidence && M.src.evidence.length && y < RP.FOOT - 72) { rpTitleBar(doc, y, 'Evidence used'); y += 17; let held = 0;
-    for (const ptxt of M.src.evidence) { const h = rpLines(doc, ptxt, 548, 8.65) * 8.65 * 1.3; if (y + h > RP.FOOT - 40) { held++; continue; } y = rpText(doc, ptxt, RP.L, y, { size: 8.65, color: GR(0.2), maxWidth: 548 }) + 6; }
-    if (held) rpText(doc, `+ ${held} more evidence note${held > 1 ? 's' : ''} in the job's review panel (no room on this sheet).`, RP.L, Math.min(y, RP.FOOT - 30), { size: 8.3, color: GR(0.32) }); }
-  else {
-    const note = M.kind === 'source' ? ((M.src.notes && M.src.notes[1]) || `${M.src.document || 'Source report'}. Edge entries reproduce the displayed dimensions.`)
-      : M.kind === 'illustrative' ? 'Plan dimensions are horizontal. Rakes and hips use their true sloped lengths. Facet areas include slope. Each schedule rounds for display after the model calculates its totals.'
-      : 'Plan dimensions are horizontal. Rakes, hips and valleys use their true sloped lengths from the fitted plane. Facet areas include slope. Each schedule rounds for display after the totals are calculated.' + (S.facetRows.some((r) => /\*$/.test(r[2])) ? ' * Pitch assigned by hand or by default, not fitted from the height model.' : '')
-        + (res.noKeys ? ` Edge keys are placed on the plan detail sheets${ctx.detail ? ` (${ctx.detail})` : ''}.` : res.missed.length > 8 ? ` ${res.missed.length} keys are placed on the detail sheets${ctx.detail ? ` (${ctx.detail})` : ''}.` : res.missed.length ? ` Keys ${res.missed.join(', ')} are placed on the detail sheet${res.missed.length > 1 ? 's' : ''}.` : '')
-        + (ctx.spill.edges ? ' The schedule continues on the next sheet.' : '');
-    const fy = Math.min(RP.FOOT - 30, Math.max(y + 16, 704));
-    if (M.kind === 'source') rpText(doc, note, RP.L, Math.min(fy, RP.FOOT - 30), { size: 8.45, color: GR(0.23), maxWidth: 548 });
-    else { rpCap(doc, 'Geometry check', RP.L, fy - 14); rpText(doc, note, RP.L, fy, { size: 8.45, color: GR(0.23), maxWidth: 548 }); }
-  }
-  return res;
-}
-// detail sheets: enlarged windows of the plan so every key can be placed without overlap
 function rpDetailWindows(M) {
   const [x0, y0, x1, y1] = M.box; const ov = 0.07, mx = x1 - x0, my = y1 - y0;
   if (M.lines.length > 110) return [[x0, y0 + my * (0.5 - ov), x0 + mx * (0.5 + ov), y1, 'north-west'], [x0 + mx * (0.5 - ov), y0 + my * (0.5 - ov), x1, y1, 'north-east'], [x0, y0, x0 + mx * (0.5 + ov), y0 + my * (0.5 + ov), 'south-west'], [x0 + mx * (0.5 - ov), y0, x1, y0 + my * (0.5 + ov), 'south-east']];
   return mx >= my * 0.78 ? [[x0, y0, x0 + mx * (0.5 + ov), y1, 'west half'], [x0 + mx * (0.5 - ov), y0, x1, y1, 'east half']] : [[x0, y0 + my * (0.5 - ov), x1, y1, 'north half'], [x0, y0, x1, y0 + my * (0.5 + ov), 'south half']];
 }
-function rpSheetDetail(doc, M, win, i, m, n, total, unplaced) {
-  rpHeader(doc, M, 'Plan detail', `Plan detail ${i} of ${m}`, `${M.line1}  /  ${win[4]}`, n, total);
-  const box = { x: RP.L, y: 145, w: 548, h: 540 }; rpRect(doc, box.x, box.y, box.w, box.h, 0.993, 0.72);
-  const inner = { x: 46, y: 160, w: 520, h: 470 }; const V = rpView(M, inner, { ftBox: win.slice(0, 4), padFt: 1 }); V.box = box;
-  const res = rpDrawPlan(doc, M, V);
-  rpNorth(doc, 60, box.y + box.h - 40); const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20; rpBar(doc, 96, box.y + box.h - 48, V.k, step);
-  // keys that fit on no sheet at all are named once (on the last detail sheet), so nothing is silently absent
-  const gone = unplaced && unplaced.length && i === m ? ` Not placed on any sheet (no room next to the line): ${unplaced.join(', ')}; their lengths are in the schedule.` : '';
-  const barIn = (2 * step * V.k / 72).toFixed(2).replace(/\.?0+$/, '');
-  rpText(doc, `${V.label} at 100% on US Letter (scale bar ${barIn} in). Keys match the schedule on the measurement plan sheet.` + gone, RP.L, box.y + box.h + 22, { size: 8.5, color: GR(0.23), maxWidth: 548 });
-  return res;
-}
-// continuation sheets take whatever table shape the plan sheet used (keyed, grouped or per-line), as many columns as fit
-function rpSchedCols(S) { const tw = S.edgeWidths.reduce((a, b) => a + b, 0); const cols = Math.max(1, Math.floor((548 + 10) / (tw + 10))); return { tw, cols, stride: cols > 1 ? (548 - tw * cols) / (cols - 1) + tw : 0 }; }
-function rpSheetSchedules(doc, M, S, spill, n, total) {
-  rpHeader(doc, M, 'Schedules', 'Schedules (continued)', `${M.line1}  /  ${M.kind === 'source' ? 'Source geometry' : 'Measured geometry'}`, n, total);
-  let y = 150; const rowh = 13.5; const rowsAvail = Math.floor((RP.FOOT - 40 - y - 19) / rowh);
-  const FW = [40, 90, 60, 70];
-  if (spill.edges && spill.edges.length) { const { cols, stride } = rpSchedCols(S); const willUse = Math.min(cols, Math.ceil(spill.edges.length / rowsAvail)); const beside = spill.facets && spill.facets.length && willUse < cols && RP.R - (RP.L + willUse * stride) >= 174;
-    rpTitleBar(doc, y, S.refs ? 'Keyed dimensions (continued)' : S.grouped ? 'Edge lengths (continued)' : 'Edge schedule (continued)', beside ? null : 'Keys match the plan'); y += 11; let yEnd = y; let used = 0;
-    for (let c = 0; c < cols; c++) { const chunk = spill.edges.slice(c * rowsAvail, (c + 1) * rowsAvail); if (!chunk.length) break; yEnd = Math.max(yEnd, rpTableD(doc, RP.L + c * stride, y, S.edgeWidths, S.edgeHead, chunk, { rowh, size: 8.4, headsz: 8, num: S.edgeNum })); used++; }
-    spill.edges = spill.edges.slice(cols * rowsAvail);
-    // leftover facet rows take the spare column beside the edges when one is free, else a block below
-    const fx = RP.L + used * stride; if (spill.facets && spill.facets.length && used < cols && RP.R - fx >= 174) { const fw = RP.R - fx >= 262 ? FW : [34, 56, 44, 40]; rpText(doc, RP.R - fx >= 262 ? 'Facet areas & pitches (continued)' : 'Facets (continued)', fx, y - 11, { size: 11, bold: true }); rpTableD(doc, fx, y, fw, S.facetHead, spill.facets.slice(0, rowsAvail), { rowh, size: 8.4, headsz: 8, num: S.facetNum }); spill.facets = spill.facets.slice(rowsAvail); }
-    y = yEnd + 24; }
-  if (spill.facets && spill.facets.length && y < RP.FOOT - 120) { rpTitleBar(doc, y, 'Facet areas & pitches (continued)'); y += 11; const avail = Math.floor((RP.FOOT - 40 - y - 19) / rowh); rpTableD(doc, RP.L, y, FW, S.facetHead, spill.facets.slice(0, avail), { rowh, size: 8.4, headsz: 8, num: S.facetNum }); spill.facets = spill.facets.slice(avail); }
-}
 // evidence used: what was checked, how, and what each view resolved (only when a second view, a source or a review exists)
 function rpSheetEvidence(doc, M, n, total) {
-  rpHeader(doc, M, 'Evidence', 'Evidence used', `${M.line1}  /  Views and sources checked`, n, total); let y = 150;
+  rpHeader(doc, M, 'Evidence', n, total); rpTitleBar(doc, 82, 'Evidence used', 'Views and sources checked'); let y = 92;
   const rows = [[M.imagery.source, M.imagery.label || 'not reported', M.kind === 'source' ? 'Source document' : 'Measurement', M.alt ? 'Canopy over part of the roof; that part taken from the second image' : (M.zones.length ? 'Tree canopy over part of the roof' : 'Roof clear of canopy')]];
   for (const v of M.views) rows.push([v.label, v.dateText || v.date || 'not published', v.measurable ? 'Georeferenced; can place an edge' : v.georef ? 'Georeferenced; comparison only' : 'Viewing aid', v.result || (v.used ? 'used for the hidden part' : 'compared')]);
   y = rpTableD(doc, RP.L, y, [170, 80, 140, 158], ['Source', 'Image date', 'Type', 'Result'], rows.map((r) => r.map((c) => String(c).slice(0, 60))), { rowh: 18, size: 8.4, headsz: 8 }) + 18;
@@ -766,54 +378,397 @@ function rpSheetEvidence(doc, M, n, total) {
 }
 // material order quantities (optional sheet): the catalog of report.js at the job's waste
 function rpSheetMaterials(doc, M, n, total) {
-  rpHeader(doc, M, 'Materials', 'Material order quantities', `${M.line1}  /  Estimates from the net measurements`, n, total);
-  const t = M.t, bt = t.byType; let y = 150; const bases = { pitched: t.pitched, starter: bt.eave.true + bt.rake.true, iw: bt.eave.true + bt.valley.true + bt.wall.true + bt.step.true, cap: bt.hip.true + bt.ridge.true };
+  rpHeader(doc, M, 'Materials', n, total); rpTitleBar(doc, 82, 'Material order quantities', 'Estimates from the net measurements');
+  const t = M.t, bt = t.byType; let y = 92; const bases = { pitched: t.pitched, starter: bt.eave.true + bt.rake.true, iw: bt.eave.true + bt.valley.true + bt.wall.true + bt.step.true, cap: bt.hip.true + bt.ridge.true };
   const cols = typeof matColumns === 'function' ? matColumns(t.recWaste) : [0, 10, 12, 15]; const rows = [];
   for (const g of MATERIAL_CATALOG) { const base = bases[g.base]; rows.push([g.group, '', ...cols.map((w) => (g.baseUnit === 'sqft' ? rpNum(Math.ceil(base * (1 + w / 100))) + ' sqft' : Math.ceil(base * (1 + w / 100)) + ' ft'))]); for (const [name, cov] of g.items) rows.push(['   ' + name, g.unit, ...cols.map((w) => String(Math.ceil(base * (1 + w / 100) / cov - 1e-9)))]); }
   y = rpTableD(doc, RP.L, y, [230, 50, ...cols.map(() => (548 - 280) / cols.length)], ['Product', 'Unit', ...cols.map((w) => `Waste ${w}%`)], rows, { rowh: 13.5, size: 8, headsz: 7.8, num: cols.map((_, i) => i + 2) }) + 10;
   rpText(doc, `Order quantities are estimates from the net measurements plus the waste shown; they are not measurements. Based on the pitched area (flat area excluded). Suggested waste for this roof: ${t.recWaste}%.`, RP.L, y, { size: 8.4, color: GR(0.3), maxWidth: 548 });
 }
 
+// ------------------------------------------------------------------ sheet frame: slim header and footer
+// Logo, document title, address and status on one band; imagery and report dates under the address. No sheet titles.
+function rpHeader(doc, M, sheet, n, total) {
+  rpLogo(doc, RP.L, 16, 70, 34); rpLn(doc, [111, 19], [111, 50], 0.6, 0.7);
+  const dark = M.statusLabel === 'REVIEW REQUIRED'; const sw = rpWidth(doc, M.statusLabel, 7.8, true) + 14;
+  rpRect(doc, RP.R - sw, 18, sw, 16, dark ? 0.13 : 0.94, dark ? 0.13 : 0.43, 0.6); rpText(doc, M.statusLabel, RP.R - sw / 2, 29, { size: 7.8, bold: true, color: dark ? GR(1) : GR(0.13), align: 'center' });
+  rpText(doc, 'Roof Measurement Report', 121, 29, { size: 12.5, bold: true });
+  const room = RP.R - sw - 14 - 121; let addr = [M.line1, M.line2].filter(Boolean).join(', '); while (addr.length > 8 && rpWidth(doc, addr, 9.2) > room) addr = addr.slice(0, -2).trim() + '…';
+  rpText(doc, addr, 121, 42, { size: 9.2, color: GR(0.18) });
+  const meta = [M.imagery.label ? 'Imagery ' + M.imagery.label : null, M.job ? M.job : null, 'Report ' + M.date].filter(Boolean).join('   ·   ');
+  rpText(doc, meta, 121, 53, { size: 7.3, color: GR(0.36) });
+  rpLn(doc, [RP.L, 62], [RP.R, 62], 0.75, 0.2);
+  rpLn(doc, [RP.L, 756], [RP.R, 756], 0.5, 0.45); rpCap(doc, 'Diversity Contracting  /  Roof Measure', RP.L, 768, 6.6);
+  rpText(doc, `${sheet}   ·   ${n} of ${total}`, RP.R, 768, { size: 7.3, bold: true, color: GR(0.28), align: 'right' });
+}
+const rpTitleBar = (doc, y, t, right) => { rpText(doc, t, RP.L, y, { size: 10.5, bold: true }); if (right) rpText(doc, right, RP.R, y, { size: 7.6, color: GR(0.36), align: 'right' }); };
+
+// ------------------------------------------------------------------ keys: one ID per line, by type (E1 eave, K1 rake ...)
+// A job imported from a source document keeps that document's references (D1 ...). Facets keep their names (F1 ...).
+const RP_LET = { eave: 'E', rake: 'K', ridge: 'R', hip: 'H', valley: 'V', step: 'S', wall: 'W', transition: 'T', parapet: 'P', unspecified: 'X' };
+const RP_ORDER = ['eave', 'rake', 'ridge', 'hip', 'valley', 'step', 'wall', 'transition', 'parapet', 'unspecified'];
+function rpKeys(M) {
+  const refMode = M.lines.some((L) => L.ref); const cnt = {};
+  // reading order within a type: building, then north to south, west to east (so E1 is the north-west eave)
+  const mid = (L) => { const a = L.xy[0], b = L.xy[L.xy.length - 1]; return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; };
+  const order = M.lines.slice().sort((p, q) => RP_ORDER.indexOf(p.type) - RP_ORDER.indexOf(q.type) || p.structure - q.structure || Math.round(mid(q)[1] / 3) - Math.round(mid(p)[1] / 3) || mid(p)[0] - mid(q)[0]);
+  // a source sketch keeps its own references: those lines carry the reference, the rest of the drawing carries no key
+  for (const L of order) { if (refMode) { L.tag = L.ref || null; continue; } const c = (cnt[L.type] = (cnt[L.type] || 0) + 1); L.tag = (RP_LET[L.type] || 'X') + c; }
+  M.lines.sort((p, q) => order.indexOf(p) - order.indexOf(q));
+  return { grouped: false, refMode };
+}
+// table rows for both schedules: every row ID appears on the plan (label, callout, or the detail sheet)
+function rpSchedules(M) {
+  const multi = M.structs.length > 1; const bName = (i) => String(i);   // the building's number in the Buildings table
+  const refs = new Map(); for (const L of M.lines) if (L.ref) { if (!refs.has(L.ref)) refs.set(L.ref, []); refs.get(L.ref).push(L); }
+  let edgeRows, edgeHead, edgeNum, edgeWidths;
+  if (refs.size) { edgeHead = ['Key', 'Reference', 'Source length', 'Current']; edgeWidths = [34, 104, 70, 58]; edgeNum = [2];
+    edgeRows = [...refs.entries()].map(([ref, Ls]) => { const st = Ls.every((L) => L.status === 'measured') ? 'Visible' : Ls.every((L) => L.status === 'inferred') ? 'Inferred' : Ls.some((L) => L.status === 'unresolved') ? 'Unresolved' : 'Partial'; const d = Ls.find((L) => L.displayedFt != null);
+      return [ref, Ls[0].e.label || EDGE_TYPES[Ls[0].type].label, d ? rpFtIn(d.displayedFt) : '', st]; });
+    for (const Z of M.zones) edgeRows.push([Z.id, Z.label || 'Review zone', '', '']); }
+  else { const srcFt = M.lines.some((L) => L.displayedFt != null); edgeHead = multi ? ['Key', 'Type', 'Length', 'ft', 'Bldg'] : ['Key', 'Type', 'Length', 'ft']; edgeWidths = multi ? [22, 54, 50, 28, 22] : [26, 58, 46, 38]; edgeNum = [2, 3];
+    edgeRows = M.lines.map((L) => { const un = L.status === 'unresolved'; const ft = srcFt ? L.displayedFt : L.m.trueFt;
+      const row = [L.tag, EDGE_TYPES[L.type].label, un || ft == null ? '' : rpFtIn(ft) + (L.status === 'inferred' ? ' est.' : ''), un ? 'not measured' : ft == null ? '' : rpNum(ft, 2)];
+      if (multi) row.push(bName(L.structure)); return row; }); }
+  const facetRows = M.facets.filter((F) => !F.f.excluded).map((F) => { const rep = F.f.reportedSqft; const noArea = F.status === 'unresolved' || F.f.areaUnsupported || F.f.pitchUnknown;
+    const assigned = M.kind === 'measured' && F.m.basis !== 'fitted' && F.f.reportedPitch == null && !F.f.pitchUnknown;   // a pitch set by hand or by default, not fitted from the height model
+    const st = F.status === 'unresolved' ? 'not supported' : F.status === 'inferred' ? (F.f.inferredSqft > 0 && F.f.inferredSqft < F.m.sloped ? 'part est.' : 'estimate') : (M.kind === 'source' ? 'source' : 'measured');
+    return [F.id, F.f.label || (multi ? bName(F.structure) : 'Main'), F.f.pitchUnknown ? '' : rpPitch(F.f.reportedPitch != null ? F.f.reportedPitch : (F.m.basis === 'fitted' ? Math.round(F.m.slope12 * 10) / 10 : F.f.pitch)) + (assigned ? '*' : ''), noArea ? '' : rep != null ? rpNum(rep, Number.isInteger(rep) ? 0 : 2) : rpNum(F.m.sloped, 2), noArea ? '' : rpNum(F.m.plan, 1), st]; });
+  return { edgeRows, edgeHead, edgeNum, edgeWidths, facetRows, facetHead: ['Facet', multi ? 'Bldg' : 'Building', 'Pitch', 'Area ft²', 'Plan ft²', 'Basis'], facetNum: [2, 3, 4], facetWidths: [34, 62, 46, 58, 50, 58], refs: refs.size > 0 };
+}
+
+// ------------------------------------------------------------------ plan drawing (page 1 and detail sheets)
+// Exterior edges (eaves, rakes) heavy, interior lines lighter; one grayscale style per type. Estimated continuations are
+// dashed and lighter; an unsupported line is stippled. No facet shading: unresolved planes and hidden zones are hatched.
+const RP_PLAN = {
+  eave: { w: 1.7, g: 0.04 }, rake: { w: 1.7, g: 0.04, dash: [7, 1.7] }, ridge: { w: 1.05, g: 0.12 }, hip: { w: 0.8, g: 0.2, dash: [3.4, 1.7] },
+  valley: { w: 0.95, g: 0.16, dash: [0.9, 1.6] }, step: { w: 0.75, g: 0.28, dash: [4, 1.4, 0.9, 1.4] }, wall: { w: 0.75, g: 0.28, dash: [1.8, 1.5] },
+  transition: { w: 0.8, g: 0.28, dash: [6, 1.5, 1.2, 1.5, 1.2, 1.5] }, parapet: { w: 1.3, g: 0.2 }, unspecified: { w: 0.6, g: 0.5, dash: [2, 2] },
+};
+function rpPlanStyle(doc, type, status, k = 1) {
+  const s = RP_PLAN[type] || RP_PLAN.unspecified;
+  if (status === 'unresolved') { rpColor(doc, 'draw', GR(0.4)); doc.setLineWidth(1.3 * k); doc.setLineDashPattern([0.6, 2.2], 0); return; }
+  const w = s.w * k * (status === 'inferred' ? 0.75 : 1); rpColor(doc, 'draw', GR(status === 'inferred' ? Math.max(0.42, s.g) : s.g)); doc.setLineWidth(w);
+  doc.setLineDashPattern(status === 'inferred' ? [5, 2.6] : (s.dash || []), 0);
+}
+// separating-axis overlap of two convex quads, and a segment against a quad (both in page points)
+const rpQuadHit = (A, B) => { for (const P of [A, B]) for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; const n = [b[1] - a[1], a[0] - b[0]];
+  const pa = A.map((p) => p[0] * n[0] + p[1] * n[1]), pb = B.map((p) => p[0] * n[0] + p[1] * n[1]); if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false; } return true; };
+const rpSegHit = (s, Q) => { if (rpInside(s[0], Q) || rpInside(s[1], Q)) return true; const o = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  for (let i = 0; i < Q.length; i++) { const a = Q[i], b = Q[(i + 1) % Q.length]; if (o(s[0], s[1], a) * o(s[0], s[1], b) < 0 && o(a, b, s[0]) * o(a, b, s[1]) < 0) return true; } return false; };
+const rpQuad = (c, u, hw, hh) => { const n = [-u[1], u[0]]; return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([a, b]) => [c[0] + u[0] * a + n[0] * b, c[1] + u[1] * a + n[1] * b]); };
+const rpBoxQuad = (b) => [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]];
+const rpShrink = (Q, d) => { const c = Q.reduce((a, p) => [a[0] + p[0] / Q.length, a[1] + p[1] / Q.length], [0, 0]); return Q.map((p) => { const v = [p[0] - c[0], p[1] - c[1]], l = Math.hypot(v[0], v[1]) || 1; return [p[0] - v[0] / l * d, p[1] - v[1] / l * d]; }); };
+
+// draws the plan in view V and places every label; returns what was placed and what was not
+// o.win: limit the drawing to V.box (detail sheets); o.only: place labels only for these keys (detail sheets)
+function rpPlanDraw(doc, M, V, o = {}) {
+  const P = V.P; const k = o.k || 1; const area = o.area || V.box; const clip = !!o.win;
+  if (clip) rpClip(doc, area.x, area.y, area.w, area.h);
+  // planes: no shading; an unresolved plane and every hidden zone hatched; a cut-out drawn dotted
+  for (const F of M.facets) { const pts = F.xy.map(P); if (F.f.excluded) { rpPolyG(doc, pts, 1, 0.5, 0.5, [1.5, 1.5]); continue; } if (F.status === 'unresolved') rpHatch(doc, pts, 5 * k, 0.6, 0.3); }
+  for (const Z of M.zones) rpHatch(doc, Z.xy.map(P), 5 * k, 0.55, 0.32);
+  // facet outlines (hairline) with a gap where the visible roof stops at a canopy edge
+  rpColor(doc, 'draw', GR(0.62)); doc.setLineWidth(0.3 * k); doc.setLineDashPattern([], 0);
+  for (const F of M.facets) if (!F.f.excluded) rpRingGap(doc, F.xy, M.obLines, P);
+  // canopy edges: where the visible roof stops at tree cover. Drawn faint and dotted: never a roof edge, never closes an outline
+  rpColor(doc, 'draw', GR(0.55)); doc.setLineWidth(0.5 * k); doc.setLineDashPattern([0.4, 1.8], 0); for (const L of M.obLines) rpPolyline(doc, L.xy.map(P)); doc.setLineDashPattern([], 0);
+  // roof lines: interior first, exterior on top
+  const ext = (t) => t === 'eave' || t === 'rake';
+  for (const L of [...M.lines.filter((q) => !ext(q.type)), ...M.lines.filter((q) => ext(q.type))]) { rpPlanStyle(doc, L.type, L.status, k); let pts = L.xy.map(P);
+    if (L.e.paired === 'lower' && pts.length >= 2) { const dx = pts[pts.length - 1][0] - pts[0][0], dy = pts[pts.length - 1][1] - pts[0][1], l = Math.hypot(dx, dy) || 1; pts = pts.map((p) => [p[0] - dy / l * 1.8, p[1] + dx / l * 1.8]); }
+    rpPolyline(doc, pts); }
+  doc.setLineDashPattern([], 0);
+  // ---- labels. Obstacles: every drawn segment (sampled as segments), every label placed, the reserved boxes
+  const segs = []; const addRing = (ring, closed, owner) => { const Q = ring.map(P); for (let i = 0; i < Q.length - (closed ? 0 : 1); i++) segs.push({ s: [Q[i], Q[(i + 1) % Q.length]], owner }); };
+  for (const F of M.facets) if (!F.f.excluded) addRing(F.xy, true, F.id); for (const Z of M.zones) addRing(Z.xy, true, Z.id); for (const L of M.lines) addRing(L.xy, false, L.tag); for (const L of M.obLines) addRing(L.xy, false, L.id);
+  const placed = (o.reserve || []).map(rpBoxQuad); const limit = { x0: area.x + 3, y0: area.y + 3, x1: area.x + area.w - 3, y1: area.y + area.h - 3 };
+  const inLimit = (Q) => Q.every((p) => p[0] >= limit.x0 && p[0] <= limit.x1 && p[1] >= limit.y0 && p[1] <= limit.y1);
+  const free = (Q, own) => inLimit(Q) && !placed.some((R) => rpQuadHit(Q, R)) && !segs.some((g) => g.owner !== own && rpSegHit(g.s, Q));
+  const out = { labels: [], callouts: [], facets: [], missed: [], facetMissed: [] };
+  const want = o.only ? new Set(o.only) : null;
+  const SZ = 7, SZK = 6.5;   // at 100% on US Letter: 7 pt length labels, 6.5 pt bold keys
+  // edges: the longest straight piece of each line carries "KEY  length" beside it, parallel to it, outside the roof first
+  const seenTag = new Set(); const lines = M.lines.filter((L) => L.tag && (!want || want.has(L.tag))).slice().sort((p, q) => q.m.trueFt - p.m.trueFt).filter((L) => { if (seenTag.has(L.tag)) return false; seenTag.add(L.tag); return true; });
+  const callout = (anchor, key, own, size = 6) => {
+    const w = rpWidth(doc, key, size, true) + 5, h = size + 3.4; const dirs = []; for (let a = 0; a < 24; a++) dirs.push([Math.cos(a * Math.PI / 12), Math.sin(a * Math.PI / 12)]);
+    for (const d of [11, 16, 22, 29, 37, 46, 58, 72, 90]) for (const u of dirs) { const c = [anchor[0] + u[0] * d, anchor[1] + u[1] * d]; const Q = rpBoxQuad({ x0: c[0] - w / 2, y0: c[1] - h / 2, x1: c[0] + w / 2, y1: c[1] + h / 2 });
+      if (!free(Q, own)) continue; const lead = [anchor, [c[0] - u[0] * (Math.min(w, h) / 2), c[1] - u[1] * (Math.min(w, h) / 2)]]; if (placed.some((R) => rpSegHit(lead, R))) continue;
+      rpLn(doc, lead[0], lead[1], 0.35, 0.35); doc.setLineDashPattern([], 0); rpColor(doc, 'fill', GR(1)); rpColor(doc, 'draw', GR(0.25)); doc.setLineWidth(0.45); doc.roundedRect(c[0] - w / 2, c[1] - h / 2, w, h, h / 2, h / 2, 'FD');
+      rpText(doc, key, c[0], c[1] + size * 0.35, { size, bold: true, color: GR(0.1), align: 'center' }); placed.push(Q); return true; }
+    return false; };
+  for (const L of lines) {
+    let bi = null, bl = -1; for (let i = 1; i < L.xy.length; i++) { const d = Math.hypot(L.xy[i][0] - L.xy[i - 1][0], L.xy[i][1] - L.xy[i - 1][1]); if (d > bl) { bl = d; bi = [L.xy[i - 1], L.xy[i]]; } }
+    if (!bi) continue; const a = P(bi[0]), b = P(bi[1]); const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; let u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len]; if (u[0] < -1e-9 || (Math.abs(u[0]) < 1e-9 && u[1] > 0)) u = [-u[0], -u[1]];
+    const n = [-u[1], u[0]]; const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    if (clip && !(mid[0] > area.x && mid[0] < area.x + area.w && mid[1] > area.y && mid[1] < area.y + area.h)) continue;
+    const un = L.status === 'unresolved'; const grp = L.ref ? M.lines.filter((q) => q.ref === L.ref) : [L]; const shown = grp.find((q) => q.displayedFt != null); const ftv = L.ref ? (shown ? shown.displayedFt : null) : L.displayedFt != null ? L.displayedFt : L.m.trueFt;
+    const lenTxt = L.ref ? (ftv == null ? 'source: no length' : rpDimTxt(ftv)) : un ? 'unsupported' : rpDimTxt(ftv) + (L.status === 'inferred' ? ' est.' : '');
+    const kw = rpWidth(doc, L.tag, SZK, true), lw = rpWidth(doc, lenTxt, SZ, false); const tw = kw + 3 + lw; const hh = SZ * 0.62;
+    // outside first for exterior edges: the side away from the plane it bounds
+    let side = 1; if (L.facets.length) { const F = M.facets.find((q) => q.id === L.facets[0]); if (F) { const c = P(rpLabelPoint(F.xy).p); side = (c[0] - mid[0]) * n[0] + (c[1] - mid[1]) * n[1] > 0 ? -1 : 1; } }
+    let done = false;
+    if (tw <= len + 14) for (const dd of [hh + 2.6, hh + 6]) { for (const sg of [side, -side]) { for (const sh of [0, 0.22, -0.22, 0.38, -0.38]) {
+      const c = [mid[0] + n[0] * dd * sg + u[0] * sh * len, mid[1] + n[1] * dd * sg + u[1] * sh * len]; const Q = rpQuad(c, u, tw / 2 + 1.5, hh + 0.8);
+      if (!free(Q, L.tag)) continue;
+      // text runs along the edge, reading left to right; key bold, then the length
+      const ang = Math.atan2(-u[1], u[0]) * 180 / Math.PI; const k0 = [c[0] - u[0] * (tw / 2 - kw / 2), c[1] - u[1] * (tw / 2 - kw / 2)], l0 = [c[0] + u[0] * (tw / 2 - lw / 2), c[1] + u[1] * (tw / 2 - lw / 2)];
+      rpRotText(doc, L.tag, k0[0], k0[1], ang, SZK, GR(0.35), true); rpRotText(doc, lenTxt, l0[0], l0[1], ang, SZ, GR(0.08), false);
+      placed.push(Q); out.labels.push(L.tag); done = true; break; } if (done) break; } if (done) break; }
+    if (!done && callout(mid, L.tag, L.tag)) { out.callouts.push(L.tag); done = true; }
+    if (!done) out.missed.push(L.tag);
+  }
+  // facet IDs: small, inside the plane; a plane too small for its ID gets a callout
+  if (!o.noFacets) for (const F of M.facets) { if (F.f.excluded || (want && !want.has(F.id))) continue; const lp = rpLabelPoint(F.xy); const c0 = P(lp.p); if (clip && !(c0[0] > area.x && c0[0] < area.x + area.w && c0[1] > area.y && c0[1] < area.y + area.h)) continue;
+    const poly = F.xy.map(P); const w = rpWidth(doc, F.id, 6.4, true) / 2 + 1, h = 3.6; let done = false;
+    const cands = [c0]; for (const d of [6, 11, 16, 22]) for (let a2 = 0; a2 < 8; a2++) cands.push([c0[0] + Math.cos(a2 * Math.PI / 4) * d, c0[1] + Math.sin(a2 * Math.PI / 4) * d]);
+    for (const c of cands) { if (!rpInside(c, poly)) continue; const Q = rpBoxQuad({ x0: c[0] - w, y0: c[1] - h, x1: c[0] + w, y1: c[1] + h }); if (!Q.every((p) => rpInside(p, poly)) || !free(Q, F.id)) continue;
+      rpText(doc, F.id, c[0], c[1] + 2.3, { size: 6.4, bold: true, color: GR(0.42), align: 'center' }); placed.push(Q); out.facets.push(F.id); done = true; break; }
+    if (!done && callout(c0, F.id, F.id, 5.8)) { out.facets.push(F.id); done = true; }
+    if (!done) out.facetMissed.push(F.id); }
+  for (const Z of M.zones) { if (want && !want.has(Z.id)) continue; const poly = Z.xy.map(P); const c0 = P(rpLabelPoint(Z.xy).p); const w = rpWidth(doc, Z.id, 6.6, true) / 2 + 1.5, h = 3.8; let done = false;
+    const cands = [c0]; for (const d of [6, 12, 18]) for (let a2 = 0; a2 < 8; a2++) cands.push([c0[0] + Math.cos(a2 * Math.PI / 4) * d, c0[1] + Math.sin(a2 * Math.PI / 4) * d]);
+    for (const c of cands) { const Q = rpBoxQuad({ x0: c[0] - w, y0: c[1] - h, x1: c[0] + w, y1: c[1] + h }); if (!Q.every((p) => rpInside(p, poly)) || !inLimit(Q) || placed.some((R) => rpQuadHit(Q, R))) continue;
+      rpRect(doc, c[0] - w, c[1] - h, 2 * w, 2 * h, 1, null); rpText(doc, Z.id, c[0], c[1] + 2.4, { size: 6.6, bold: true, color: GR(0.15), align: 'center' }); placed.push(Q); out.facets.push(Z.id); done = true; break; }
+    if (!done && callout(c0, Z.id, Z.id, 6)) { out.facets.push(Z.id); done = true; }
+    if (!done) out.facetMissed.push(Z.id); }
+  if (clip) rpUnclip(doc);
+  out.placed = placed; out.segs = segs; return out;
+}
+// legend row items for the line types and states the plan uses
+function rpLegendItems(M) {
+  const it = []; const used = new Set(M.lines.map((L) => L.type)); for (const t of RP_ORDER) if (used.has(t)) it.push({ type: t, status: 'measured', label: EDGE_TYPES[t].label });
+  if (M.lines.some((L) => L.status === 'inferred')) it.push({ type: 'eave', status: 'inferred', label: 'Estimated' });
+  if (M.lines.some((L) => L.status === 'unresolved')) it.push({ type: 'eave', status: 'unresolved', label: 'Unsupported' });
+  if (M.obLines.length) it.push({ canopy: true, label: 'Canopy edge' });
+  if (M.zones.length || M.facets.some((F) => F.status === 'unresolved')) it.push({ hatch: true, label: 'Not measured' });
+  return it;
+}
+function rpLegendDraw(doc, items, x, y, maxW) {
+  let cx = x, cy = y; for (const L of items) { const w = 22 + 4 + rpWidth(doc, L.label, 6.8) + 11; if (cx + w > x + maxW) { cx = x; cy += 11; }
+    if (L.hatch) rpHatch(doc, [[cx, cy - 6], [cx + 20, cy - 6], [cx + 20, cy + 1], [cx, cy + 1]], 3, 0.5);
+    else if (L.canopy) { rpColor(doc, 'draw', GR(0.55)); doc.setLineWidth(0.5); doc.setLineDashPattern([0.4, 1.8], 0); doc.line(cx, cy - 2.5, cx + 20, cy - 2.5); doc.setLineDashPattern([], 0); }
+    else { rpPlanStyle(doc, L.type, L.status); doc.line(cx, cy - 2.5, cx + 20, cy - 2.5); doc.setLineDashPattern([], 0); }
+    rpText(doc, L.label, cx + 25, cy, { size: 6.8, color: GR(0.22) }); cx += w; }
+  return cy;
+}
+
+// ------------------------------------------------------------------ sheet 1: measurement summary and roof plan
+function rpSummaryCells(M) {
+  const t = M.t, R = M.area, src = M.src, est = src && src.estimate, sq = (v) => rpNum(v / 100, 2) + ' SQ', net = t.sloped; const cells = [];
+  if (est) cells.push(['SKETCH-VERIFIED SUBTOTAL', rpNum(R.confirmed, 2) + ' ft²'], [String(est.label || 'Reported net estimate').toUpperCase(), rpNum(est.netSqft, 2) + ' ft²'], ['BALANCE TO REVIEW', rpNum(est.netSqft - R.confirmed, 2) + ' ft²']);
+  else if (M.kind === 'source' && src.totals && src.totals.netSqft != null) cells.push(['REPORTED NET SLOPED AREA', rpNum(src.totals.netSqft) + ' ft²'], ['NET SQUARES', sq(src.totals.netSqft)], ['PREDOMINANT PITCH', rpPitch(src.totals.pitch != null ? src.totals.pitch : t.predominant)]);
+  else if (!R.fullKnown || R.estimate > 0.5) { cells.push(['CONFIRMED AREA', rpNum(R.confirmed, 2) + ' ft²']); if (R.estimate > 0.5) cells.push(['CONFIRMED + ESTIMATE', rpNum(net, 2) + ' ft²']); cells.push(['NET SQUARES', sq(net)], ['PREDOMINANT PITCH', rpPitch(t.predominant)]); }
+  else cells.push(['NET SLOPED AREA', rpNum(net, 2) + ' ft²'], ['NET SQUARES', sq(net)], ['PREDOMINANT PITCH', rpPitch(t.predominant)]);
+  const li = M.kind === 'source' && src.totals && src.totals.lines ? src.totals.lines : null; const v = (k) => (li ? li[k] : t.byType[k].true);
+  const verified = M.kind !== 'measured' || (R.fullKnown && R.estimate < 0.5);   // a zero is a measured absence only when no roof is hidden or estimated
+  for (const [cap, kk] of [['EAVES', 'eave'], ['RAKES', 'rake'], ['RIDGES', 'ridge'], ['HIPS', 'hip'], ['VALLEYS', 'valley']]) { const x = v(kk); cells.push([cap, x == null ? '' : x < 0.05 && !verified ? 'none seen' : rpFtIn(x)]); }
+  const fl = li ? (li.step || 0) + (li.wall || 0) : t.byType.step.true + t.byType.wall.true; if (fl > 0.05) cells.push(['FLASHING', rpFtIn(fl)]);
+  return cells;
+}
+function rpSheetPlanFirst(doc, M, S, hero, n, total, ctx, opts = {}) {
+  rpHeader(doc, M, 'Roof plan', n, total);
+  // compact summary strip
+  const cells = rpSummaryCells(M); const y0 = 70, hS = 34; rpRect(doc, RP.L, y0, 548, hS, 0.955);
+  const need = cells.map(([cap, val]) => Math.max(rpWidth(doc, cap, 6.2, true), rpWidth(doc, val, 10.2, true)) + 12); const extra = Math.max(0, (548 - need.reduce((a, b) => a + b, 0)) / cells.length);
+  let x = RP.L; const scale = Math.min(1, 548 / need.reduce((a, b) => a + b, 0)); cells.forEach(([cap, val], i) => { const w = need[i] * scale + extra; if (i) rpLn(doc, [x, y0 + 6], [x, y0 + hS - 6], 0.45, 0.72);
+    rpText(doc, cap, x + 6, y0 + 12, { size: 6.2 * Math.min(1, scale + 0.08), bold: true, color: GR(0.34) }); rpText(doc, val, x + 6, y0 + 26.5, { size: 10.2 * Math.min(1, scale + 0.08), bold: true }); x += w; });
+  let top = y0 + hS + 8;
+  // one status line: why the report needs review, or what the numbers are based on
+  const why = M.review ? 'Review required: ' + (M.status.reasons.slice(0, 2).map((r) => r.text.replace(/\.$/, '')).join('; ') || 'see sheet 2') + '. Estimated and unsupported parts are marked on the plan; sheet 2 lists them.'
+    : M.kind === 'source' ? `Source takeoff: ${(M.src.document || 'source report')}${M.src.pages ? ', ' + M.src.pages : ''}. The plan reproduces the reported geometry.`
+      : M.kind === 'illustrative' ? 'Illustrative model: all coordinates and quantities are examples, not measurements.' : null;
+  if (why) { top = rpText(doc, why, RP.L, top + 6, { size: 7.4, color: GR(0.25), maxWidth: 548, lh: 1.25 }) + 1; }
+  // the plan: everything else on the sheet
+  const box = { x: RP.L, y: top, w: 548, h: 724 - top }; rpRect(doc, box.x, box.y, box.w, box.h, 1, 0.72, 0.5);
+  const legend = rpLegendItems(M); const legendRows = (() => { let cx = 0, r = 1; for (const L of legend) { const w = 37 + rpWidth(doc, L.label, 6.8); if (cx + w > 350) { cx = 0; r++; } cx += w; } return r; })(); const bandH = Math.max(30, 12 + 11 * legendRows); const area = { x: box.x + 6, y: box.y + 6, w: box.w - 12, h: box.h - bandH - 10 };
+  const inner = { x: area.x + 10, y: area.y + 10, w: area.w - 20, h: area.h - 20 };
+  let V = rpView(M, inner, { padFt: 2 }); { const V2 = rpView(M, inner, { padFt: Math.max(2, 20 / V.k) }); if (V2.perIn === V.perIn) V = V2; } V.box = box;
+  // aerial inset: only into a corner the drawing leaves empty (checked against the geometry before anything is placed)
+  let inset = null;
+  if (hero && opts.inset !== false) { const iw = 118, ih = Math.round(118 * hero.h / hero.w); const pts = []; const add = (ring, closed) => { const Q = ring.map(V.P); for (let i = 0; i < Q.length - (closed ? 0 : 1); i++) { const a = Q[i], b = Q[(i + 1) % Q.length]; const m = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 6)); for (let j = 0; j <= m; j++) pts.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]); } };
+    for (const F of M.facets) add(F.xy, true); for (const L of M.lines) add(L.xy, false); for (const Z of M.zones) add(Z.xy, true);
+    for (const c of ['tr', 'tl', 'br', 'bl']) { const bx = c[1] === 'r' ? area.x + area.w - iw - 4 : area.x + 4, by = c[0] === 't' ? area.y + 4 : area.y + area.h - ih - 16; const r = { x0: bx - 30, y0: by - 26, x1: bx + iw + 30, y1: by + ih + 38 };
+      if (!pts.some((p) => p[0] > r.x0 && p[0] < r.x1 && p[1] > r.y0 && p[1] < r.y1)) { inset = { x0: bx, y0: by, x1: bx + iw, y1: by + ih + 12, iw, ih }; break; } } }
+  const res = rpPlanDraw(doc, M, V, { area, reserve: inset ? [inset] : [] });
+  if (inset) { doc.addImage(hero.src, 'JPEG', inset.x0, inset.y0, inset.iw, inset.ih, 'planInset', 'FAST'); rpRect(doc, inset.x0, inset.y0, inset.iw, inset.ih, null, 0.4, 0.5); rpText(doc, 'Aerial reference, not to scale' + (M.imagery.date ? ' · ' + rpDate(M.imagery.date) : ''), inset.x0, inset.y0 + inset.ih + 8, { size: 5.9, color: GR(0.36) }); }
+  // legend, scale bar and north arrow in a band at the foot of the plan
+  const by = box.y + box.h - bandH + 4; rpLn(doc, [box.x + 6, by - 4], [box.x + box.w - 6, by - 4], 0.4, 0.78);
+  rpLegendDraw(doc, legend, box.x + 10, by + 8, 350);
+  const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20; const barIn = (2 * step * V.k / 72).toFixed(2).replace(/\.?0+$/, '');
+  rpNorth(doc, box.x + box.w - 18, by + 12, 0); rpBar(doc, box.x + box.w - 48 - 2 * step * V.k, by + 2, V.k, step); rpText(doc, V.label, box.x + box.w - 54 - 2 * step * V.k, by + 6, { size: 6.8, bold: true, color: GR(0.22), align: 'right' });
+  rpText(doc, `Scale ${V.label} at 100% on US Letter (bar ${barIn} in). North up. Labels give true (sloped) lengths in feet and inches; the drawing is a horizontal projection.` + (res.missed.length || res.facetMissed.length ? ` ${res.missed.length + res.facetMissed.length} key${res.missed.length + res.facetMissed.length > 1 ? 's' : ''} on the plan detail sheet.` : ''), RP.L, 737, { size: 6.9, color: GR(0.3), maxWidth: 548 });
+  // layout self-check: scale exactness, every key accounted for, the plan's share of the printable sheet
+  let chk = null; for (const L of M.lines) for (let i = 1; i < L.xy.length; i++) { const ft = Math.hypot(L.xy[i][0] - L.xy[i - 1][0], L.xy[i][1] - L.xy[i - 1][1]); if (!chk || ft > chk.segmentFt) { const a = V.P(L.xy[i - 1]), b = V.P(L.xy[i]); chk = { key: L.tag, segmentFt: ft, segmentPt: Math.hypot(b[0] - a[0], b[1] - a[1]) }; } }
+  if (chk) { chk.expectedPt = chk.segmentFt * V.k; chk.ok = Math.abs(chk.segmentPt - chk.expectedPt) < 1e-6 * Math.max(1, chk.expectedPt); }
+  ctx.layout = { scale: V.label, perIn: V.perIn, ptPerFt: V.k, rotationDeg: 0, bar: { ft: 2 * step, pt: 2 * step * V.k, inches: +barIn }, dims: res.labels.length, keysOnOverview: true, inset: !!inset,
+    keys: { total: new Set(M.lines.map((L) => L.tag).filter(Boolean)).size, placed: [...res.labels, ...res.callouts], missed: res.missed.slice(), labels: res.labels.length, callouts: res.callouts.length }, facetIds: { placed: res.facets.slice(), missed: res.facetMissed.slice() },
+    planShare: Math.round(box.w * box.h / (548 * (724 - 70)) * 100) / 100, scaleCheck: chk };
+  ctx.missedAll = [...res.missed, ...res.facetMissed];
+  return res;
+}
+
+// ------------------------------------------------------------------ 3D illustration: only when the elevations support it
+// The same faces as the plan, heights from the fitted roof planes. Omitted (with the reason) when the heights are only
+// pitch-derived, planes are missing, neighbouring planes disagree at a shared corner, a face folds over in the view, or
+// the roof is too simple for a 3D view to add anything.
+function rpAxonCheck(M, AX, angle = -24, alt = 32) {
+  if (!AX) return { ok: false, why: 'no roof plane has a measured height' };
+  if (AX.illustrative && M.kind !== 'illustrative') return { ok: false, why: 'heights would come from the pitch alone (no measured elevations)' };
+  if (AX.partial) return { ok: false, why: 'some planes have no supported height' };
+  if (AX.faces.length < 3) return { ok: false, why: 'the plan shows this roof completely' };
+  const brk = M.lines.filter((L) => ['step', 'wall', 'parapet', 'transition'].includes(L.type) || L.e.paired).map((L) => L.xy); const onBreak = (q) => brk.some((L) => { for (let i = 1; i < L.length; i++) if (RM.pointSeg(q, L[i - 1], L[i]) < 1.2) return true; return false; });
+  const at = new Map(); for (const f of AX.faces) for (const p of f.pts) { if (onBreak([p[0], p[1]])) continue; const kk = Math.round(p[0] * 2) + ',' + Math.round(p[1] * 2); if (!at.has(kk)) at.set(kk, []); at.get(kk).push({ z: p[2], id: f.label }); }
+  let worst = null; for (const arr of at.values()) if (arr.length > 1) { const zs = arr.map((q) => q.z); const sp = Math.max(...zs) - Math.min(...zs); if (!worst || sp > worst.sp) worst = { sp, ids: [...new Set(arr.map((q) => q.id))] }; }
+  if (worst && worst.sp > 1.0) return { ok: false, why: `elevations conflict: ${worst.ids.join(' and ')} disagree by ${rpNum(worst.sp, 1)} ft at a shared corner` };
+  const a = angle * Math.PI / 180, h = alt * Math.PI / 180; const pr = (p) => [Math.cos(a) * p[0] - Math.sin(a) * p[1], -Math.sin(h) * (Math.sin(a) * p[0] + Math.cos(a) * p[1]) - Math.cos(h) * p[2]];
+  const crosses = (r) => { const n = r.length; const o = (p, q, t) => (q[0] - p[0]) * (t[1] - p[1]) - (q[1] - p[1]) * (t[0] - p[0]); for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) { if (i === 0 && j === n - 1) continue; const A = r[i], B = r[(i + 1) % n], C = r[j], D = r[(j + 1) % n]; if (o(A, B, C) * o(A, B, D) < -1e-9 && o(C, D, A) * o(C, D, B) < -1e-9) return true; } return false; };
+  for (const f of AX.faces) { const q = f.pts.map(pr); if (crosses(q)) return { ok: false, why: `${f.label || 'a plane'} folds over in the 3D view` }; }
+  return { ok: true, why: worst ? `shared corners agree within ${rpNum(worst.sp, 1)} ft` : 'elevations agree' };
+}
+
+// ------------------------------------------------------------------ sheet 2: detailed takeoff
+function rpTakeoffBlocks(doc, M, S) {
+  // the tables as blocks of rows so they can flow across columns and onto a continuation sheet
+  return [
+    { title: S.refs ? 'Keyed dimensions' : 'Edge lengths by type', head: S.edgeHead, widths: S.edgeWidths, num: S.edgeNum, rows: S.edgeRows },
+    { title: 'Facet areas and pitch', head: S.facetHead, widths: S.facetWidths, num: S.facetNum, rows: S.facetRows },
+  ];
+}
+function rpSheetTakeoff(doc, M, S, n, total, ctx, opts = {}) {
+  rpHeader(doc, M, 'Takeoff', n, total);
+  const t = M.t, R = M.area, src = M.src, est = src && src.estimate; let y = 82;
+  // buildings: one row each (detached buildings never merged), net before waste
+  const T0 = M.kind === 'source' && src.totals ? src.totals : null; const li = T0 && T0.lines ? T0.lines : null; const lf = (v) => (v == null ? '' : li ? rpFtIn(v) : rpNum(v, 2)); const net = t.sloped;
+  rpTitleBar(doc, y, 'Buildings', T0 ? (src.document || 'Source report') + (src.pages ? '  /  ' + src.pages : '') : 'Net roof-surface quantities, before waste'); y += 6;
+  let rows;
+  if (est) { rows = [[src.mainLabel || (M.structs[0] ? M.structs[0].name : 'Main house'), rpNum(R.confirmed, 2), rpNum(est.netSqft, 2), rpNum(est.netSqft / 100, 2), est.perimeterFt != null ? rpNum(est.perimeterFt, 2) : '', est.ridgeFt != null ? rpNum(est.ridgeFt, 2) : '']];
+    for (const B of M.structs.slice(1)) rows.push([B.name, B.confirmed > 0.5 ? rpNum(B.confirmed, 2) : '', '', '', '', '']); if (M.structs.length === 1) rows.push([src.detachedLabel || 'Detached structures', '', '', '', '', '']);
+    y = rpTableD(doc, RP.L, y, [150, 84, 84, 64, 84, 82], ['Building', 'Checked ft²', 'Est. net ft²', 'Est. SQ', 'Perimeter ft', 'Ridge ft'], rows, { rowh: 15, size: 8.2, headsz: 7.3, num: [1, 2, 3, 4, 5] }); }
+  else { rows = M.structs.map((B) => { const one = M.structs.length === 1 && T0; const netS = one && T0.netSqft != null ? T0.netSqft : (B.unresolvedFacets && !B.confirmed && !B.estimate ? null : B.sloped);
+      return [(M.structs.length > 1 ? B.index + '  ' : '') + B.name, netS == null ? '' : rpNum(netS, one ? 0 : 2), netS == null ? '' : rpNum(netS / 100, 2), rpPitch(one && T0.pitch != null ? T0.pitch : B.predominant), lf(li ? li.eave : B.eave), lf(li ? li.rake : B.rake), lf(li ? li.hip : B.hip), lf(li ? li.ridge : B.ridge)]; });
+    if (M.structs.length > 1) rows.push(['Total', rpNum(net, 2), rpNum(net / 100, 2), '', rpNum(t.byType.eave.true, 2), rpNum(t.byType.rake.true, 2), rpNum(t.byType.hip.true, 2), rpNum(t.byType.ridge.true, 2)]);
+    y = rpTableD(doc, RP.L, y, [128, 74, 52, 56, 60, 60, 58, 60], ['Building', 'Net ft²', 'SQ', 'Pitch', li ? 'Eave' : 'Eave ft', li ? 'Rake' : 'Rake ft', li ? 'Hip' : 'Hip ft', li ? 'Ridge' : 'Ridge ft'], rows, { rowh: 15, size: 8.2, headsz: 7.3, num: [1, 2, 3, 4, 5, 6, 7], lastBold: M.structs.length > 1 });
+    const other = li ? [['Valleys', li.valley], ['Step flashing', li.step], ['Wall flashing', li.wall], ['Transitions', li.transition]].filter(([, v]) => v != null && v > 0).map(([k2, v]) => `${k2}  ${rpFtIn(v)}`) : [['Valleys', t.byType.valley.true], ['Step flashing', t.byType.step.true], ['Wall flashing', t.byType.wall.true], ['Transitions', t.byType.transition.true], ['Parapet', t.byType.parapet.true]].filter(([, v]) => v > 0.05).map(([k2, v]) => `${k2}  ${rpNum(v, 2)} ft`);
+    if (other.length) { y += 11; rpText(doc, other.join('      '), RP.L, y, { size: 8.2, bold: true }); y += 2; } }
+  // three columns: net measurements before waste, ordering quantities, and the 3D illustration (or why it is left out)
+  y += 16; const yBlock = y; const w = state.waste != null ? +state.waste : 10; const withWaste = net * (1 + w / 100); const bt = t.byType;
+  const hold = M.review && !est; const pending = est || (M.review && R.confirmed < 1); const cw = [118, 56], cx = [RP.L, RP.L + 188, RP.L + 376];
+  rpCap(doc, 'Net, before waste', cx[0], y, 6.6);
+  const netRows = est ? [['Sketch-verified subtotal', rpNum(R.confirmed, 2) + ' ft²'], [est.label || 'Reported net estimate', rpNum(est.netSqft, 2) + ' ft²']]
+    : [[R.fullKnown && R.estimate < 0.5 ? 'Net sloped area' : 'Confirmed area', rpNum(R.fullKnown && R.estimate < 0.5 ? net : R.confirmed, 2) + ' ft²'], ...(R.estimate > 0.5 ? [['Estimate under canopy', rpNum(R.estimate, 2) + ' ft²']] : []), ...(R.zoneCount ? [['Hidden zones (no total)', R.zoneUnknown ? 'not measured' : `0-${rpNum(R.zoneUpper)} ft²`]] : []), ['Plan (horizontal) area', rpNum(t.plan, 2) + ' ft²'], ['Squares', rpNum(net / 100, 2) + ' SQ'], ['Facets', String(M.facets.filter((F) => !F.f.excluded).length)]];
+  let y1 = rpTableD(doc, cx[0], y + 4, cw, ['Quantity', 'Value'], netRows, { rowh: 12.6, size: 7.5, headsz: 6.8, num: [1] });
+  rpCap(doc, `Ordering, ${w}% waste` + (hold && !pending ? ' (provisional)' : ''), cx[1], y, 6.6);
+  const ordRows = pending ? [['Waste allowance', 'pending'], ['Order quantity', 'on hold']]
+    : [['Area with waste', `${rpNum(withWaste, 2)} ft²`], ['Squares with waste', `${rpNum(withWaste / 100, 2)} SQ`], ['Bundles (3 per SQ)', String(Math.ceil(withWaste / 100 * 3))], ['Starter / drip edge', `${rpNum((bt.eave.true + bt.rake.true) * (1 + w / 100), 0)} ft`], ['Hip & ridge cap', `${rpNum((bt.hip.true + bt.ridge.true) * (1 + w / 100), 0)} ft`], ['Valley lining', `${rpNum(bt.valley.true * (1 + w / 100), 0)} ft`]];
+  const y2 = rpTableD(doc, cx[1], y + 4, cw, ['Item', 'Quantity'], ordRows, { rowh: 12.6, size: 7.5, headsz: 6.8, num: [1] });
+  const AX = opts.axon === false ? null : rpAxonModel(M); const okAX = opts.axon === false ? { ok: false, why: 'turned off for this report' } : rpAxonCheck(M, AX);
+  rpCap(doc, '3D illustration', cx[2], y, 6.6); const hBox = Math.max(96, Math.max(y1, y2) - y - 4);
+  if (okAX.ok) { rpRect(doc, cx[2], y + 4, 172, hBox, 0.99, 0.8, 0.45); rpDrawAxon(doc, M, AX, { x: cx[2] + 8, y: y + 10, w: 156, h: hBox - 30 }); rpText(doc, 'Same planes as the plan; ' + (M.kind === 'illustrative' ? 'modelled heights' : 'heights from the height model') + '. Not to scale.', cx[2] + 5, y + hBox - 7, { size: 5.9, color: GR(0.35), maxWidth: 164, lh: 1.2 }); }
+  else rpText(doc, `Not drawn: ${okAX.why}. The scaled plan on sheet 1 is the drawing of record.`, cx[2], y + 14, { size: 7.2, color: GR(0.3), maxWidth: 172, lh: 1.3 });
+  ctx.axon = okAX; y = Math.max(y1, y2, okAX.ok ? y + 4 + hBox + 8 : y) + 4;
+  if (hold && !pending) y = rpText(doc, 'Provisional: the review items below can change these quantities.', RP.L, y + 8, { size: 7, color: GR(0.35) }) - 4;
+  y += 18;
+  return rpTakeoffFlow(doc, M, S, y, ctx, true);
+}
+// edge and facet tables (columns side by side, rows continued on the next sheet), then review items and the source note
+function rpTakeoffFlow(doc, M, S, y, ctx, first) {
+  const bottom = 744; const rowh = 11, headH = 19; const blocks = ctx.flow || (ctx.flow = rpTakeoffBlocks(doc, M, S).map((b) => ({ ...b, at: 0 })));
+  for (const B of blocks) { if (B.at >= B.rows.length) continue; const tw = B.widths.reduce((a, b) => a + b, 0); const cols = Math.max(1, Math.floor((548 + 10) / (tw + 10))); const stride = cols > 1 ? (548 - tw * cols) / (cols - 1) + tw : 0;
+    if (y + 12 + headH + rowh * 2 > bottom) return { more: true };
+    rpTitleBar(doc, y, B.title + (B.at ? ' (continued)' : ''), B === blocks[0] && !S.refs ? 'Keys match the plan  ·  true (sloped) length' : B === blocks[1] ? 'Area includes slope' : null); y += 6;
+    const per = Math.max(1, Math.floor((bottom - y - headH) / rowh)); let yEnd = y;
+    const remaining = B.rows.length - B.at; const perCol = Math.min(per, Math.ceil(remaining / cols));
+    for (let c = 0; c < cols && B.at < B.rows.length; c++) { const chunk = B.rows.slice(B.at, B.at + perCol); yEnd = Math.max(yEnd, rpTableD(doc, RP.L + c * stride, y, B.widths, B.head, chunk, { rowh, size: 7.6, headsz: 7, num: B.num })); B.at += chunk.length; }
+    y = yEnd + 14; if (B.at < B.rows.length) return { more: true }; }
+  // review items and notes
+  const items = rpReviewItems(M); const notes = [];
+  if (S.facetRows.some((r) => /\*$/.test(r[2]))) notes.push('* Pitch assigned by hand or by default, not fitted from the height model.');
+  if (M.kind === 'measured') notes.push(`Source: ${M.imagery.source}${M.imagery.date ? ', flown ' + rpDate(M.imagery.date) : ''}${M.imagery.quality ? ' (' + String(M.imagery.quality).toLowerCase() + ' quality)' : ''}. Facet area = plan area × the fitted plane's slope factor; lengths are true (sloped) lengths; nothing is rounded before it is summed.` + (M.alt ? ` Part of the roof under canopy came from ${M.alt.label}.` : ''));
+  else if (M.kind === 'source') notes.push((M.src.notes && M.src.notes[0]) || `${M.src.document || 'The source report'} supplies the net area, pitches and line totals.`);
+  else notes.push((M.src && M.src.notes && M.src.notes[0]) || 'All coordinates and quantities are illustrative.');
+  const itemH = (it) => Math.max(rpLines(doc, `${it.key}  ${it.title}`, 150, 7.8, true), rpLines(doc, it.action, 390, 7.6)) * 7.8 * 1.25 + 3;
+  const noteH = notes.reduce((a, q) => a + rpLines(doc, q, 548, 7.2) * 7.2 * 1.3 + 4, 0);
+  if (items.length) { if (!ctx.itemsAt) ctx.itemsAt = 0; if (y + 13 + itemH(items[ctx.itemsAt]) > bottom - noteH - 6) return { more: true };   // never a heading without its first item
+    rpTitleBar(doc, y, ctx.itemsAt ? 'Items for field review (continued)' : 'Items for field review', 'Marked on the plan; in no total until measured'); y += 13;
+    while (ctx.itemsAt < items.length) { const it = items[ctx.itemsAt]; const hh = itemH(it); if (y + hh > bottom - noteH - 6) return { more: true };
+      rpText(doc, `${it.key}  ${it.title}`, RP.L, y, { size: 7.8, bold: true, maxWidth: 150, lh: 1.25 }); rpText(doc, it.action, RP.L + 158, y, { size: 7.6, maxWidth: 390, lh: 1.25 }); y += hh; ctx.itemsAt++; } y += 6; }
+  y = Math.max(y + 4, bottom - noteH); for (const q of notes) y = rpText(doc, q, RP.L, y, { size: 7.2, color: GR(0.3), maxWidth: 548, lh: 1.3 }) + 4;
+  return { more: false };
+}
+function rpSheetTakeoffCont(doc, M, S, n, total, ctx) { rpHeader(doc, M, 'Takeoff (continued)', n, total); return rpTakeoffFlow(doc, M, S, 82, ctx, false); }
+
+// plan detail (only when a key found no room on sheet 1): an enlarged window of the same plan with those keys placed
+function rpSheetDetail(doc, M, win, i, m, n, total, keys) {
+  rpHeader(doc, M, 'Plan detail', n, total); rpTitleBar(doc, 82, `Plan detail ${i} of ${m}  ·  ${win[4]}`, 'Same plan, enlarged; keys match the takeoff');
+  const box = { x: RP.L, y: 92, w: 548, h: 600 }; rpRect(doc, box.x, box.y, box.w, box.h, 1, 0.72, 0.5);
+  const inner = { x: box.x + 12, y: box.y + 12, w: box.w - 24, h: box.h - 24 }; const V = rpView(M, inner, { ftBox: win.slice(0, 4), padFt: 1 }); V.box = box;
+  const res = rpPlanDraw(doc, M, V, { area: { x: box.x + 2, y: box.y + 2, w: box.w - 4, h: box.h - 4 }, win: true, only: keys });
+  const step = V.k >= 4 ? 5 : V.k >= 2 ? 10 : 20; rpNorth(doc, box.x + box.w - 20, box.y + box.h - 40); rpBar(doc, box.x + 14, box.y + box.h - 22, V.k, step);
+  rpText(doc, `${V.label} at 100% on US Letter. North up. Keys match the takeoff tables on sheet 2.`, RP.L, box.y + box.h + 14, { size: 7.2, color: GR(0.3), maxWidth: 548 });
+  return res;
+}
+
+// ------------------------------------------------------------------ in-app 3D preview of the same model (canvas)
+// Draws the faces rpAxonModel() builds, from any heading, so the user can look before choosing to print it.
+function rpAxonPreview(canvas, heading = -24) {
+  const g = canvas.getContext('2d'); const W = canvas.width, H = canvas.height; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  const M = rpModel(); if (!M) return { ok: false, why: 'trace the roof first' }; rpKeys(M); const AX = rpAxonModel(M); const chk = rpAxonCheck(M, AX, heading);
+  if (!AX) { g.fillStyle = '#555'; g.font = '13px sans-serif'; g.fillText('No measured heights for a 3D view.', 12, 24); return chk; }
+  const a = heading * Math.PI / 180, h = 32 * Math.PI / 180; const pr = (p) => [Math.cos(a) * p[0] - Math.sin(a) * p[1], -Math.sin(h) * (Math.sin(a) * p[0] + Math.cos(a) * p[1]) - Math.cos(h) * p[2]];
+  const all = AX.faces.flatMap((f) => f.pts.map(pr)); const x0 = Math.min(...all.map((p) => p[0])), x1 = Math.max(...all.map((p) => p[0])), y0 = Math.min(...all.map((p) => p[1])), y1 = Math.max(...all.map((p) => p[1]));
+  const s = Math.min((W - 30) / (x1 - x0 || 1), (H - 30) / (y1 - y0 || 1)); const T = (p) => { const q = pr(p); return [15 + (q[0] - x0) * s + ((W - 30) - (x1 - x0) * s) / 2, 15 + (q[1] - y0) * s + ((H - 30) - (y1 - y0) * s) / 2]; };
+  const depth = (f) => f.pts.reduce((acc, p) => acc + Math.sin(a) * p[0] + Math.cos(a) * p[1] - p[2] * 0.04, 0) / f.pts.length;
+  for (const f of AX.faces.slice().sort((p, q) => depth(q) - depth(p))) { const A = f.pts[0], B = f.pts[1], C = f.pts[f.pts.length - 1]; let nn = [(B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]), (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]), (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])];
+    const nl = Math.hypot(...nn) || 1; nn = nn.map((v) => v / nl); if (nn[2] < 0) nn = nn.map((v) => -v); const v = Math.round(255 * Math.max(0.55, Math.min(0.95, 0.8 + 0.25 * nn[0] + 0.25 * nn[1])));
+    g.beginPath(); f.pts.map(T).forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.closePath(); g.fillStyle = `rgb(${v},${v},${v})`; g.fill(); g.strokeStyle = '#222'; g.lineWidth = 1; g.stroke();
+    if (f.label) { const c = f.pts.map(T).reduce((acc, p) => [acc[0] + p[0] / f.pts.length, acc[1] + p[1] / f.pts.length], [0, 0]); g.fillStyle = '#333'; g.font = 'bold 10px sans-serif'; g.textAlign = 'center'; g.fillText(f.label, c[0], c[1] + 3); } }
+  return chk;
+}
+
 // ------------------------------------------------------------------ build
+// Sheet 1 roof plan, sheet 2 takeoff; a plan detail sheet only when a key found no room on sheet 1, a continuation only
+// when the tables run long; the evidence and materials sheets when they apply. One model (rpModel) feeds every sheet.
 async function rpBuild(opts = {}) {
   if (!window.jspdf) throw new Error('PDF library did not load; check the internet connection');
   const M = rpModel(); if (!M || !M.facets.length) { if (state.trace && state.trace.failed) return rpBuildNoRoof(); throw new Error('Trace the roof first'); }
-  await rpLoadLogo(); const hero = await rpHeroAerial(M); const S = rpSchedules(M);
-  const doc = rpDoc(); doc.__rpText = []; const ctx = { spill: {} };
-  // first pass on sheet 2 decides whether detail sheets are needed; the sheets are then drawn in order with "n of N"
-  const probe = rpDoc(); const pctx = { spill: {} }; const probeRes = rpSheetPlan(probe, M, S, 2, 2, pctx); const wins = probeRes.missed.length ? rpDetailWindows(M) : [];
-  // detail sheets on the throwaway doc too: a key counts as unplaced only when no window had room for it
-  const hadRoom = new Set(); const inSome = new Set(); for (const [i, w] of wins.entries()) { const r = rpSheetDetail(probe, M, w, i + 1, wins.length, 0, 0); for (const k of r.missed) inSome.add(k); for (const b of r.placedKeys || []) hadRoom.add(b); }
-  const unplaced = [...inSome].filter((k) => !hadRoom.has(k)).sort();
-  // continuation sheets: drawn on the throwaway doc until nothing is left over, so the count is exact
-  let extraSched = 0; { const sp = { edges: pctx.spill.edges ? [...pctx.spill.edges] : null, facets: pctx.spill.facets ? [...pctx.spill.facets] : null };
-    while (((sp.edges && sp.edges.length) || (sp.facets && sp.facets.length)) && extraSched < 8) { rpSheetSchedules(probe, M, S, sp, 0, 0); extraSched++; } }
+  await rpLoadLogo(); const hero = await rpHeroAerial(M); const S = rpSchedules(M); const axon = opts.axon == null ? (state.report3d !== false) : !!opts.axon;
+  // dry run on throwaway documents: which keys need a detail sheet, how many continuation sheets the tables take
+  const probe = rpDoc(); const pctx = {}; rpSheetPlanFirst(probe, M, S, hero, 1, 2, pctx); const missed = pctx.missedAll || [];
+  const wins = missed.length ? rpDetailWindows(M) : []; const placedOnDetail = new Set();
+  for (const [i, w] of wins.entries()) { const r = rpSheetDetail(probe, M, w, i + 1, wins.length, 0, 0, missed); for (const kk of [...r.labels, ...r.callouts, ...r.facets]) placedOnDetail.add(kk); }
+  const unplaced = missed.filter((kk) => !placedOnDetail.has(kk));
+  const tctx = {}; probe.addPage('letter', 'portrait'); let more = rpSheetTakeoff(probe, M, S, 2, 2, tctx, { axon }).more; let cont = 0; while (more && cont < 8) { probe.addPage('letter', 'portrait'); more = rpSheetTakeoffCont(probe, M, S, 0, 0, tctx).more; cont++; }
   const hasEvidence = M.kind === 'source' ? false : (M.views.length > 0 || M.evidence.length > 0 || !!M.alt);
-  const total = 2 + wins.length + extraSched + (hasEvidence ? 1 : 0) + (opts.materials ? 1 : 0);
-  ctx.detail = wins.length === 1 ? 'sheet 3' : wins.length > 1 ? `sheets 3-${2 + wins.length}` : '';
-  let n = 1; rpSheetOverview(doc, M, hero, n, total); doc.addPage('letter', 'portrait'); n++; rpSheetPlan(doc, M, S, n, total, ctx);
-  wins.forEach((w, i) => { doc.addPage('letter', 'portrait'); n++; rpSheetDetail(doc, M, w, i + 1, wins.length, n, total, unplaced); });
-  for (let i = 0; i < extraSched; i++) { doc.addPage('letter', 'portrait'); n++; rpSheetSchedules(doc, M, S, ctx.spill, n, total); }
+  const total = 2 + cont + wins.length + (hasEvidence ? 1 : 0) + (opts.materials ? 1 : 0);
+  const doc = rpDoc(); doc.__rpText = []; const ctx = {}; let n = 1;
+  rpSheetPlanFirst(doc, M, S, hero, n, total, ctx); doc.addPage('letter', 'portrait'); n++;
+  const kctx = {}; let mo = rpSheetTakeoff(doc, M, S, n, total, kctx, { axon }).more; for (let i = 0; i < cont && mo; i++) { doc.addPage('letter', 'portrait'); n++; mo = rpSheetTakeoffCont(doc, M, S, n, total, kctx).more; }
+  wins.forEach((w, i) => { doc.addPage('letter', 'portrait'); n++; rpSheetDetail(doc, M, w, i + 1, wins.length, n, total, missed); });
   if (hasEvidence) { doc.addPage('letter', 'portrait'); n++; rpSheetEvidence(doc, M, n, total); }
   if (opts.materials) { doc.addPage('letter', 'portrait'); n++; rpSheetMaterials(doc, M, n, total); }
-  doc.setProperties({ title: `${M.line1} - roof measurement`, author: 'Diversity Contracting | Roof Measure', subject: 'US Letter roof overview, takeoff and scaled measurement plan', creator: 'Roof Measure' });
-  // layout self-check for the caller: every key is on the plan, on a detail sheet, or named as unplaced; the scale is exact
-  const Lk = ctx.layout || null; let layout = null;
-  if (Lk) { const accounted = new Set([...Lk.keys.placed, ...hadRoom, ...unplaced]); const unaccounted = [...Lk.keys.placed, ...Lk.keys.missed].filter((k) => !accounted.has(k));
-    layout = { ...Lk, keys: { total: Lk.keys.total, overview: Lk.keys.placed.length, detail: hadRoom.size, unplaced, unaccounted }, sheets: { total, detail: wins.length, schedules: extraSched, evidence: hasEvidence, materials: !!opts.materials } }; }
-  // text over text anywhere in the document is a layout defect: report every overlapping pair (page, both strings)
+  doc.setProperties({ title: `${M.line1} - Roof Measurement Report`, author: 'Diversity Contracting | Roof Measure', subject: 'US Letter roof measurement report: scaled roof plan and takeoff', creator: 'Roof Measure' });
+  // layout self-check for the caller: every key and facet ID is on the plan, on a detail sheet, or named as unplaced; every
+  // ID on the plan is a row of the takeoff and every row is on the plan; the scale is exact; no text sits on other text
+  const Lk = ctx.layout; let layout = null;
+  if (Lk) { const onPlan = new Set([...Lk.keys.placed, ...Lk.facetIds.placed]); const rowKeys = new Set([...S.edgeRows.map((r) => r[0]), ...S.facetRows.map((r) => r[0]), ...rpReviewItems(M).map((it) => it.key).filter((kk) => /^Z\d+$/.test(kk))]);
+    const shown = new Set([...onPlan, ...placedOnDetail]); const refMode = S.refs;
+    const notInSchedule = [...onPlan].filter((kk) => !rowKeys.has(kk)); const notOnPlan = [...rowKeys].filter((kk) => !shown.has(kk) && !unplaced.includes(kk));
+    layout = { ...Lk, keys: { ...Lk.keys, total: Lk.keys.total, overview: Lk.keys.placed.length, detail: placedOnDetail.size, unplaced, unaccounted: notOnPlan }, callouts: { onPlan: onPlan.size, rows: rowKeys.size, notInSchedule, notOnPlan, ok: !notInSchedule.length && !notOnPlan.length },
+      axon: kctx.axon || null, sheets: { total, detail: wins.length, schedules: cont, evidence: hasEvidence, materials: !!opts.materials } }; }
   if (layout) { const byPage = new Map(); for (const t of doc.__rpText) { if (!byPage.has(t.pg)) byPage.set(t.pg, []); byPage.get(t.pg).push(t); } const hits = [];
-    for (const [pg, arr] of byPage) for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) { const a = arr[i], b = arr[j]; const ow = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oh = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); if (ow > 0.75 && oh > 0.75) hits.push({ page: pg, a: a.s, b: b.s, at: [Math.round(a.x0), Math.round(a.y0)] }); }
+    for (const [pg, arr] of byPage) for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) { const a = arr[i], b = arr[j]; const ow = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oh = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); if (ow > 0.75 && oh > 0.75 && (!(a.q || b.q) || rpQuadHit(rpShrink(a.q || rpBoxQuad(a), 0.4), rpShrink(b.q || rpBoxQuad(b), 0.4)))) hits.push({ page: pg, a: a.s, b: b.s, at: [Math.round(a.x0), Math.round(a.y0)] }); }
     layout.textOverlaps = { count: hits.length, first: hits.slice(0, 12) }; }
   doc.__rpText = null;
   return { doc, M, pages: doc.getNumberOfPages(), layout };
 }
+
 // no roof could be measured from the imagery: a one-sheet REVIEW REQUIRED report with what was found and what is needed
 function rpBuildNoRoof() {
   const tr = state.trace || {}; const st = typeof reviewReportStatus === 'function' ? reviewReportStatus() : { status: 'REVIEW REQUIRED', reasons: [{ text: tr.failed, needs: 'Imagery that shows the building.' }] };
   const addr = String(state.address || '').split(','); const d = tr.imageryDate;
   const M = { line1: addr[0] || 'Roof', line2: addr.slice(1).join(',').replace(/,?\s*USA\s*$/, '').trim(), statusLabel: 'REVIEW REQUIRED', imagery: { label: d ? rpDate(d) : 'not reported' } };
-  const doc = rpDoc(); rpHeader(doc, M, 'Overview & takeoff', 'No roof measured', 'Roof overview & takeoff', 1, 1); let y = 160;
+  const doc = rpDoc(); M.date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); rpHeader(doc, M, 'No roof measured', 1, 1); rpTitleBar(doc, 82, 'No roof measured'); let y = 96;
   rpRect(doc, RP.L, y, 548, 37, 0.94); rpRect(doc, RP.L, y, 2, 37, 0.22); rpText(doc, 'Review required', RP.L + 10, y + 15, { size: 9.3, bold: true }); rpText(doc, 'No roof area or length could be measured from the imagery. Nothing in this report is a measurement.', RP.L + 10, y + 28, { size: 8.7 }); y += 60;
   rpTitleBar(doc, y, 'What was found'); y += 18; for (const q of st.reasons) { y = rpText(doc, q.text, RP.L, y, { size: 9.2, maxWidth: 548 }) + 2; y = rpText(doc, 'Needed: ' + q.needs, RP.L + 10, y, { size: 8.8, color: GR(0.32), maxWidth: 538 }) + 8; }
   y += 10; rpTitleBar(doc, y, 'Property & imagery'); y += 18; const kv = (k, v) => { rpText(doc, k, RP.L, y, { size: 8.8, color: GR(0.32) }); y = rpText(doc, v, RP.L + 110, y, { size: 8.8, maxWidth: 438 }) + 2; };

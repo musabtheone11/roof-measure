@@ -51,6 +51,15 @@ var AT2 = {
   bandSteep: 20,       // steeper than 20/12: wall or eave drop-off, never a roof plane
   islandMaxM2: 8,      // enclosed regions smaller than this join the plane around them
   bandAspect: 3.5,     // ... and a band is a strip: length / width above this (hip-end triangles are compact)
+  bumpMaxM2: 16,       // a small region raised by an object on the roof (vent stack, AC unit, debris, a DSM spike) ...
+  bumpInlier: 0.5,     // ... is absorbed when a neighbouring plane explains at least this share of its pixels within bumpDist
+  bumpDist: 0.15,      // (m) and its own plane disagrees with that neighbour (pitch or a poor fit): see absorbBumps()
+  bumpPitchTol: 1.2,   // (x/12) a small region within this pitch of the neighbour and fitting well is a real facet: keep
+  bumpRms: 0.045,      // (m) own-fit RMS above this counts as a poor fit
+  bumpObjectRms: 0.08, // (m) a region this lumpy is not a roof plane: an object on the roof ...
+  bumpObjectMaxM: 1.5, // ... when it stands on or above a bigger neighbour plane everywhere, less than this high on average
+  bumpObjectRatio: 2.5, // ... and that neighbour is at least this many times its size (a porch roof beside a similar plane is kept)
+  debugBumps: false,
 };
 
 // ------------------------------------------------------------------ 1. local planes
@@ -683,6 +692,47 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
   return { label, changedIds };
 }
 
+// small regions raised or tilted by an object on the roof: when a neighbouring plane already explains most of a small
+// region's pixels and the region's own plane disagrees with it (another pitch, or a poor fit), the region is that plane
+// with something on it. Its pixels join the neighbour; the object stays out of every fit (heights above the plane are
+// outliers there). A real small facet (a bay's hip end, a dormer cheek) has its own orientation, so a neighbour explains
+// only the pixels along the shared edge and it is kept.
+function absorbBumps(dsm, label, regions, w, h, lp, geo) {
+  const changedIds = new Set();
+  for (let pass = 0; pass < 2; pass++) {
+    const area = new Map(), shared = new Map();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, l = label[i]; if (l < 0) continue; area.set(l, (area.get(l) || 0) + 1);
+      const nb = [x > 0 ? label[i - 1] : -1, x < w - 1 ? label[i + 1] : -1, y > 0 ? label[i - w] : -1, y < h - 1 ? label[i + w] : -1];
+      for (const q of nb) if (q !== l && q >= 0) { let m = shared.get(l); if (!m) shared.set(l, (m = new Map())); m.set(q, (m.get(q) || 0) + 1); } }
+    let changed = 0;
+    for (const [l, n] of area) {
+      const aM2 = n * geo.pxM2; if (aM2 > AT2.bumpMaxM2) continue;
+      const nbs = [...(shared.get(l) || new Map()).entries()].filter(([q]) => (area.get(q) || 0) * geo.pxM2 > aM2); if (!nbs.length) continue;
+      const P = regions[l].plane; let ownSq = 0, ownN = 0;
+      const pix = []; for (let i = 0; i < w * h; i++) if (label[i] === l && dsm[i] > -1000) { const x = i % w, y = (i - x) / w; pix.push(i); const r = dsm[i] - (P.a * lp.Ecol[x] + P.b * lp.Nrow[y] + P.c); ownSq += r * r; ownN++; }
+      if (pix.length < 12) continue; const ownRms = Math.sqrt(ownSq / ownN);
+      let best = null;
+      for (const [q, sh] of nbs) { const Q = regions[q].plane; let inl = 0, above = 0, sumUp = 0;
+        for (const i of pix) { const x = i % w, y = (i - x) / w; const r = dsm[i] - (Q.a * lp.Ecol[x] + Q.b * lp.Nrow[y] + Q.c); if (Math.abs(r) <= AT2.bumpDist) inl++; else if (r > 0) { above++; sumUp += r; } }
+        const frac = inl / pix.length, upFrac = (inl + above) / pix.length, meanUp = above ? sumUp / above : 0, dPitch = Math.abs(Math.hypot(P.a, P.b) - Math.hypot(Q.a, Q.b)) * 12, ang = angleBetween(P.a, P.b, Q.a, Q.b);
+        const bigger = (area.get(q) || 0) >= AT2.bumpObjectRatio * n;
+        // (a) mostly the neighbour's plane, tilted by something on it; (b) an object standing on the neighbour: not a plane
+        // (lumpy fit), on or above the neighbour everywhere, less than a storey high. A real raised roof (a dormer, an upper
+        // level) fits its own plane well, so (b) never takes it.
+        const a = frac >= AT2.bumpInlier && above >= (pix.length - inl) * 0.7 && (dPitch > AT2.bumpPitchTol || ownRms > AT2.bumpRms || ang > 12);
+        const b = bigger && ownRms >= AT2.bumpObjectRms && upFrac >= 0.9 && meanUp < AT2.bumpObjectMaxM;
+        const ok = a || b;
+        if (AT2.debugBumps) console.log(`bump? region ${l} ${aM2.toFixed(1)} m2 own ${(Math.hypot(P.a, P.b) * 12).toFixed(1)}/12 rms ${ownRms.toFixed(3)} vs ${q} (${((area.get(q) || 0) * geo.pxM2).toFixed(0)} m2, shared ${sh}): inliers ${(frac * 100).toFixed(0)}% on-or-above ${(upFrac * 100).toFixed(0)}% mean up ${meanUp.toFixed(2)} m dPitch ${dPitch.toFixed(1)} ang ${ang.toFixed(0)} -> ${ok ? (a ? 'tilted' : 'object') : 'keep'}`);
+        if (ok && (!best || sh > best.sh)) best = { q, frac, sh }; }
+      if (!best) continue;
+      for (const i of pix) label[i] = best.q; for (let i = 0; i < w * h; i++) if (label[i] === l) label[i] = best.q;
+      changedIds.add(best.q); changed++;
+    }
+    if (!changed) break;
+  }
+  return { label, changedIds };
+}
+
 // ------------------------------------------------------------------ polygon checks (metres)
 var ringAreaM = (r) => { let s = 0; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; };
 // drop points closer than 6 cm to the previous one and zero-width spikes (out and straight back within 4 cm)
@@ -782,6 +832,12 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
       const f = acc.solve(); if (f) regions[id].plane = f; }
     ids.length = 0; for (const l of new Set(label)) if (l >= 0) ids.push(l);
     for (const id of ids) { let n = 0; for (let i = 0; i < w * h; i++) if (label[i] === id) n++; regions[id].n = n; } }
+  // small regions raised by an object on the roof -> the plane under them, then refit the planes that grew
+  { const r3 = absorbBumps(tif.data, label, regions, w, h, lp, geo); label = r3.label;
+    for (const id of r3.changedIds) for (let pass = 0; pass < 2; pass++) { const acc = new PlaneAcc(); const pl = regions[id].plane;
+      for (let i = 0; i < w * h; i++) { if (label[i] !== id || !(tif.data[i] > -1000)) continue; const x = i % w, y = (i - x) / w; const r = Math.abs(tif.data[i] - (pl.a * lp.Ecol[x] + pl.b * lp.Nrow[y] + pl.c)); if (r > 0.2) continue; acc.add(lp.Ecol[x], lp.Nrow[y], tif.data[i]); }
+      const f = acc.solve(); if (f) regions[id].plane = f; }
+    if (r3.changedIds.size) { ids.length = 0; for (const l of new Set(label)) if (l >= 0) ids.push(l); for (const id of ids) { let n = 0; for (let i = 0; i < w * h; i++) if (label[i] === id) n++; regions[id].n = n; } } }
   // dominant building axis
   const dominantDeg = (() => { const bins = new Float64Array(90); for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (label[i] < 0) continue; const outside = label[i - 1] < 0 || label[i + 1] < 0 || label[i - w] < 0 || label[i + w] < 0; if (!outside) continue; } let best = 0;
     // use plane gradient directions weighted by area: roof planes face the building axes
@@ -1066,7 +1122,7 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
   if (ob && st) { try {
     obstruction = obSummarize(dsmRaw, w, h, geo, env.mask, label, regions, ob, st, toLL); obstruction.canopyOnMaskSqft = st.canopyOnMaskPx * geo.pxM2 * SQFT;
     // hidden zones: where a plane could continue under the canopy but nothing seen supports it. Not roof; an upper bound.
-    obstruction.hiddenZones = obHiddenZones(st.ghost, label, w, h, geo, regions, obstSegs, toLL, st.maskGhost).map((z, i) => ({ id: 'H' + (i + 1), path: z.path, centre: z.centre, planSqft: z.planSqft, upperSqft: z.upperSqft, pitch: z.pitch, facet: idName.has(z.region) ? idName.get(z.region) : null }));
+    obstruction.hiddenZones = obHiddenZones(st.ghost, label, w, h, geo, regions, obstSegs, toLL, st.maskGhost).map((z, i) => ({ id: 'Z' + (i + 1), path: z.path, centre: z.centre, planSqft: z.planSqft, upperSqft: z.upperSqft, pitch: z.pitch, facet: idName.has(z.region) ? idName.get(z.region) : null }));
     obstruction.obstructionBoundaryFt = edges.filter((e) => e.type === 'obstruction').reduce((a, e) => a + e.planM * FT, 0);
   } catch (e) { console.warn('obstruction summary failed', e); } }
   const plot = env && env.opts && env.opts.plot && ob ? { w, h, label: env.opts.plot === 'full' ? Array.from(label) : null, ids: env.opts.plot === 'full' ? facets.map((f) => f.id) : null, tree: (() => { const o = []; for (let y = 0; y < h; y++) { const r = []; for (let x = 0; x < w; x++) { const i = y * w + x; r.push(st.ghost[i] > 0 && label[i] < 0 ? 4 : st.unresolved[i] ? 3 : st.inferred[i] && label[i] >= 0 ? 2 : ob.tree[i] === 1 ? 1 : 0); } o.push(r); } return o; })() } : null;

@@ -704,7 +704,7 @@ async function autoTraceRoof(opts = {}) {
   const hiddenZones = [];
   results.forEach(({ res }, idx) => {
     const base = fi;
-    if (res.obstruction && res.obstruction.hiddenZones) for (const z of res.obstruction.hiddenZones) hiddenZones.push({ ...z, id: 'H' + (hiddenZones.length + 1), structure: idx + 1, facetName: z.facet != null ? 'F' + (base + z.facet + 1) : null });
+    if (res.obstruction && res.obstruction.hiddenZones) for (const z of res.obstruction.hiddenZones) hiddenZones.push({ ...z, id: 'Z' + (hiddenZones.length + 1), structure: idx + 1, facetName: z.facet != null ? 'F' + (base + z.facet + 1) : null });
     for (const f of res.facets) {
       // engine evidence kept on the facet: exact fitted slope, fit quality, Measured / Inferred / Unresolved, raw outline
       const added = addFacet(f.path, f.pitch, `F${++fi}`, f.slope != null ? { azimuth: f.azimuth, slope: f.slope, rms: f.rms, status: f.status, auto: true, structure: idx + 1, plane: f.plane, repaired: f.repaired, evidenceKind: f.evidenceKind, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, rawPath: f.rawPath, inferredSqft: f.inferredSqft, altSqft: f.altSqft, confirmedBy: f.confirmedBy ? { source: f.confirmedBy, date: (altInfo && altInfo.date) || '' } : null, verify: rmOpenCover(f) } : { azimuth: f.azimuth, structure: idx + 1, verify: f.pitchAssumed ? { source: 'assumed', date: '', note: 'no roof plane could be fitted here: the pitch is the job default, not a measurement' } : null });

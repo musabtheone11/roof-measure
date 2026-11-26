@@ -14,7 +14,7 @@ const ftIn = (s) => { const m = String(s).match(/(\d+)' (\d+)"/); return m ? +m[
 
 // ---- the PDF text -> numbers
 export function parseReportText(text) {
-  const pages = text.split('\f'); const p1 = pages[0] || ''; const lines = text.split('\n'); const out = { status: null, band: {}, takeoff: [], other: {}, facets: [], edges: [], blankFacets: [], blankEdges: [], refs: [] };
+  const pages = text.split('\f'); const p1 = pages[0] || ''; const lines = text.split('\n'); const out = { status: null, band: {}, takeoff: [], other: {}, strip: {}, facets: [], edges: [], blankFacets: [], blankEdges: [], refs: [] };
   const st = p1.match(/\b(REVIEW REQUIRED|SOURCE TAKEOFF|ILLUSTRATIVE|COMPLETE)\b/); out.status = st ? st[1] : null;
   const p1l = p1.split('\n');
   const bandAfter = (cap, re) => { const i = p1l.findIndex((l) => l.includes(cap)); if (i < 0) return null; for (let k = i + 1; k < Math.min(p1l.length, i + 5); k++) { const m = p1l[k].match(re); if (m) return m; } return null; };
@@ -24,11 +24,18 @@ export function parseReportText(text) {
   const m4 = bandAfter('REPORTED NET SLOPED AREA', /([\d,]+) ft²/); if (m4) out.band.reportedNet = num(m4[1]);
   const m5 = bandAfter('SKETCH-VERIFIED SUBTOTAL', /([\d,]+\.\d{2}) ft²\s+([\d,]+\.\d{2}) ft²\s+([\d,]+\.\d{2}) ft²/); if (m5) { out.band.subtotal = num(m5[1]); out.band.estimate = num(m5[2]); out.band.balance = num(m5[3]); }
   // takeoff rows (one per building, plus Total): name, net, SQ, [pitch], eave, rake, hip, ridge
-  for (const l of p1l) { const m = l.match(/^\s*([A-Za-z][A-Za-z +\-']*?)\s{2,}([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(?:([\d.]+ \/ 12)\s+)?([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$/); if (m) out.takeoff.push({ name: m[1].trim(), net: num(m[2]), sq: num(m[3]), pitch: m[4] || null, eave: num(m[5]), rake: num(m[6]), hip: num(m[7]), ridge: num(m[8]) }); }
-  for (const m of p1.matchAll(/(Valleys|Step flashing|Wall flashing|Transitions|Parapet)\s+([\d,]+\.\d{2}) ft/g)) out.other[m[1]] = num(m[2]);
+  for (const l of lines) { const m = l.match(/^\s*(?:\d+\s+)?([A-Za-z][A-Za-z0-9 +\-']*?)\s{2,}([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(?:([\d.]+ \/ 12)\s+)?([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$/); if (m) out.takeoff.push({ name: m[1].trim(), net: num(m[2]), sq: num(m[3]), pitch: m[4] || null, eave: num(m[5]), rake: num(m[6]), hip: num(m[7]), ridge: num(m[8]) }); }
+  for (const m of text.matchAll(/(Valleys|Step flashing|Wall flashing|Transitions|Parapet)\s+([\d,]+\.\d{2}) ft/g)) out.other[m[1]] = num(m[2]);
+  // the summary strip of the plan sheet: captions on one line, values (ft-in for the lines) on the next
+  { const ci = p1l.findIndex((l) => /\bEAVES\b/.test(l) && /\bRAKES\b/.test(l)); if (ci >= 0) { const caps = p1l[ci].trim().split(/\s{2,}/); let vi = ci + 1; while (vi < p1l.length && !p1l[vi].trim()) vi++; const vals = (p1l[vi] || '').trim().split(/\s{2,}/);
+    if (caps.length === vals.length) caps.forEach((c, i) => { const f = ftIn(vals[i]); if (f != null && /^(EAVES|RAKES|RIDGES|HIPS|VALLEYS|FLASHING)$/.test(c)) out.strip[c] = f; }); } }
   // schedules on the later sheets (several tables can share a line in -layout output)
+  const TYP = 'Eave|Rake|Hip|Ridge|Valley|Step flashing|Wall flashing|Transition|Parapet|Unspecified';
   for (const l of lines.slice(p1l.length)) {
-    for (const m of l.matchAll(/\b(F\d+)\s{2,}([A-Za-z][A-Za-z ,+\-]*?)\s{2,}(\d+(?:\.\d)? \/ 12)\*?\s+([\d,]+(?:\.\d{2})?)(?=\s|$)/g)) out.facets.push({ id: m[1], pitch: m[3], assigned: /\/ 12\*/.test(m[0]), area: num(m[4]) });
+    // per-edge keys by type (E1, K2, H3 ...): key, type, ft-in, decimal feet; an unsupported line prints "not measured"
+    for (const m of l.matchAll(new RegExp(`\\b([EKRHVSWTPX]\\d+)\\s{2,}(${TYP})\\s{2,}(\\d+' \\d+")( est\\.)?\\s{2,}([\\d,]+\\.\\d{2})`, 'g'))) out.edges.push({ key: m[1], type: TYPES[m[2]], ft: num(m[5]), ftIn: ftIn(m[3]), est: !!m[4] });
+    for (const m of l.matchAll(new RegExp(`\\b([EKRHVSWTPX]\\d+)\\s{2,}(${TYP})\\s{2,}not measured`, 'g'))) out.blankEdges.push(m[1]);
+    for (const m of l.matchAll(/\b(F\d+)\s{2,}([A-Za-z0-9][A-Za-z0-9 ,.+\-]*?)\s{2,}(\d+(?:\.\d)? \/ 12)\*?\s+([\d,]+(?:\.\d{2})?)(?=\s|$)/g)) out.facets.push({ id: m[1], pitch: m[3], assigned: /\/ 12\*/.test(m[0]), area: num(m[4]) });
     for (const m of l.matchAll(/\b(F\d+)\s{2,}([A-Za-z][A-Za-z ,+\-]*?)\s{2,}([\d,]+\.\d{2})\s{2,}(\d+(?:\.\d)? \/ 12)/g)) out.facets.push({ id: m[1], pitch: m[4], area: num(m[3]) });
     for (const m of l.matchAll(/\b(F\d+(?:–\d+)?)\s{2,}([A-Za-z][A-Za-z ,+\-]*?)\s*(?:\s{2,}|$)/g)) if (!/\d \/ 12/.test(l.slice(m.index, m.index + m[0].length + 40))) out.blankFacets.push(m[1]);
     for (const m of l.matchAll(/\b(\d{2,3})\s{2,}(Eave|Rake|Hip|Ridge|Valley|Step flashing|Wall flashing|Transition|Parapet|Unspecified)(?:\s{2,}([\d,]+(?:\.\d{1,2})?)( est\.)?)?(?=\s{2,}|\s*$)/g)) { if (m[3] != null) out.edges.push({ key: m[1], type: TYPES[m[2]], ft: num(m[3]), est: !!m[4] }); else out.blankEdges.push(m[1]); }
@@ -62,6 +69,8 @@ export function reconcile(P, M) {
     const tot = P.takeoff.find((r) => r.name === 'Total') || (P.takeoff.length === 1 ? P.takeoff[0] : null);
     if (tot) for (const t of ['eave', 'rake', 'hip', 'ridge']) chk(`takeoff ${t} ft`, eq2(tot[t], r2(M.byType[t] ? M.byType[t].trueFt : 0)), r2(M.byType[t] ? M.byType[t].trueFt : 0), tot[t]); else chk('takeoff row found', false, 'a Total row or one building row', P.takeoff.length + ' rows');
     for (const [lab, t] of [['Valleys', 'valley'], ['Step flashing', 'step'], ['Wall flashing', 'wall'], ['Transitions', 'transition'], ['Parapet', 'parapet']]) { const v = M.byType[t] ? M.byType[t].trueFt : 0; if (v > 0.05) chk(`${lab} ft`, eq2(P.other[lab], r2(v)), r2(v), P.other[lab]); else chk(`${lab} absent when zero`, P.other[lab] == null, 'not printed', P.other[lab]); }
+    for (const [cap, t] of [['EAVES', 'eave'], ['RAKES', 'rake'], ['RIDGES', 'ridge'], ['HIPS', 'hip'], ['VALLEYS', 'valley']]) if (P.strip[cap] != null) { const v = M.byType[t] ? M.byType[t].trueFt : 0; chk(`plan sheet ${cap.toLowerCase()} (ft-in)`, Math.abs(P.strip[cap] - v) <= 1 / 24 + 1e-6, Math.round(v * 12) / 12, P.strip[cap]); }
+    for (const e of P.edges) if (e.ftIn != null) chk(`edge ${e.key} ft-in matches its decimal`, Math.abs(e.ftIn - e.ft) <= 1 / 24 + 0.006, e.ft, e.ftIn);
     for (const S of M.structures) if (M.structures.length > 1) { const row = P.takeoff.find((r) => r.name !== 'Total' && eq2(r.net, r2(S.sloped))); chk(`building ${S.index} own row (${r2(S.sloped)} ft²)`, !!row, r2(S.sloped), row ? row.net : 'no row'); }
     // facet schedule: areas at 2 decimals; unsupported planes blank
     const byId = new Map(M.facets.map((f) => [f.id, f]));
