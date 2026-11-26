@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: bench/package-lock.json
       - name: Install benchmark dependencies
@@ -48,3 +48,55 @@ jobs:
       - name: Vision-review fusion (corner moved back on evidence, decoy refused, canopy corner never moved, missed shed opened)
         run: node visiontest.mjs
         working-directory: bench
+      - name: Evidence provenance, geometry support, plan layout and stale exports
+        run: |
+          node evidence-gate-test.mjs
+          node evidence-ui-test.mjs
+          node geometrytest.mjs
+          node planfirsttest.mjs
+          node stale-report-test.mjs
+          node net-area-test.mjs
+          node report-information-test.mjs
+          node location-lifecycle-test.mjs
+          node registrationtest.mjs
+          node registration-stress.mjs
+          node trace-race-test.mjs
+          node spatial-test.mjs
+          node evidence-notes-test.mjs
+          node batch-update-test.mjs
+          node layer-cache-test.mjs
+          node map-label-test.mjs
+          node trace-evidence-test.mjs
+        working-directory: bench
+      - name: Server-side AI geometry and orchestration contracts
+        run: |
+          node --test server/*.test.mjs
+          node bench/runtime-agents-test.mjs
+      - name: Source-image report quantity and revision checks
+        run: node bench/ai-report-test.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned browser test dependencies
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+          python -m pip install PyMuPDF==1.26.6
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          node -e "console.log('CHROMIUM_PATH=' + require('playwright').chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Browser source review, local PDF pages and rendered reports
+        run: |
+          node tools/dev/ai-ui-test.mjs
+          node tools/dev/ai-cancel-ui-test.mjs
+          node tools/dev/ai-source-restrictions-test.mjs
+          node tools/dev/ai-boundary-review-test.mjs
+          node tools/dev/pdf-ui-test.mjs
+          node tools/dev/ai-report-test.mjs
+          node tools/dev/static-ai-test.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-review-browser-artifacts
+          path: .devcache/ai-report-tests/
+          if-no-files-found: ignore

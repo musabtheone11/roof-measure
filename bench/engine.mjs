@@ -9,7 +9,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export function loadEngine(files = ['autotrace.js', 'autotrace2.js', 'obstruction.js']) {
   const ctx = { console, Math, Float64Array, Float32Array, Int32Array, Int16Array, Uint8Array, Map, Set, Array, Number, Object, JSON, Infinity, NaN, state: {}, window: {}, location: { hostname: 'bench' }, toast() {}, degToPitch: (d) => 12 * Math.tan(d * Math.PI / 180) };
   vm.createContext(ctx);
-  for (const f of files) { const fp = path.join(ROOT, f); if (fs.existsSync(fp)) vm.runInContext(fs.readFileSync(fp, 'utf8'), ctx, { filename: f }); }
+  for (const f of files) { const fp = path.resolve(ROOT, f); if (!fs.existsSync(fp) && /(?:^|[/\\])autotrace2?\.js$/.test(f)) throw new Error('Missing engine file: ' + fp); if (fs.existsSync(fp)) vm.runInContext(fs.readFileSync(fp, 'utf8'), ctx, { filename: f }); }
   return ctx;
 }
 

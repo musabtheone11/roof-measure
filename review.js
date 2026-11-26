@@ -104,7 +104,61 @@ function reviewConfirm(kind, id, source, date, note) {
   reviewLog({ target: kind === 'facet' ? it.name : `${EDGE_TYPES[it.type].label} line`, action: `${was} -> confirmed on georeferenced imagery`, source, date, note: note || '' });
   recompute();
 }
-window.rmReview = { acceptZone: reviewAcceptZone, markVerify: reviewMarkVerify, confirm: reviewConfirm, log: reviewLog };
+// Provenance is recorded per quantity; checking a source does not certify its other quantities.
+function reviewScopeRevision(job) {
+  const pick = (x) => ({ modelId: x.modelId, path: x.path, structure: x.structure || 1, level: x.level || 1, omit: !!x.omit, excluded: !!x.excluded });
+  return RM.modelRevision({ address: job.address, location: job.location, facets: (job.facets || []).map(pick), edges: (job.edges || []).map(pick) });
+}
+function reviewEvidenceFields(record) {
+  const r = { source: String(record.source || '').trim(), date: String(record.date || '').trim(), basis: String(record.basis || '').trim() };
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? new Date(r.date + 'T00:00:00Z') : null;
+  if (!r.source || !r.basis || !d || !Number.isFinite(d.getTime()) || d.toISOString().slice(0, 10) !== r.date)
+    throw new Error('Enter a source, a valid YYYY-MM-DD date, and how this quantity was measured or checked.');
+  return r;
+}
+function reviewEvidenceContext(job = serialize()) {
+  const e = job.trace && job.trace.scopeEvidence;
+  let current = false;
+  try { current = !!e && !!reviewEvidenceFields(e) && e.revision === reviewScopeRevision(job); } catch (_) { /* incomplete evidence */ }
+  return { selectionVerified: current && e.selectionVerified === true, scaleVerified: current && e.scaleVerified === true };
+}
+function reviewRecordQuantity(modelId, quantity, record) {
+  const job = serialize(); const item = [...(job.facets || []), ...(job.edges || [])].find((x) => x.modelId === modelId);
+  const isFacet = (job.facets || []).includes(item);
+  if (!item || !(isFacet ? ['geometry', 'pitch', 'area'] : ['geometry', 'type', 'length']).includes(quantity)) throw new Error('Choose an existing item and its applicable quantity.');
+  const live = [...state.facets, ...state.edges].find((x) => x.modelId === modelId);
+  if (!live) throw new Error('This item is no longer in the model.');
+  if (!['measured', 'inferred', 'unresolved'].includes(record.status)) throw new Error('Choose a quantity status.');
+  const entry = { ...reviewEvidenceFields(record), status: record.status, revision: RM.evidenceRevision(item, quantity, job) };
+  live.measurementEvidence = { ...(live.measurementEvidence || {}), [quantity]: entry };
+  reviewLog({ target: modelId + ' ' + quantity, action: 'quantity evidence recorded (' + entry.status + ')', source: entry.source, date: entry.date, note: entry.basis });
+  recompute(); return entry;
+}
+function reviewRecordScope(record) {
+  const fields = reviewEvidenceFields(record); const job = serialize();
+  if (!record.selectionVerified && !record.scaleVerified) throw new Error('Select the structure or scale check you actually completed.');
+  if (!state.trace) state.trace = {};
+  state.trace.scopeEvidence = { ...fields, selectionVerified: record.selectionVerified === true, scaleVerified: record.scaleVerified === true, revision: reviewScopeRevision(job) };
+  // Retain these legacy fields for compatibility; validation requires the revision-bound record above.
+  state.trace.selectionVerified = record.selectionVerified === true; state.trace.scaleVerified = record.scaleVerified === true;
+  reviewLog({ target: 'roof selection and scale', action: 'scope evidence recorded', source: fields.source, date: fields.date, note: fields.basis });
+  recompute(); return state.trace.scopeEvidence;
+}
+function renderQuantityEvidence(out) {
+  const box = document.createElement('details'); box.className = 'help';
+  const items = [...state.facets.map((x) => ({ x, label: x.name + ' (' + x.modelId + ')', kinds: ['geometry', 'pitch', 'area'] })), ...state.edges.filter((x) => !EDGE_TYPES[x.type].notRoof).map((x) => ({ x, label: EDGE_TYPES[x.type].label + ' (' + x.modelId + ')', kinds: ['geometry', 'type', 'length'] }))];
+  const fields = `<label style="display:block;margin-top:6px">Source <input style="width:100%" data-source type="text" placeholder="Dated orthomosaic, dataset or field record"></label><label style="display:block;margin-top:6px">Date <input style="width:100%" data-date type="text" placeholder="YYYY-MM-DD"></label><label style="display:block;margin-top:6px">Measurement basis <input style="width:100%" data-basis type="text" placeholder="What supports this quantity; calibration or field method"></label>`;
+  box.innerHTML = `<summary>Record measurement evidence</summary><div class="small muted">Record each quantity separately. A geometry check does not establish pitch or length. Model edits invalidate affected evidence.</div><div class="grid2"><label>Item <select data-item>${items.map((i) => `<option value="${esc(i.x.modelId)}">${esc(i.label)}</option>`).join('')}</select></label><label>Quantity <select data-quantity></select></label></div><div data-quantity-fields>${fields}</div><label>Status <select data-status><option value="unresolved">Unresolved</option><option value="inferred">Inferred</option><option value="measured">Measured</option></select></label><button data-save-quantity class="small">Save quantity evidence</button><hr><b>Structure and scale checks</b><div data-scope-fields>${fields}</div><label class="chk"><input data-selection type="checkbox"> I checked the selected structure against this source</label><label class="chk"><input data-scale type="checkbox"> I checked the source scale/calibration</label><button data-save-scope class="small">Save structure / scale evidence</button><div data-result class="small" role="status"></div>`;
+  out.appendChild(box);
+  const q = (s) => box.querySelector(s), values = (s) => ({ source: q(s + ' [data-source]').value, date: q(s + ' [data-date]').value, basis: q(s + ' [data-basis]').value });
+  const quantities = () => { const item = items.find((i) => i.x.modelId === q('[data-item]').value); q('[data-quantity]').innerHTML = item ? item.kinds.map((kind) => `<option>${kind}</option>`).join('') : ''; };
+  q('[data-item]').onchange = quantities; quantities();
+  const save = (fn) => { try { fn(); q('[data-result]').textContent = 'Evidence saved against this model revision.'; } catch (e) { q('[data-result]').textContent = e.message; } };
+  q('[data-save-quantity]').onclick = () => save(() => reviewRecordQuantity(q('[data-item]').value, q('[data-quantity]').value, { ...values('[data-quantity-fields]'), status: q('[data-status]').value }));
+  q('[data-save-scope]').onclick = () => save(() => reviewRecordScope({ ...values('[data-scope-fields]'), selectionVerified: q('[data-selection]').checked, scaleVerified: q('[data-scale]').checked }));
+}
+
+window.rmReview = { recordQuantity: reviewRecordQuantity, recordScope: reviewRecordScope, evidenceContext: reviewEvidenceContext, acceptZone: reviewAcceptZone, markVerify: reviewMarkVerify, confirm: reviewConfirm, log: reviewLog };
 
 function renderReview() { clearTimeout(RV.timer); RV.timer = setTimeout(renderReviewNow, 120); }
 function renderReviewNow() {
@@ -117,7 +171,7 @@ function renderReviewNow() {
     const d = tr.imageryDate; const ds = d ? `${+d.year || 0}-${String(+d.month || 0).padStart(2, '0')}-${String(+d.day || 0).padStart(2, '0')}` : 'unknown date';
     const ageY = d ? (Date.now() - new Date(d.year, d.month - 1, d.day).getTime()) / 3.15576e10 : null;
     if (ageY != null && ageY > 3) h += `<div class="small" style="color:#ffb000;margin-bottom:4px"><b>Imagery is ${fmt(ageY, 1)} years old.</b> Additions, re-roofs, removed trees or removed sections since ${d.year} are not in this trace: compare with newer imagery (<b>Review roof from other angles</b>) before exporting.</div>`;
-    h += `<div class="muted small">Auto-trace from ${esc(tr.source)}; imagery ${ds}${tr.imageryQuality ? ' (' + esc(String(tr.imageryQuality).toLowerCase()) + ' quality)' : ''}. Building chosen: ${esc(tr.selection.method)} (${fmt(tr.selection.planSqft)} sf footprint).</div>`;
+    h += `<div class="muted small">Auto-trace from ${esc(tr.source || 'manually recorded source')}; imagery ${ds}${tr.imageryQuality ? ' (' + esc(String(tr.imageryQuality).toLowerCase()) + ' quality)' : ''}. Building chosen: ${esc((tr.selection && tr.selection.method) || 'manual review')} (${fmt(tr.selection && tr.selection.planSqft || 0)} sf footprint).</div>`;
   }
   // structures
   const ids = [...new Set(state.facets.map((f) => f.structure || 1))].sort((a, b) => a - b);
@@ -127,7 +181,7 @@ function renderReviewNow() {
   }
   // status: confirmed first
   h += `<h4>Measurement status</h4><div class="kpis">
-      <div class="kpi"><div class="v">${fmt(t.confirmedSloped)}</div><div class="l">sf confirmed</div></div>
+      <div class="kpi"><div class="v">${fmt(t.confirmedSloped)}</div><div class="l">sf marked measured</div></div>
       <div class="kpi"><div class="v" style="color:${t.inferredSloped > 0.5 ? '#ffb000' : 'inherit'}">${fmt(t.inferredSloped)}</div><div class="l">sf inferred</div></div>
       <div class="kpi"><div class="v" style="color:${r.unresolved.length ? '#ff6b61' : 'inherit'}">${r.unresolved.length}</div><div class="l">unresolved items</div></div>
     </div>`;
@@ -159,6 +213,7 @@ function renderReviewNow() {
   if (tr && tr.repairs && tr.repairs.length) h += `<details class="help"><summary>${tr.repairs.length} automatic repair${tr.repairs.length > 1 ? 's' : ''} during tracing</summary><div class="muted small">${tr.repairs.map((x) => esc(`${x.reason}: ${x.action}`)).join('<br>')}</div></details>`;
   h += `<div class="muted small" style="margin-top:6px">Totals check: ${r.reconcile.ok ? 'all subtotals reconcile' : '<b style="color:#ff6b61">a subtotal does not reconcile</b>'}.</div>`;
   out.innerHTML = h;
+  renderQuantityEvidence(out);
   out.querySelectorAll('[data-struct]').forEach((el) => { el.onchange = () => reviewSetStructure(+el.dataset.struct, el.checked); });
   out.querySelectorAll('[data-zoomstruct]').forEach((el) => { el.onclick = (ev) => { ev.preventDefault(); const b = new google.maps.LatLngBounds(); state.facets.filter((f) => (f.structure || 1) === +el.dataset.zoomstruct).forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 80); }; });
   out.querySelectorAll('[data-sel]').forEach((el) => { el.onclick = (ev) => { if (ev.target.tagName === 'BUTTON') return; const [kind, id] = el.dataset.sel.split(':'); if (kind === 'zone') { const u = r.unresolved.find((q) => q.kind === 'zone' && q.id === id); if (u) reviewZoom(u.at); return; } if (state.tool !== 'select') setTool('select'); select({ kind, id: +id }); const it = findSel(); if (it) reviewZoom(it.shape.getPath().getAt(0)); }; });
@@ -176,15 +231,21 @@ function renderReviewNow() {
 // and the specific evidence that would settle it. Built from the same review state the totals come from.
 function reviewReportStatus(r) {
   r = r || reviewState(); const t = r.totals, tr = state.trace || {};
-  return RM.reportStatus({ failed: tr.failed, facets: state.facets.length, hiddenZones: r.unresolved.filter((u) => u.kind === 'zone'), hiddenUpperSqft: t.hiddenUpperKnown === false ? null : t.hiddenUpperSloped,
+  const job = serialize();
+  const illustrative = state.source && state.source.kind === 'illustrative';
+  const evidenceAudit = illustrative ? null : RM.auditEvidence(job, reviewEvidenceContext(job));
+  const result = RM.reportStatus({ evidenceAudit, unclassifiedFt: r.audit.unclassifiedFt, failed: tr.failed, facets: state.facets.length, hiddenZones: r.unresolved.filter((u) => u.kind === 'zone'), hiddenUpperSqft: t.hiddenUpperKnown === false ? null : t.hiddenUpperSloped,
     inferredSqft: t.inferredSloped, unresolved: r.unresolved.filter((u) => u.kind !== 'zone'), verify: r.verify, geometryErrors: r.errors, reconcileOk: r.reconcile.ok,
-    imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, newerRecords: tr.newerRecords, extra: typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : [] });
+    imageryQuality: tr.engine ? tr.imageryQuality : null, layerChoice: tr.layerChoice, addressCheck: tr.addressCheck, newerRecords: tr.newerRecords, extra: [...(typeof reviewExtraReasons === 'function' ? reviewExtraReasons(r) : []), ...(t.netAreaIssues || []).map(x => ({ code: 'cutout-scope', id: x.id, text: x.id + ': ' + x.reason, needs: 'Locate the cutout within one supported facet at the correct roof level and structure, and verify its quantity.' }))] });
+  if (illustrative && result.status === 'COMPLETE') result.status = 'ILLUSTRATIVE';
+  return result;
 }
 // asked before any export: incomplete totals and geometry errors must be acknowledged, never silently exported
 function reviewGate() {
   if (!state.facets.length && !(state.trace && state.trace.failed)) return true;
-  const st = reviewReportStatus(); if (st.status === 'COMPLETE') return true;
-  return window.__rmNoConfirm ? true : confirm('REVIEW REQUIRED before you export:\n\n- ' + st.reasons.map((q) => q.text).join('\n- ') + '\n\nThe report states this on its first page with the evidence each item needs. Open "5. Review before export" (and "Review roof from other angles") to resolve them, or press OK to export a REVIEW REQUIRED report.');
+  const st = reviewReportStatus(); if (st.status === 'COMPLETE' || st.status === 'ILLUSTRATIVE') return true;
+  const reasons = st.reasons.length > 12 ? [...new Map(st.reasons.map(q => [q.code, q.text])).values()].slice(0, 8).concat(st.reasons.length + ' review findings are keyed to the plan in the report evidence notes.') : st.reasons.map(q => q.text);
+  return window.__rmNoConfirm ? true : confirm('REVIEW REQUIRED before you export:\n\n- ' + reasons.join('\n- ') + '\n\nThe report states this on its first page with the evidence each item needs. Open "5. Review before export" (and "Review roof from other angles") to resolve them, or press OK to export a REVIEW REQUIRED report.');
 }
 
 // the export validator's geometry check on the fitted planes: neighbouring planes must meet at one height at a shared corner

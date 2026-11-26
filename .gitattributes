@@ -1,0 +1,2 @@
+# Keep upstream distribution bytes and license formatting unchanged.
+vendor/** -whitespace linguist-vendored

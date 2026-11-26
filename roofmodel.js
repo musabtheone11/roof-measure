@@ -72,6 +72,64 @@ var RM = (function () {
     return { planFt: plan, factor, trueFt: plan * factor, basis, pitch, lengthKind: factor < 1.002 ? 'horizontal' : (basis === 'plane' ? 'sloped (measured plane)' : 'sloped (' + basis + ')') };
   }
 
+  // Net facet schedule shared by reports and takeoffs. Cutouts must have one fully containing
+  // host on the same structure/level. Ambiguous, partial and unknown cuts remain review items.
+  // Input quantities are unrounded square feet; paths are geographic lat/lng literals.
+  function netFacetAreas(input) {
+    const rows = input.map(r => ({ ...r, netPlan: r.excluded ? 0 : r.plan, netSloped: r.excluded ? 0 : r.sloped, cutoutIndices: [] }));
+    const unmatchedCutouts = [], accepted = [];
+    const fr = frame(rows.map(r => r.path || []));
+    const rings = rows.map(r => fr && (r.path || []).map(fr.xy));
+    const finiteArea = r => Number.isFinite(r.plan) && r.plan > 0 && Number.isFinite(r.sloped) && r.sloped > 0;
+    const cross = (a,b,p) => (b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);
+    const inside = (p,r,boundary = true) => {
+      if (r.some((a,i) => pointSeg(p,a,r[(i+1)%r.length]) < 1e-7)) return boundary;
+      let yes = false;
+      for (let i=0,j=r.length-1;i<r.length;j=i++) if ((r[i][1]>p[1]) !== (r[j][1]>p[1]) && p[0] < (r[j][0]-r[i][0])*(p[1]-r[i][1])/(r[j][1]-r[i][1])+r[i][0]) yes = !yes;
+      return yes;
+    };
+    const properCross = (a,b,c,d) => cross(a,b,c)*cross(a,b,d) < -1e-14 && cross(c,d,a)*cross(c,d,b) < -1e-14;
+    const valid = r => r && r.length >= 3 && r.every(p => p.every(Number.isFinite)) && Math.abs(ringArea(r)) > 1e-8 && !r.some((a,i) => r.some((c,j) => j>i+1 && !(i===0 && j===r.length-1) && properCross(a,r[(i+1)%r.length],c,r[(j+1)%r.length])));
+    const contains = (outer,inner) => {
+      if (!inner.every(p => inside(p,outer))) return false;
+      // Split each cutout segment at every host-boundary intersection. Checking every
+      // interval prevents a chord crossing a narrow concave gap from passing containment.
+      return inner.every((a,i) => {
+        const b=inner[(i+1)%inner.length], dx=b[0]-a[0],dy=b[1]-a[1],len2=dx*dx+dy*dy;
+        if (len2 < 1e-14) return false;
+        const ts=[0,1];
+        outer.forEach((c,j) => {
+          const d=outer[(j+1)%outer.length],ex=d[0]-c[0],ey=d[1]-c[1],den=dx*ey-dy*ex;
+          if (Math.abs(den)>1e-12) {
+            const t=((c[0]-a[0])*ey-(c[1]-a[1])*ex)/den, u=((c[0]-a[0])*dy-(c[1]-a[1])*dx)/den;
+            if(t>0&&t<1&&u>=0&&u<=1)ts.push(t);
+          } else if(Math.abs(cross(a,b,c))<1e-8) for(const p of [c,d]) {const t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len2;if(t>0&&t<1)ts.push(t);}
+        });
+        ts.sort((x,y)=>x-y);
+        return ts.slice(1).every((t,j)=>inside([a[0]+dx*(t+ts[j])/2,a[1]+dy*(t+ts[j])/2],outer));
+      });
+    };
+    const overlaps = (a,b) => {
+      if(a.some(p=>inside(p,b,false))||b.some(p=>inside(p,a,false)))return true;
+      if(a.some((p,i)=>b.some((q,j)=>properCross(p,a[(i+1)%a.length],q,b[(j+1)%b.length]))))return true;
+      // Coincident polygons can have no strictly interior vertex or crossing.
+      const sign=Math.sign(ringArea(a));
+      return a.some((p,i)=>{const q=a[(i+1)%a.length],dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy)||1;const t=[(p[0]+q[0])/2-sign*dy/L*1e-6,(p[1]+q[1])/2+sign*dx/L*1e-6];return inside(t,a,false)&&inside(t,b,false);});
+    };
+    const reject = (index,reason) => unmatchedCutouts.push({ index, row: input[index], reason });
+    rows.forEach((cut,i) => {
+      if (!cut.excluded || cut.omit) return;
+      if (!finiteArea(cut) || !valid(rings[i]) || cut.areaUnsupported || cut.pitchUnknown || cut.status === 'unresolved') {reject(i,'Cutout geometry or quantity is unresolved.');return;}
+      const hosts=rows.map((h,j)=>j).filter(j=>!rows[j].excluded&&!rows[j].omit&&(rows[j].level||1)===(cut.level||1)&&(rows[j].structure||1)===(cut.structure||1)&&finiteArea(rows[j])&&valid(rings[j])&&contains(rings[j],rings[i]));
+      if(hosts.length!==1){reject(i,hosts.length?'Cutout has more than one possible host.':'Cutout is not fully contained in one facet of the same structure and level.');return;}
+      const j=hosts[0];
+      if(accepted.some(k=>rows[k].hostIndex===j&&overlaps(rings[i],rings[k]))){reject(i,'Cutout overlaps another cutout on its host.');return;}
+      if(cut.plan>rows[j].netPlan+1e-6||cut.sloped>rows[j].netSloped+1e-6){reject(i,'Cutout quantities exceed its remaining host area.');return;}
+      rows[j].netPlan-=cut.plan;rows[j].netSloped-=cut.sloped;rows[j].cutoutIndices.push(i);cut.hostIndex=j;accepted.push(i);
+    });
+    return { rows, unmatchedCutouts, ok: unmatchedCutouts.length === 0 };
+  }
+
   // ---- geometry audit. facets: [{name, path, excluded, level, omit}], lines: [{type, path, omit}]
   // returns { issues: [{severity:'error'|'warn'|'info', code, message, facet?, line?, at:{lat,lng}}], unclassifiedFt, ok }
   function audit(facets, lines, opt) {
@@ -181,6 +239,72 @@ var RM = (function () {
     return { checks, ok: checks.every((c) => c.ok) };
   }
 
+  // Content revision, independent of camera state, report timestamps and object key order. Keep the
+  // canonical payload (rather than a short collision-prone hash): equal-area outlines must differ.
+  function modelRevision(model) {
+    const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().filter((k) => !['savedAt', 'camera', 'orbit', 'view', 'zoom'].includes(k)).map((k) => [k, canonical(v[k])])) : v;
+    return JSON.stringify(canonical(model));
+  }
+
+  // Bind each evidence record to the inputs of that quantity. Evidence metadata itself is
+  // excluded so attaching a record never invalidates its own revision.
+  function evidenceRevision(item, quantity, model) {
+    const geometry = { path: item.path, structure: item.structure || 1, level: item.level || 1 };
+    const pitch = { pitch: item.pitch, slope: item.slope, plane: item.plane, azimuth: item.azimuth };
+    if (quantity === 'geometry') return modelRevision(geometry);
+    if (quantity === 'pitch') return modelRevision({ ...geometry, ...pitch });
+    if (quantity === 'type') return modelRevision({ ...geometry, type: item.type });
+    // A sloped line may inherit an adjoining facet pitch or the job default. Bind
+    // these dependencies too, conservatively including every candidate facet.
+    const dependencies = quantity === 'area'
+      ? { cutouts: (model && model.facets || []).filter(f => f.excluded && !f.omit).map(f => ({ path: f.path, pitch: f.pitch, slope: f.slope, plane: f.plane, level: f.level || 1, structure: f.structure || 1 })) }
+      : quantity === 'length' && item.pitch == null && (SLOPE_KIND[item.type] || 'flat') !== 'flat'
+      ? { defaultPitch: model && model.defaultPitch, facets: (model && model.facets || []).map(f => ({ path: f.path, pitch: f.pitch, slope: f.slope, plane: f.plane, omit: !!f.omit, excluded: !!f.excluded })) } : null;
+    return modelRevision({ ...geometry, ...pitch, type: item.type, factor: item.factor, autoType: item.autoType, excluded: !!item.excluded, dependencies });
+  }
+
+  // Independent evidence for geometry, classification, pitch and length. A measured area does
+  // not establish an outline, and a visible outline does not establish a pitch. Legacy jobs can
+  // still export, but absent provenance is explicitly unresolved instead of implicitly measured.
+  function auditEvidence(model, context) {
+    const c = context || {}, issues = [], quantities = [];
+    const add = (code, id, quantity, text) => issues.push({ code, id, quantity, text,
+      needs: 'Record a dated georeferenced source or field measurement, its measurement basis, and the affected ' + id + ' quantity.' });
+    const dateOK = (v) => {
+      const value = typeof v === 'string' ? v : v && `${v.year}-${String(v.month).padStart(2, '0')}-${String(v.day).padStart(2, '0')}`;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+      const parsed = new Date(value + 'T00:00:00Z');
+      return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    };
+    const stated = (v) => typeof v === 'string' && v.trim().length > 0;
+    const visit = (item, id, kinds) => {
+      for (const kind of kinds) {
+        if ((kind === 'pitch' && item.pitchUnknown) || (kind === 'area' && (item.pitchUnknown || item.areaUnsupported)))
+          add('unsupported-quantity', id, kind, id + ' ' + kind + ' is explicitly unsupported.');
+        const e = item.measurementEvidence && item.measurementEvidence[kind] || {};
+        const status = STATUS.includes(e.status) ? e.status : 'unresolved';
+        const q = { id, quantity: kind, source: e.source || null, date: e.date || null, basis: e.basis || null, status };
+        quantities.push(q);
+        const provenance = stated(q.source) && dateOK(q.date) && stated(q.basis);
+        if (status === 'inferred' && provenance) add('inferred-quantity', id, kind, id + ' ' + kind + ' is an evidence-backed estimate, requiring review.');
+        else if (status !== 'measured' || !provenance)
+          add('quantity-evidence', id, kind, id + ' ' + kind + ' has ' + (status === 'measured' ? 'incomplete provenance' : status + ' evidence') + '.');
+        if ((e.revision || e.modelRevision || provenance) && (e.revision || e.modelRevision) !== evidenceRevision(item, kind, model))
+          add('stale-evidence', id, kind, id + ' ' + kind + ' evidence does not match its current measurement inputs.');
+        if ((kind === 'geometry' || kind === 'type') && /(?:canopy|shadow)\s*(?:boundary|edge|outline|line)/i.test(String(q.basis || '')))
+          add('non-roof-boundary', id, kind, id + ' uses canopy or shadow as a roof boundary.');
+      }
+    };
+    (model.facets || []).filter((f) => !f.omit).forEach((f, i) => visit(f, f.modelId || f.id || f.name || 'F' + (i + 1), ['geometry', 'pitch', 'area']));
+    (model.edges || model.lines || []).filter((e) => !e.omit && e.type !== 'obstruction').forEach((e, i) => visit(e, e.modelId || e.id || e.ref || 'L' + (i + 1), ['geometry', 'type', 'length']));
+    if (c.selectionVerified !== true) add('selection-evidence', 'roof', 'selection', 'The selected structure has not been verified against the source.');
+    if (c.scaleVerified !== true) add('scale-evidence', 'roof', 'scale', 'The source scale has not been verified.');
+    if (c.reportRevision != null && c.reportRevision !== modelRevision(model))
+      add('stale-report', 'roof', 'revision', 'The report describes an earlier roof model revision.');
+    return { ok: issues.length === 0, issues, quantities, revision: modelRevision(model) };
+  }
+
   // hatch lines for a polygon (unresolved zones): segments of parallel lines at `angleDeg`, `spacing` apart, clipped to the ring
   function hatch(ring, spacing, angleDeg) {
     const a = (angleDeg == null ? 45 : angleDeg) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a); const out = [];
@@ -216,6 +340,8 @@ var RM = (function () {
       add('selection', `The address point is ${ac.distM > 0 ? Math.round(ac.distM * 3.28084) + ' ft from' : 'on'} the building measured` + (ac.precision && ac.precision !== 'ROOFTOP' ? ` and the address was located only approximately (${String(ac.precision).toLowerCase().replace(/_/g, ' ')})` : '') + (ac.partial ? ' (partial address match)' : '') + ': it may be a neighbouring building.', 'Confirm on the map that this is the customer\'s building (lot lines or a site visit).');
     const grown = (f.newerRecords || []).filter((q) => q.ratio >= 1.25).sort((p, q) => q.ratio - p.ratio)[0];
     if (f.facets && grown) add('imagery-change', `A newer Google image of this building (${fd(grown.date)}) shows about ${Math.round((grown.ratio - 1) * 100)}% more roof than the image traced: the building may have been extended or rebuilt since, or more of it was under trees.`, 'Compare the dated imagery (Review roof from other angles) and trace from the newer image, or measure on site.');
+    if (f.unclassifiedFt > 2) add('unclassified-boundary', `${n0(f.unclassifiedFt)} ft of required boundary is unclassified.`, 'Classify each supported boundary; leave hidden boundaries unresolved.');
+    if (f.evidenceAudit && !f.evidenceAudit.ok) for (const x of f.evidenceAudit.issues) why.push({ ...x });
     for (const x of f.extra || []) why.push(x);
     return { status: why.length ? 'REVIEW REQUIRED' : 'COMPLETE', reasons: why };
   }
@@ -231,6 +357,6 @@ var RM = (function () {
     const out = []; for (const arr of at.values()) { const names = [...new Set(arr.map((q) => q.name))]; if (names.length < 2 || onBreak([arr[0].e, arr[0].n])) continue; const zs = arr.map((q) => q.z); const sp = Math.max(...zs) - Math.min(...zs); if (sp > tolM) out.push({ names, spreadM: sp, at: [arr[0].e, arr[0].n] }); }
     return out.sort((p, q) => q.spreadM - p.spreadM);
   }
-  return { reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg, planeConflicts };
+  return { netFacetAreas, evidenceRevision, modelRevision, auditEvidence, reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg, planeConflicts };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = RM;

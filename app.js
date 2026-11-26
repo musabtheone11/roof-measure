@@ -35,6 +35,7 @@ const state = {
   key: localStorage.getItem('rm.key') || '',
   address: '',
   location: null,          // {lat,lng}
+  locationEpoch: 0, addressRequestEpoch: 0, solarRequestEpoch: 0,
   defaultPitch: 6,
   waste: 10,
   facets: [],              // {id, name, pitch, shape(Polygon), twoStory, twoLayer, excluded}
@@ -52,6 +53,7 @@ const state = {
   solarShapes: [],
   showSolar: true,
   showFacetEdges: true,
+  showAllLabels: false,
   selected: null,          // {kind:'facet'|'edge', id}
   tool: 'select',
   jobName: '',
@@ -180,21 +182,23 @@ function summarize(fs, cs, es) {
   // an inferred or unresolved facet is mostly seen: only its hidden part counts as such when the trace measured that part
   for (const x of fs) { const st = RM.statusOf(x.f); if (st !== 'measured' && x.f.inferredSqft > 0 && x.f.inferredSqft < x.m.sloped && !x.f.edited) { areaByStatus[st] += x.f.inferredSqft; areaByStatus.measured += x.m.sloped - x.f.inferredSqft; } else areaByStatus[st] += x.m.sloped; }
   // a cut-out (skylight, chimney) comes off the facet it sits on: that facet's pitch group and its status
-  const hostOf = (c) => { const p = centroid(c.m.path); const inside = (r) => { let k = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) if ((r[i].lat > p.lat) !== (r[j].lat > p.lat) && p.lng < (r[j].lng - r[i].lng) * (p.lat - r[i].lat) / (r[j].lat - r[i].lat) + r[i].lng) k = !k; return k; }; return fs.find((x) => inside(x.m.path)) || null; };
-  const hosts = cs.map(hostOf);
-  cs.forEach((c, i) => { const hst = hosts[i]; const st = hst ? RM.statusOf(hst.f) : 'measured'; const k = hst && st !== 'measured' && hst.f.inferredSqft > 0 && hst.f.inferredSqft < hst.m.sloped && !hst.f.edited ? 'measured' : st; areaByStatus[k] -= c.m.sloped; });
+  const netAreas = RM.netFacetAreas([...fs, ...cs].map(x => ({ ...x.f, path: x.m.path, plan: x.m.plan, sloped: x.m.sloped })));
+  const hosts = cs.map((c, i) => { const row = netAreas.rows[fs.length + i]; return row.hostIndex == null ? null : fs[row.hostIndex]; });
+  const acceptedCuts = cs.filter((c, i) => hosts[i]);
+  cs.forEach((c, i) => { const hst = hosts[i]; if (!hst) return; const st = RM.statusOf(hst.f); const k = st !== 'measured' && hst.f.inferredSqft > 0 && hst.f.inferredSqft < hst.m.sloped && !hst.f.edited ? 'measured' : st; areaByStatus[k] -= c.m.sloped; });
+  const netAreaIssues = netAreas.unmatchedCutouts.map(x => ({ id: x.row.modelId || x.row.name || 'cutout', reason: x.reason }));
   const lineByStatus = { measured: 0, inferred: 0, unresolved: 0 };
   for (const { e, m } of es) if (!EDGE_TYPES[e.type].notRoof) lineByStatus[RM.statusOf(e)] += m.trueFt;
-  const unresolvedItems = fs.filter((x) => RM.statusOf(x.f) === 'unresolved').length + es.filter((x) => RM.statusOf(x.e) === 'unresolved').length;
+  const unresolvedItems = fs.filter((x) => RM.statusOf(x.f) === 'unresolved').length + es.filter((x) => RM.statusOf(x.e) === 'unresolved').length + netAreaIssues.length;
   // confirmed = seen and measured; estimate = evidence-backed inferred part; neither includes hidden zones
   const roofLineFt = ROOF_LINE_TYPES.reduce((a, k) => a + byType[k].true, 0);
   const sum = (arr, k) => arr.reduce((s, x) => s + x.m[k], 0);
-  const plan = sum(fs, 'plan') - sum(cs, 'plan');
-  const sloped = sum(fs, 'sloped') - sum(cs, 'sloped');
+  const plan = sum(fs, 'plan') - sum(acceptedCuts, 'plan');
+  const sloped = sum(fs, 'sloped') - sum(acceptedCuts, 'sloped');
   const pitchGroups = {};
   for (const x of fs) pitchGroups[x.f.pitch] = (pitchGroups[x.f.pitch] || 0) + x.m.sloped;
   { const big = () => Object.keys(pitchGroups).sort((a, b) => pitchGroups[b] - pitchGroups[a])[0];
-    cs.forEach((c, i) => { const k = hosts[i] ? hosts[i].f.pitch : (pitchGroups[c.f.pitch] != null ? c.f.pitch : big()); if (k != null && pitchGroups[k] != null) pitchGroups[k] -= c.m.sloped; }); }
+    cs.forEach((c, i) => { if (!hosts[i]) return; const k = hosts[i].f.pitch; if (k != null && pitchGroups[k] != null) pitchGroups[k] -= c.m.sloped; }); }
   const pitches = Object.keys(pitchGroups).map(Number).sort((a, b) => a - b);
   let predominant = null, predArea = -1;
   for (const p of pitches) if (pitchGroups[p] > predArea) { predArea = pitchGroups[p]; predominant = p; }
@@ -205,7 +209,7 @@ function summarize(fs, cs, es) {
   // average pitch weighted by the net area of each pitch group (cut-outs already taken off their host's group)
   const groupArea = pitches.reduce((s, p) => s + Math.max(pitchGroups[p], 0), 0);
   const wp = groupArea > 0 ? pitches.reduce((s, p) => s + p * Math.max(pitchGroups[p], 0), 0) / groupArea : state.defaultPitch;
-  return { facets: fs, cutouts: cs, edges: es, plan, sloped, pitched: sloped - flat, flat, twoStory, twoLayer, byType, pitchGroups, pitches, predominant, predArea: Math.max(predArea, 0), facetCount: fs.length, weightedPitch: wp, areaByStatus, lineByStatus, unresolvedItems, complete: unresolvedItems === 0, confirmedSloped: areaByStatus.measured, inferredSloped: areaByStatus.inferred, obstructionFt: byType.obstruction.true, roofLineFt, squares: sloped / 100, squaresWaste: sloped / 100 * (1 + state.waste / 100) };
+  return { facets: fs, cutouts: cs, edges: es, netAreaIssues, plan, sloped, pitched: sloped - flat, flat, twoStory, twoLayer, byType, pitchGroups, pitches, predominant, predArea: Math.max(predArea, 0), facetCount: fs.length, weightedPitch: wp, areaByStatus, lineByStatus, unresolvedItems, complete: unresolvedItems === 0, confirmedSloped: areaByStatus.measured, inferredSloped: areaByStatus.inferred, obstructionFt: byType.obstruction.true, roofLineFt, squares: sloped / 100, squaresWaste: sloped / 100 * (1 + state.waste / 100) };
 }
 // Roofr-style recommended waste. Fitted to Roofr reports: cut edges (hips + valleys + rakes + step flashing) per square.
 // Matches Roofr on every structure checked: 6%, 7%, 10% (flat), 11%, 12% and 33%.
@@ -271,6 +275,9 @@ function loadMaps() {
 }
 window.gm_authFailure = () => { $('#nokey').hidden = false; $('#nokey p').textContent = 'Google rejected this API key. Check the key, billing, and that Maps JavaScript API is enabled.'; };
 
+function mapLabelFits(box, placed, padding = 3) {
+  return !placed.some(other => box.left < other.right + padding && box.right > other.left - padding && box.top < other.bottom + padding && box.bottom > other.top - padding);
+}
 window.initMap = function initMap() {
   const saved = JSON.parse(localStorage.getItem('rm.lastLoc') || 'null');
   const start = saved || { lat: 30.3322, lng: -81.6557 };
@@ -293,14 +300,19 @@ window.initMap = function initMap() {
       if (!this.div) return;
       const proj = this.getProjection(); if (!proj) return;
       this.div.innerHTML = '';
-      for (const it of this.items) {
+      const placed = []; let hidden = 0;
+      const ordered = this.items.map((it, i) => ({ it, i })).sort((a, b) => (b.it.priority ?? 100) - (a.it.priority ?? 100) || a.i - b.i);
+      for (const { it } of ordered) {
         const p = proj.fromLatLngToDivPixel(new google.maps.LatLng(it.lat, it.lng));
         const el = document.createElement('div');
         el.className = 'lbl ' + (it.cls || '');
         el.innerHTML = it.html;
         el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
         this.div.appendChild(el);
+        const box = el.getBoundingClientRect();
+        if (!state.showAllLabels && !mapLabelFits(box, placed)) { el.remove(); hidden++; } else placed.push(box);
       }
+      this.div.dataset.hiddenLabels = String(hidden);
     }
     pixel(latLng) { const proj = this.getProjection(); return proj ? proj.fromLatLngToContainerPixel(latLng) : null; }
   }
@@ -321,19 +333,46 @@ window.initMap = function initMap() {
 async function goToAddress() {
   const q = $('#address').value.trim();
   if (!q || !map) return;
+  const request = ++state.addressRequestEpoch, epoch = locationGeneration();
   const m = q.match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);
   if (m) { setLocation({ lat: +m[1], lng: +m[3] }, q); return; }
   try {
     const res = await geocoder.geocode({ address: q });
+    if (request !== state.addressRequestEpoch || epoch !== locationGeneration()) return;
     const r = res.results && res.results[0];
     if (!r) throw new Error('No results');
     const loc = { lat: r.geometry.location.lat(), lng: r.geometry.location.lng(), precision: r.geometry.location_type || null, partial: !!r.partial_match };
     setLocation(loc, r.formatted_address);
   } catch (err) {
+    if (request !== state.addressRequestEpoch || epoch !== locationGeneration()) return;
     toast('Address not found: ' + (err.message || err), true);
   }
 }
+function locationGeneration() { return state.locationEpoch || 0; }
+function archiveLocationJob() {
+  if (!state.facets.length && !state.edges.length) return;
+  const job = serialize();
+  // Preserve edits before switching houses; the saved job keeps its original location.
+  state.previousLocationJob = job;
+  try {
+    const jobs = savedProjects();
+    const name = 'Before location change - ' + (state.jobName || state.address || 'Roof') + ' - ' + new Date().toISOString();
+    jobs[name] = job; localStorage.setItem('rm.projects', JSON.stringify(jobs));
+    if (typeof renderSaved === 'function') renderSaved();
+  } catch (_) { /* the in-memory snapshot remains available if browser storage is full */ }
+}
 function setLocation(loc, label) {
+  const moved = state.location && (state.location.lat !== loc.lat || state.location.lng !== loc.lng);
+  if (moved) {
+    archiveLocationJob();
+    state.locationEpoch = locationGeneration() + 1;
+    clearAll();
+    const preview = $('#reportPreview'); if (preview) preview.hidden = true;
+    $('#btnAuto').disabled = true;
+    state.showSolar = true; const solarToggle = $('#chkSolar'); if (solarToggle) solarToggle.checked = true;
+    toast('Location changed. Previous roof edits are preserved; get roof data for this house before tracing.');
+  }
+
   state.location = loc; state.address = label || `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
   $('#address').value = state.address;
   localStorage.setItem('rm.lastLoc', JSON.stringify(loc));
@@ -357,18 +396,33 @@ async function fetchSolar(lat, lng) {
   }
   return r.json();
 }
+function assertSolarSelection(record, loc) {
+  if (!record || !record.boundingBox || !loc || !(loc.selectedByPin || loc.precision === 'ROOFTOP')) return;
+  const bb = record.boundingBox, k = RM.scale(loc.lat);
+  const east = Math.max(bb.sw.longitude - loc.lng, 0, loc.lng - bb.ne.longitude) * k.kx;
+  const north = Math.max(bb.sw.latitude - loc.lat, 0, loc.lat - bb.ne.latitude) * k.ky;
+  // The 6 m ceiling is the existing building-selection review threshold. Do not
+  // draw a different building when an explicit roof pin falls outside its box.
+  if (Math.hypot(east, north) > 6) throw new Error('Google returned a different building from the selected roof pin. Pick the intended roof or use another dated source; a neighbouring roof will not be traced.');
+}
 async function runSolar() {
   if (!state.location) return;
   const out = $('#solarOut');
+  const epoch = locationGeneration(), loc = { ...state.location }, request = ++state.solarRequestEpoch;
+  const current = () => epoch === locationGeneration() && request === state.solarRequestEpoch;
   out.innerHTML = '<span class="muted">Fetching roof model...</span>';
   try {
     const prev = (state.solar && state.solar.name) || (state.trace && state.trace.buildingName) || null;
-    state.solar = await fetchSolar(state.location.lat, state.location.lng);
+    const result = await fetchSolar(loc.lat, loc.lng);
+    if (!current()) return;
+    assertSolarSelection(result, loc);
+    state.solar = result;
     // another building: what a reviewer approved, confirmed or looked at for the last one does not apply to this one
     if (prev && state.solar && state.solar.name !== prev) { state.altFusion = null; state.acceptedHidden = []; state.altViews = []; state.evidence = []; if (window.rmAltView) { if (window.rmAltView.state.isOpen) window.rmAltView.close(); window.rmAltView.reset(); } }
     drawSolar(); renderSolar(); recompute();
     $('#btnAuto').disabled = false;
   } catch (err) {
+    if (!current()) return;
     out.innerHTML = `<span class="err">${esc(err.message || err)}</span>`;
   }
 }
@@ -381,16 +435,19 @@ function offsetLatLng(lat, lng, meters, bearingDeg) {
 async function scanStructures() {
   if (!state.location) return;
   const btn = $('#btnScan'); btn.disabled = true; btn.textContent = 'Scanning...';
+  const epoch = locationGeneration();
   const { lat, lng } = state.location;
   const mainName = state.solar && state.solar.name;
   const pts = [];
   for (const r of [12, 24, 36]) for (let a = 0; a < 360; a += 45) pts.push(offsetLatLng(lat, lng, r, a));
   const found = {};
   for (let i = 0; i < pts.length; i += 6) {
+    if (epoch !== locationGeneration()) return;
     await Promise.all(pts.slice(i, i + 6).map(async (p) => {
       try { const j = await fetchSolar(p.lat, p.lng); if (j.name && j.name !== mainName) found[j.name] = j; } catch (_) { /* no building near this probe */ }
     }));
   }
+  if (epoch !== locationGeneration()) return;
   state.otherSolar = Object.values(found);
   btn.disabled = false; btn.textContent = 'Scan for other structures';
   drawSolar(); renderSolar(); recompute();
@@ -485,19 +542,20 @@ function nearPx(a, b, px) {
 }
 function allVertices() {
   const v = [];
-  for (const f of state.facets) f.shape.getPath().forEach((ll) => v.push(ll));
-  for (const e of state.edges) e.shape.getPath().forEach((ll) => v.push(ll));
-  if (draft) for (const p of draft.points) v.push(p);
+  for (const f of state.facets.filter((f) => !f.omit)) f.shape.getPath().forEach((ll) => v.push(ll));
+  for (const e of state.edges.filter((e) => !e.omit)) e.shape.getPath().forEach((ll) => v.push(ll));
+  if (draft) for (const p of draft.points.slice(0, -1)) v.push(p);
   return v;
 }
 function snap(latLng) {
-  let best = null, bestD = SNAP_PX + 1;
+  let best = null, bestD = SNAP_PX;
   const p0 = labels.pixel(latLng);
   if (!p0) return latLng;
   for (const v of allVertices()) {
     const p = labels.pixel(v);
+    if (!p) continue;
     const d = Math.hypot(p.x - p0.x, p.y - p0.y);
-    if (d < bestD) { bestD = d; best = v; }
+    if (p && d <= bestD) { bestD = d; best = v; }
   }
   return best || latLng;
 }
@@ -516,9 +574,11 @@ function onMapClick(e, isDbl) {
   if (state.tool === 'select') { if (!isDbl) select(null); return; }
   if (isDbl) { finishDraft(); return; }
   if (!draft) startDraft(state.tool);
-  const pt = snap(e.latLng);
+  if (e.domEvent?.detail >= 2) return;
   const pts = draft.points;
-  if (pts.length && nearPx(pt, pts[pts.length - 1], 4)) return;             // ignore the 2nd click of a double-click
+  if (pts.length && pts[pts.length - 1].equals(e.latLng)) return;
+  const pt = e.domEvent?.altKey ? e.latLng : snap(e.latLng);
+  if (pts.length && pts[pts.length - 1].equals(pt)) return; // reject exact duplicates; retain deliberate short corners
   if (draft.tool === 'facet' && pts.length >= 3 && pts[0].equals(pt)) { finishDraft(); return; } // close on first point
   pts.push(pt);
   refreshDraft();
@@ -594,7 +654,7 @@ function facetStyle(f, selected) {
 }
 function addFacet(path, pitch, name, flags = {}) {
   const id = nextId++;
-  const f = { id, name: name || `F${state.facets.length + 1}`, pitch, twoStory: !!flags.twoStory, twoLayer: !!flags.twoLayer, excluded: !!flags.excluded, azimuth: flags.azimuth == null ? null : flags.azimuth,
+  const f = { id, modelId: flags.modelId || 'F' + id, measurementEvidence: flags.measurementEvidence || null, name: name || `F${state.facets.length + 1}`, pitch, twoStory: !!flags.twoStory, twoLayer: !!flags.twoLayer, excluded: !!flags.excluded, azimuth: flags.azimuth == null ? null : flags.azimuth,
     status: ['measured', 'inferred', 'unresolved'].includes(flags.status) ? flags.status : 'measured', level: flags.level || (flags.twoStory ? 2 : 1), slope: flags.slope == null ? null : +flags.slope, rms: flags.rms == null ? null : +flags.rms, auto: !!flags.auto, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null,
     rangeSqft: flags.rangeSqft || null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', rawPath: flags.rawPath || null, inferredSqft: flags.inferredSqft || 0, omit: !!flags.omit, edited: !!flags.edited, plane: flags.plane || null, repaired: flags.repaired || 0, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, evidenceKind: flags.evidenceKind || null, altSqft: flags.altSqft || 0,
     // source takeoffs: the document's own figures for this plane and its name in the report; pitchUnknown = no supported slope (area prints blank)
@@ -617,7 +677,7 @@ function edgeStyle(e, selected) {
 }
 function addEdge(type, path, pitch, name, flags = {}) {
   const id = nextId++;
-  const e = { id, type, pitch: pitch == null ? null : pitch, name: name || '', status: flags.status || 'measured', factor: flags.factor == null ? null : flags.factor, basis: flags.basis || null, autoType: flags.autoType || null,
+  const e = { id, modelId: flags.modelId || 'E' + id, measurementEvidence: flags.measurementEvidence || null, type, pitch: pitch == null ? null : pitch, name: name || '', status: flags.status || 'measured', factor: flags.factor == null ? null : flags.factor, basis: flags.basis || null, autoType: flags.autoType || null,
     obscuredFt: +flags.obscuredFt || 0, structure: Number.isInteger(+flags.structure) && +flags.structure > 0 ? +flags.structure : null, evidence: flags.evidence || null, missing: flags.missing || null, note: flags.note || '', paired: flags.paired || null, omit: !!flags.omit, verify: flags.verify || null, confirmedBy: flags.confirmedBy || null, altFt: flags.altFt || 0,
     // source takeoffs: the document's reference key (D1 ...), its displayed length and its name
     ref: flags.ref || null, displayedFt: flags.displayedFt == null ? null : +flags.displayedFt, label: flags.label || null };
@@ -646,6 +706,7 @@ function select(sel) {
   const cur = findSel();
   if (cur) { cur.shape.setEditable(true); cur.shape.setOptions(sel.kind === 'facet' ? facetStyle(cur, true) : edgeStyle(cur, true)); }
   renderSelection(); renderLists();
+  if (labels) labels.setItems(baseLabels());
 }
 function clearAll() {
   if (draft) cancelDraft();
@@ -662,12 +723,12 @@ function baseLabels() {
   const edgePaths = state.edges.map((e) => pathToLiteral(e.shape));
   for (const f of state.facets) {
     const m = facetMetrics(f);
-    if (f.excluded) items.push({ ...centroid(m.path), cls: 'facet cut', html: `${esc(f.name)} excluded<small>&minus;${fmt(m.sloped)} sf</small>` });
-    else items.push({ ...centroid(m.path), cls: 'facet', html: `${esc(f.name)} &middot; ${pitchLabel(f.pitch)}${f.twoStory ? ' &middot; 2-story' : ''}${f.twoLayer ? ' &middot; 2-layer' : ''}<small>${fmt(m.sloped)} sf</small>` });
+    if (f.excluded) items.push({ ...centroid(m.path), priority: 60, cls: 'facet cut', html: `${esc(f.name)} excluded<small>&minus;${fmt(m.sloped)} sf</small>` });
+    else items.push({ ...centroid(m.path), priority: state.selected && state.selected.kind === 'facet' && state.selected.id === f.id ? 200 : 40, cls: 'facet', html: `${esc(f.name)} &middot; ${pitchLabel(f.pitch)}${f.twoStory ? ' &middot; 2-story' : ''}${f.twoLayer ? ' &middot; 2-layer' : ''}<small>${fmt(m.sloped)} sf</small>` });
     if (state.showFacetEdges && !f.excluded) for (let i = 0; i < m.path.length; i++) {
       const a = m.path[i], b = m.path[(i + 1) % m.path.length];
       if (coveredByEdge(a, b, edgePaths)) continue;
-      items.push({ ...midpoint(a, b), cls: 'fe', html: ftIn(segFt(a, b)) });
+      items.push({ ...midpoint(a, b), priority: state.selected && state.selected.kind === 'facet' && state.selected.id === f.id ? 180 : 15, cls: 'fe', html: ftIn(segFt(a, b)) });
     }
   }
   for (const e of state.edges) {
@@ -675,19 +736,20 @@ function baseLabels() {
     if (EDGE_TYPES[e.type].notRoof || e.omit) continue;
     for (let i = 1; i < m.path.length; i++) {
       const a = m.path[i - 1], b = m.path[i];
-      items.push({ ...midpoint(a, b), cls: '', html: `<span style="color:${EDGE_TYPES[e.type].color}">&#9632;</span> ${ftIn(segFt(a, b) * m.factor)}` });
+      items.push({ ...midpoint(a, b), priority: state.selected && state.selected.kind === 'edge' && state.selected.id === e.id ? 200 : 20, cls: '', html: `<span style="color:${EDGE_TYPES[e.type].color}">&#9632;</span> ${ftIn(segFt(a, b) * m.factor)}` });
     }
   }
   if (state.trace && state.trace.hiddenZones) for (const z of state.trace.hiddenZones) if (z.centre) items.push({ lat: z.centre.lat, lng: z.centre.lng, cls: 'facet cut', html: `${esc(z.id)} hidden<small>0 - ${fmt(z.upperSqft)} sf, not in totals</small>` });
   if (state.showSolar) {
     if (state.solar && state.solar.solarPotential) for (const s of state.solar.solarPotential.roofSegmentStats || []) {
-      items.push({ lat: s.center.latitude, lng: s.center.longitude, cls: 'solar', html: `${pitchLabel(Math.round(degToPitch(s.pitchDegrees)))} &middot; ${fmt(s.stats.areaMeters2 * SQFT_PER_M2)} sf` });
+      items.push({ lat: s.center.latitude, lng: s.center.longitude, priority: 5, cls: 'solar', html: `${pitchLabel(Math.round(degToPitch(s.pitchDegrees)))} &middot; ${fmt(s.stats.areaMeters2 * SQFT_PER_M2)} sf` });
     }
-    state.otherSolar.forEach((o, i) => { const q = solarSummaryOf(o); if (q && o.center) items.push({ lat: o.center.latitude, lng: o.center.longitude, cls: 'solar other', html: `Structure #${i + 2}<small>${fmt(q.total)} sf &middot; ${pitchLabel(Math.round(q.predominant))}</small>` }); });
+    state.otherSolar.forEach((o, i) => { const q = solarSummaryOf(o); if (q && o.center) items.push({ lat: o.center.latitude, lng: o.center.longitude, priority: 5, cls: 'solar other', html: `Structure #${i + 2}<small>${fmt(q.total)} sf &middot; ${pitchLabel(Math.round(q.predominant))}</small>` }); });
   }
   return items;
 }
 function recompute() {
+  if (state.deferRecompute) return;
   if (!labels) return;
   labels.setItems(baseLabels());
   renderLists(); renderSummary(); renderSelection();
@@ -823,11 +885,11 @@ function setDefaultPitch(p) { state.defaultPitch = p; $('#defaultPitch').value =
 // ------------------------------------------------------------------ serialize / save
 function serialize() {
   return {
-    app: 'roof-measure', version: 3, savedAt: new Date().toISOString(),
+    app: 'roof-measure', version: 4, savedAt: new Date().toISOString(),
     jobName: state.jobName, address: state.address, location: state.location, defaultPitch: state.defaultPitch, waste: state.waste, mat: state.mat,
-    facets: state.facets.map((f) => ({ name: f.name, pitch: f.pitch, twoStory: f.twoStory, twoLayer: f.twoLayer, excluded: f.excluded, azimuth: f.azimuth, path: pathToLiteral(f.shape),
+    facets: state.facets.map((f) => ({ modelId: f.modelId, measurementEvidence: f.measurementEvidence, name: f.name, pitch: f.pitch, twoStory: f.twoStory, twoLayer: f.twoLayer, excluded: f.excluded, azimuth: f.azimuth, path: pathToLiteral(f.shape),
       status: RM.statusOf(f), level: f.level || 1, slope: f.slope, rms: f.rms, auto: f.auto, structure: f.structure, rangeSqft: f.rangeSqft, evidence: f.evidence, missing: f.missing, note: f.note, rawPath: f.rawPath, inferredSqft: f.inferredSqft, omit: f.omit, edited: f.edited, plane: f.plane, repaired: f.repaired, verify: f.verify, confirmedBy: f.confirmedBy, evidenceKind: f.evidenceKind, altSqft: f.altSqft, label: f.label, reportedSqft: f.reportedSqft, reportedPitch: f.reportedPitch, pitchUnknown: f.pitchUnknown, areaUnsupported: f.areaUnsupported })),
-    edges: state.edges.map((e) => ({ type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit, verify: e.verify, confirmedBy: e.confirmedBy, altFt: e.altFt, ref: e.ref, displayedFt: e.displayedFt, label: e.label })),
+    edges: state.edges.map((e) => ({ modelId: e.modelId, measurementEvidence: e.measurementEvidence, type: e.type, pitch: e.pitch, path: pathToLiteral(e.shape), status: RM.statusOf(e), factor: e.factor, basis: e.basis, autoType: e.autoType, obscuredFt: e.obscuredFt, structure: e.structure, evidence: e.evidence, missing: e.missing, note: e.note, paired: e.paired, omit: e.omit, verify: e.verify, confirmedBy: e.confirmedBy, altFt: e.altFt, ref: e.ref, displayedFt: e.displayedFt, label: e.label })),
     trace: state.trace, source: state.source,
     acceptedHidden: state.acceptedHidden, evidence: state.evidence, altFusion: state.altFusion, altViews: state.altViews,
     solar: state.solar, otherSolar: state.otherSolar,
@@ -835,6 +897,8 @@ function serialize() {
 }
 function restore(d) {
   if (!map) { toast('Load the map first (save your API key), then import.', true); return; }
+  state.deferRecompute = (state.deferRecompute || 0) + 1;
+  try {
   clearAll();
   state.jobName = d.jobName || ''; $('#jobName').value = state.jobName;
   if (d.location) setLocation(d.location, d.address);
@@ -848,6 +912,9 @@ function restore(d) {
   drawSolar(); renderSolar(); $('#btnAuto').disabled = !state.solar;
   recompute();
   if (state.facets.length) { const b = new google.maps.LatLngBounds(); state.facets.forEach((f) => f.shape.getPath().forEach((p) => b.extend(p))); map.fitBounds(b, 80); }
+    // jobs saved before per-quantity provenance: give unedited engine output its engine provenance (see autotrace.js)
+    if (typeof rmAttachTraceEvidence === 'function') rmAttachTraceEvidence({ backfill: true });
+  } finally { state.deferRecompute--; recompute(); }
 }
 function savedProjects() { return JSON.parse(localStorage.getItem('rm.projects') || '{}'); }
 function renderSaved() {
@@ -933,6 +1000,7 @@ function wire() {
   $('#btnAuto').onclick = async () => { const b = $('#btnAuto'); b.disabled = true; b.textContent = 'Tracing...'; try { await autoTraceRoof(); } catch (e) { toast('Auto-trace failed: ' + e.message, true); if (!state.facets.length && state.solar) { const d = state.solar.imageryDate; state.trace = { engine: 'v2.1', failed: e.message, buildingName: state.solar.name, imageryQuality: state.solar.imageryQuality || null, imageryDate: d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : null }; recompute(); } } b.disabled = false; b.textContent = 'Auto-trace roof'; };
   $('#chkSolar').onchange = (e) => { state.showSolar = e.target.checked; drawSolar(); recompute(); };
   $('#chkFacetEdges').onchange = (e) => { state.showFacetEdges = e.target.checked; recompute(); };
+  $('#chkAllLabels').onchange = (e) => { state.showAllLabels = e.target.checked; if (labels) labels.setItems(baseLabels()); };
   $('#waste').onchange = (e) => { state.waste = +e.target.value; recompute(); };
   for (const k of Object.keys(state.mat)) {
     const el = $('#m_' + k); if (!el) continue;

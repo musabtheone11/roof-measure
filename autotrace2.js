@@ -24,6 +24,7 @@ var AT2 = {
   minRegionM2: 1.2,    // smaller regions are absorbed by a neighbour
   dpEpsM: 0.38,        // outline simplification tolerance (m)
   snapDeg: 20,
+  runFitToleranceM: 0.20, // two 10 cm DSM pixels; direction constraints must fit every supporting point
   diagMinM: 2.2,       // outline runs shorter than this never snap to the 45-degree diagonals
   jogM: 0.4,           // parallel outline runs closer than this are one straight line
   shortRunM: 0.7,      // short runs between parallel runs are jogs to remove         // snap outline runs to the plane's contour / slope direction within this angle
@@ -34,11 +35,11 @@ var AT2 = {
   fpSnapDeg: 18,       // footprint runs within this angle of a building axis snap to it
   fpJogM: 0.45,        // parallel footprint runs closer than this are one wall line
   fpShortM: 0.9,       // shorter runs between parallel runs are jogs
-  fpChamferMaxM: 9,    // diagonal corner cuts up to this long can be squared off
+  fpChamferMaxM: 0,    // disabled: canopy/shortness alone cannot prove that a diagonal corner is missing roof
   fpChamferInsideM: 2.4, // inside-corner chamfers shorter than this are squared too
   fpChamferFreeM: 2.2, // ... always when shorter than this, otherwise only if the corner is occluded (tree canopy)
   eaveBufferM: 0,      // outward offset of the footprint (benchmarked: 0.15 m made well-traced houses 4-5% too big)
-  fpSquareJog: true,   // a short slanted stretch between two parallel offset walls becomes a square step through its middle
+  fpSquareJog: false,  // disabled: a slanted join may be a real asymmetric addition
   fpSquareJogMaxM: 5,  // ... when the slanted stretch is shorter than this (longer ones can be real angled walls)
   hipCornerEave: true,  // short sloped outline pieces at the low end of a hip are part of the eave round the corner
   edgeHalfHeight: false, // move each outline wall to the half-way point of the height drop. Benchmarked: synthetic 93.0% -> 93.7% within 3%, but real houses got worse (median area error 6.0% -> 8.4%), so it stays off
@@ -256,8 +257,8 @@ function absorbSlivers(dsm, label, regions, w, h, lp, geo) {
 }
 
 // ------------------------------------------------------------------ footprint regularisation
-// Fit the building outline as straight runs on the building's two axes (Roofr outlines are rectilinear), remove small
-// jogs, restore corners cut off by tree canopy, then re-rasterise the footprint so every later step follows it.
+// Fit building outline runs only when the raw boundary supports them, then re-rasterise the footprint.
+// A building axis is a candidate constraint, not evidence that a diagonal is an error.
 function regularizeFootprint(dsm, label, w, h, geo, dominantDeg, ground) {
   const M = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) M[i] = label[i] >= 0 ? 1 : 0;
   const reg = new Int32Array(w * h).fill(-1); for (let i = 0; i < w * h; i++) if (M[i]) reg[i] = 0;
@@ -280,7 +281,9 @@ function regularizeFootprint(dsm, label, w, h, geo, dominantDeg, ground) {
     const d = [b[0] - a[0], b[1] - a[1]]; const L = Math.hypot(d[0], d[1]) || 1e-9; const du = [d[0] / L, d[1] / L];
     let cls = -1, best = Math.cos(AT2.fpSnapDeg * Math.PI / 180);
     for (let c = 0; c < 2; c++) { const cs = Math.abs(du[0] * ax[c][0] + du[1] * ax[c][1]); if (cs > best) { best = cs; cls = c; } }
-    const line = cls >= 0 ? lineWithDir(pts, ax[cls]) : lineFromPts(pts);
+    const candidate = cls >= 0 && lineWithDir(pts, ax[cls]);
+    if (candidate && !runSupported(pts, candidate)) cls = -1;
+    const line = cls >= 0 ? candidate : lineFromPts(pts);
     runs.push({ cls, line, pts, len: L, a, b });
   }
   const offset = (r, p) => r.line.n[0] * p[0] + r.line.n[1] * p[1] - r.line.c;
@@ -305,9 +308,9 @@ function regularizeFootprint(dsm, label, w, h, geo, dominantDeg, ground) {
     for (let k = 0; k < runs.length; k++) {
       const r = runs[k], p = out.length ? out[out.length - 1] : runs[runs.length - 1], q = runs[(k + 1) % runs.length];
       // same axis + small offset: one wall line
-      if (out.length && r.cls >= 0 && p.cls === r.cls && Math.abs(offset(p, r.line.m)) < AT2.fpJogM) { out[out.length - 1] = joinR(p, r); changed = true; continue; }
+      if (out.length && r.cls >= 0 && p.cls === r.cls && Math.abs(offset(p, r.line.m)) < AT2.fpJogM && runSupported(p.pts.concat(r.pts), joinR(p, r).line)) { out[out.length - 1] = joinR(p, r); changed = true; continue; }
       // short run between two parallel runs: a jog
-      if (out.length && k + 1 < runs.length && r.len < AT2.fpShortM && p.cls >= 0 && p.cls === q.cls && Math.abs(offset(p, q.line.m)) < AT2.fpJogM * 1.8) { out[out.length - 1] = joinR(p, q, r); k++; changed = true; continue; }
+      if (out.length && k + 1 < runs.length && r.len < AT2.fpShortM && p.cls >= 0 && p.cls === q.cls && Math.abs(offset(p, q.line.m)) < AT2.fpJogM * 1.8 && runSupported(p.pts.concat(r.pts, q.pts), joinR(p, q, r).line)) { out[out.length - 1] = joinR(p, q, r); k++; changed = true; continue; }
       // chamfer: a non-axis run between two perpendicular axis runs -> extend them to a square corner (if the corner is occluded)
       if (out.length && k + 1 < runs.length && r.cls < 0 && p.cls >= 0 && q.cls >= 0 && p.cls !== q.cls && r.len < AT2.fpChamferMaxM) {
         const c = intersect2(p.line, q.line);
@@ -516,20 +519,15 @@ function reconstruct(label, regions, w, h, geo, dominantDeg, obstTest) {
     if (obstTest) for (const ch of chains) if (ch.kind === 'outline') markObstruction(ch);
   };
   // Outline segments that run along a hidden zone are not roof edges. Consecutive ones collapse into one straight chord
-  // between the last confirmed points on either side (no canopy-following zigzag). A long, dead-straight run that lies
-  // on the plane's own eave or rake direction is the exception: that is a real edge with a tree against it (inferred).
+  // between the last confirmed points on either side (no canopy-following zigzag). Straightness and alignment
+  // cannot establish that a canopy boundary is a roof edge; it stays unresolved until another source locates it.
   function markObstruction(ch) {
     const g = ch.geom; if (!g || g.length < 2) return; const flags = [];
     for (let k = 1; k < g.length; k++) {
       const a = g[k - 1], b = g[k]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) { flags.push(0); continue; }
       const nx = -(b[1] - a[1]) / L, ny = (b[0] - a[0]) / L; const steps = Math.max(1, Math.round(L / 0.2)); let hit = 0;
       for (let s = 0; s < steps; s++) { const t = (s + 0.5) / steps; const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; if (obstTest(p) || obstTest([p[0] + nx * 0.3, p[1] + ny * 0.3]) || obstTest([p[0] - nx * 0.3, p[1] - ny * 0.3])) hit++; }
-      let f = hit / steps >= 0.5 ? 2 : 0;
-      if (f === 2 && !ch.rawGeom && ch.runs && ch.runs.length === g.length - 1 && L >= 2.5 && ch.own && Math.hypot(ch.own.a, ch.own.b) > 0.06) {
-        const sl = Math.hypot(ch.own.a, ch.own.b), gx = ch.own.a / sl, gy = ch.own.b / sl; const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
-        const along = Math.abs(ux * gx + uy * gy), across = Math.abs(-ux * gy + uy * gx);          // rake direction / eave direction
-        if (Math.max(along, across) >= 0.9945) { let ss = 0, n = 0; for (const q of ch.runs[k - 1].pts || []) { const d = (q[0] - a[0]) * nx + (q[1] - a[1]) * ny; ss += d * d; n++; } if (n >= 10 && Math.sqrt(ss / n) <= 0.12) f = 1; }
-      }
+      const f = hit / steps >= 0.5 ? 2 : 0;
       flags.push(f);
     }
     const ng = [g[0]], nf = [];
@@ -556,6 +554,22 @@ function reconstruct(label, regions, w, h, geo, dominantDeg, obstTest) {
 }
 
 // split a simplified polyline into straight runs; snap run directions to the plane's contour/slope (or the building axis)
+// The raw support is retained on each run, so every adopted constraint is auditable.
+function runSupported(pts, line) {
+  if (pts.length < 2) return false;
+  const distances = pts.map(p => Math.abs(line.n[0] * p[0] + line.n[1] * p[1] - line.c));
+  if (!distances.every(d => Number.isFinite(d) && d <= AT2.runFitToleranceM)) return false;
+  // The 10 cm source grid permits a 5 cm RMS low-noise band and 2.5 cm
+  // fit penalty. An absolute pixel bound alone can erase a short real diagonal:
+  // in that band the constraint must fit nearly as well as unconstrained TLS.
+  const free = lineFromPts(pts);
+  const freeDistances = pts.map(p => Math.abs(free.n[0] * p[0] + free.n[1] * p[1] - free.c));
+  const rms = values => Math.sqrt(values.reduce((sum, d) => sum + d * d, 0) / values.length);
+  const freeRms = rms(freeDistances), constrainedRms = rms(distances);
+  return Number.isFinite(freeRms) && Number.isFinite(constrainedRms)
+    && !(freeRms <= 0.05 && constrainedRms > freeRms + 0.025);
+}
+
 function splitRuns(simp, raw, plane, dominantDeg) {
   const runs = [];
   let dirs = [];
@@ -575,9 +589,12 @@ function splitRuns(simp, raw, plane, dominantDeg) {
     const a = simp[i - 1], b = simp[i]; const seg = [];
     while (k < raw.length) { seg.push(raw[k]); if (raw[k][0] === b[0] && raw[k][1] === b[1]) break; k++; }
     const d0 = [b[0] - a[0], b[1] - a[1]]; const L = Math.hypot(d0[0], d0[1]) || 1e-9; const du = [d0[0] / L, d0[1] / L];
-    const snap = snapFor(du, L);
-    const pts = seg.length ? seg : [a, b];
-    const line = snap ? lineWithDir(pts, snap) : lineFromPts(pts.length > 1 ? pts : [a, b]);
+    let snap = snapFor(du, L);
+    const pts = seg.length > 1 ? seg : [a, b];
+    const candidate = snap && lineWithDir(pts, snap);
+    // Angle agreement alone can rotate a real diagonal through metres of supported roof.
+    if (candidate && !runSupported(pts, candidate)) snap = null;
+    const line = snap ? candidate : lineFromPts(pts);
     runs.push({ start: a, end: b, line, len: L, pts, snap });
   }
   const parallel = (p, q) => Math.abs(p.line.d[0] * q.line.d[1] - p.line.d[1] * q.line.d[0]) < 0.05;
@@ -588,10 +605,10 @@ function splitRuns(simp, raw, plane, dominantDeg) {
     for (let i = 0; i < out.length; i++) {
       const r = out[i], p = next[next.length - 1];
       // consecutive parallel runs whose offsets differ by less than a jog: one straight line
-      if (p && parallel(p, r) && Math.abs(p.line.n[0] * r.line.m[0] + p.line.n[1] * r.line.m[1] - p.line.c) < AT2.jogM) { next[next.length - 1] = join(p, r); changed = true; continue; }
+      if (p && parallel(p, r) && Math.abs(p.line.n[0] * r.line.m[0] + p.line.n[1] * r.line.m[1] - p.line.c) < AT2.jogM && runSupported(p.pts.concat(r.pts), join(p, r).line)) { next[next.length - 1] = join(p, r); changed = true; continue; }
       // a short run squeezed between two parallel runs: remove the jog
       const q = out[i + 1];
-      if (p && q && r.len < AT2.shortRunM && parallel(p, q) && Math.abs(p.line.n[0] * q.line.m[0] + p.line.n[1] * q.line.m[1] - p.line.c) < AT2.jogM * 1.6) { next[next.length - 1] = join(p, q, r); i++; changed = true; continue; }
+      if (p && q && r.len < AT2.shortRunM && parallel(p, q) && Math.abs(p.line.n[0] * q.line.m[0] + p.line.n[1] * q.line.m[1] - p.line.c) < AT2.jogM * 1.6 && runSupported(p.pts.concat(r.pts, q.pts), join(p, q, r).line)) { next[next.length - 1] = join(p, q, r); i++; changed = true; continue; }
       next.push(r);
     }
     out = next; if (!changed) break;
