@@ -247,3 +247,14 @@ function reviewGate() {
   const reasons = st.reasons.length > 12 ? [...new Map(st.reasons.map(q => [q.code, q.text])).values()].slice(0, 8).concat(st.reasons.length + ' review findings are keyed to the plan in the report evidence notes.') : st.reasons.map(q => q.text);
   return window.__rmNoConfirm ? true : confirm('REVIEW REQUIRED before you export:\n\n- ' + reasons.join('\n- ') + '\n\nThe report states this on its first page with the evidence each item needs. Open "5. Review before export" (and "Review roof from other angles") to resolve them, or press OK to export a REVIEW REQUIRED report.');
 }
+
+// the export validator's geometry check on the fitted planes: neighbouring planes must meet at one height at a shared corner
+function reviewExtraReasons(r) {
+  const tr = state.trace; if (!tr || !tr.ref || typeof pathToLiteral !== 'function') return [];
+  const fs = state.facets.filter((f) => !f.excluded && f.plane && !f.edited && RM.statusOf(f) === 'measured').map((f) => ({ name: f.name, plane: f.plane, path: pathToLiteral(f.shape) }));
+  const breaks = state.edges.filter((e) => ['step', 'wall', 'parapet', 'transition'].includes(e.type) || e.paired).map((e) => pathToLiteral(e.shape));
+  // 0.75 m: well above the 0.2-0.3 m a good plane fit can be off when carried to its far corner
+  const c = RM.planeConflicts(fs, tr.ref, 0.75, breaks); if (!c.length) return [];
+  const w = c[0]; const pairs = [...new Set(c.map((q) => q.names.join(' and ')))];
+  return [{ code: 'geometry', text: `Roof planes ${pairs.slice(0, 3).join('; ')} meet at different heights (up to ${(w.spreadM * 3.28084).toFixed(1)} ft apart at a shared corner): a step or wall line is missing there, or a plane's outline is wrong, so those areas are in doubt.`, needs: 'Check that corner in the 3D view or on site; draw the step or correct the outline.' }];
+}

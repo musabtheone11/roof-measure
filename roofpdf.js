@@ -1002,6 +1002,36 @@ function rpSheetInformation(doc, M, n, total) {
 }
 
 // ------------------------------------------------------------------ build
+function rpAxonCheck(M, AX, angle = -24, alt = 32) {
+  if (!AX) return { ok: false, why: 'no roof plane has a measured height' };
+  if (AX.illustrative && M.kind !== 'illustrative') return { ok: false, why: 'heights would come from the pitch alone (no measured elevations)' };
+  if (AX.partial) return { ok: false, why: 'some planes have no supported height' };
+  if (AX.faces.length < 3) return { ok: false, why: 'the plan shows this roof completely' };
+  const brk = M.lines.filter((L) => ['step', 'wall', 'parapet', 'transition'].includes(L.type) || L.e.paired).map((L) => L.xy); const onBreak = (q) => brk.some((L) => { for (let i = 1; i < L.length; i++) if (RM.pointSeg(q, L[i - 1], L[i]) < 1.2) return true; return false; });
+  const at = new Map(); for (const f of AX.faces) for (const p of f.pts) { if (onBreak([p[0], p[1]])) continue; const kk = Math.round(p[0] * 2) + ',' + Math.round(p[1] * 2); if (!at.has(kk)) at.set(kk, []); at.get(kk).push({ z: p[2], id: f.label }); }
+  let worst = null; for (const arr of at.values()) if (arr.length > 1) { const zs = arr.map((q) => q.z); const sp = Math.max(...zs) - Math.min(...zs); if (!worst || sp > worst.sp) worst = { sp, ids: [...new Set(arr.map((q) => q.id))] }; }
+  if (worst && worst.sp > 1.0) return { ok: false, why: `elevations conflict: ${worst.ids.join(' and ')} disagree by ${rpNum(worst.sp, 1)} ft at a shared corner` };
+  const a = angle * Math.PI / 180, h = alt * Math.PI / 180; const pr = (p) => [Math.cos(a) * p[0] - Math.sin(a) * p[1], -Math.sin(h) * (Math.sin(a) * p[0] + Math.cos(a) * p[1]) - Math.cos(h) * p[2]];
+  const crosses = (r) => { const n = r.length; const o = (p, q, t) => (q[0] - p[0]) * (t[1] - p[1]) - (q[1] - p[1]) * (t[0] - p[0]); for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) { if (i === 0 && j === n - 1) continue; const A = r[i], B = r[(i + 1) % n], C = r[j], D = r[(j + 1) % n]; if (o(A, B, C) * o(A, B, D) < -1e-9 && o(C, D, A) * o(C, D, B) < -1e-9) return true; } return false; };
+  for (const f of AX.faces) { const q = f.pts.map(pr); if (crosses(q)) return { ok: false, why: `${f.label || 'a plane'} folds over in the 3D view` }; }
+  return { ok: true, why: worst ? `shared corners agree within ${rpNum(worst.sp, 1)} ft` : 'elevations agree' };
+}
+
+function rpAxonPreview(canvas, heading = -24) {
+  const g = canvas.getContext('2d'); const W = canvas.width, H = canvas.height; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  const M = rpModel(); if (!M) return { ok: false, why: 'trace the roof first' }; rpKeys(M); const AX = rpAxonModel(M); const chk = rpAxonCheck(M, AX);
+  if (!AX) { g.fillStyle = '#555'; g.font = '13px sans-serif'; g.fillText('No measured heights for a 3D view.', 12, 24); return chk; }
+  const a = heading * Math.PI / 180, h = 32 * Math.PI / 180; const pr = (p) => [Math.cos(a) * p[0] - Math.sin(a) * p[1], -Math.sin(h) * (Math.sin(a) * p[0] + Math.cos(a) * p[1]) - Math.cos(h) * p[2]];
+  const all = AX.faces.flatMap((f) => f.pts.map(pr)); const x0 = Math.min(...all.map((p) => p[0])), x1 = Math.max(...all.map((p) => p[0])), y0 = Math.min(...all.map((p) => p[1])), y1 = Math.max(...all.map((p) => p[1]));
+  const s = Math.min((W - 30) / (x1 - x0 || 1), (H - 30) / (y1 - y0 || 1)); const T = (p) => { const q = pr(p); return [15 + (q[0] - x0) * s + ((W - 30) - (x1 - x0) * s) / 2, 15 + (q[1] - y0) * s + ((H - 30) - (y1 - y0) * s) / 2]; };
+  const depth = (f) => f.pts.reduce((acc, p) => acc + Math.sin(a) * p[0] + Math.cos(a) * p[1] - p[2] * 0.04, 0) / f.pts.length;
+  for (const f of AX.faces.slice().sort((p, q) => depth(q) - depth(p))) { const A = f.pts[0], B = f.pts[1], C = f.pts[f.pts.length - 1]; let nn = [(B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]), (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]), (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0])];
+    const nl = Math.hypot(...nn) || 1; nn = nn.map((v) => v / nl); if (nn[2] < 0) nn = nn.map((v) => -v); const v = Math.round(255 * Math.max(0.55, Math.min(0.95, 0.8 + 0.25 * nn[0] + 0.25 * nn[1])));
+    g.beginPath(); f.pts.map(T).forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.closePath(); g.fillStyle = `rgb(${v},${v},${v})`; g.fill(); g.strokeStyle = '#222'; g.lineWidth = 1; g.stroke();
+    if (f.label) { const c = f.pts.map(T).reduce((acc, p) => [acc[0] + p[0] / f.pts.length, acc[1] + p[1] / f.pts.length], [0, 0]); g.fillStyle = '#333'; g.font = 'bold 10px sans-serif'; g.textAlign = 'center'; g.fillText(f.label, c[0], c[1] + 3); } }
+  return chk;
+}
+
 async function rpBuild(opts = {}) {
   if (!window.jspdf) throw new Error('PDF library did not load; check the internet connection');
   const revision = typeof serialize === 'function' ? RM.modelRevision(serialize()) : null;
@@ -1021,19 +1051,27 @@ async function rpBuild(opts = {}) {
   const hasEvidence = M.review || M.views.length > 0 || M.evidence.length > 0 || !!M.alt;
   const evidencePages = hasEvidence ? rpSheetEvidence(probe, M, 0, 0) : 0;
   const informationPages = rpSheetInformation(probe, M, 0, 0);
-  const total = 2 + wins.length + extraSched + informationPages + evidencePages + (opts.materials && !M.review ? 1 : 0);
+  const axon = opts.axon === false ? null : rpAxonModel(M);
+  const elevation = rpAxonCheck(M, axon);
+  const total = Number(elevation.ok) + 2 + wins.length + extraSched + informationPages + evidencePages + (opts.materials && !M.review ? 1 : 0);
   ctx.detail = wins.length === 1 ? 'sheet 3' : wins.length > 1 ? `sheets 3-${2 + wins.length}` : '';
   let n = 1; rpSheetPlanFirst(doc, M, hero, n, total, ctx); doc.addPage('letter', 'portrait'); n++; rpSheetMeasurementSchedules(doc, M, S, ctx.spill, n, total);
   wins.forEach((w, i) => { doc.addPage('letter', 'portrait'); n++; rpSheetDetail(doc, M, w, i + 1, wins.length, n, total, unplaced); });
   for (let i = 0; i < extraSched; i++) { doc.addPage('letter', 'portrait'); n++; rpSheetSchedules(doc, M, S, ctx.spill, n, total); }
   doc.addPage('letter', 'portrait'); n++; n += rpSheetInformation(doc, M, n, total) - 1;
+  if (elevation.ok) {
+    doc.addPage('letter', 'portrait');
+    rpHeader(doc, M, 'Illustration', 'Roof elevations', M.kind === 'illustrative' ? 'Illustrative model' : 'Fitted roof planes', ++n, total);
+    rpDrawAxon(doc, M, axon, { x: RP.L, y: 175, w: 548, h: 440 });
+    rpText(doc, 'Illustration only. Use the scaled plan and keyed schedules for measurements.', RP.L, 650, { size: 9 });
+  }
   if (hasEvidence) { doc.addPage('letter', 'portrait'); n++; n += rpSheetEvidence(doc, M, n, total) - 1; }
   if (opts.materials && !M.review) { doc.addPage('letter', 'portrait'); n++; rpSheetMaterials(doc, M, n, total); }
   doc.setProperties({ title: `${M.line1} - roof measurement`, author: 'Diversity Contracting | Roof Measure', subject: 'US Letter roof overview, takeoff and scaled measurement plan', creator: 'Roof Measure' });
   // layout self-check for the caller: every key is on the plan, on a detail sheet, or named as unplaced; the scale is exact
   const Lk = ctx.layout || null; let layout = null;
   if (Lk) { const accounted = new Set([...Lk.keys.placed, ...hadRoom, ...unplaced]); const unaccounted = [...Lk.keys.placed, ...Lk.keys.missed].filter((k) => !accounted.has(k));
-    layout = { ...Lk, keys: { total: Lk.keys.total, overview: Lk.keys.placed.length, detail: hadRoom.size, unplaced, unaccounted }, sheets: { total, detail: wins.length, schedules: extraSched, evidence: hasEvidence, materials: !!opts.materials } }; }
+    layout = { ...Lk, axon: elevation, keys: { total: Lk.keys.total, overview: Lk.keys.placed.length, detail: hadRoom.size, unplaced, unaccounted }, sheets: { total, detail: wins.length, schedules: extraSched, evidence: hasEvidence, materials: !!opts.materials } }; }
   // text over text anywhere in the document is a layout defect: report every overlapping pair (page, both strings)
   if (layout) { const byPage = new Map(); for (const t of doc.__rpText) { if (!byPage.has(t.pg)) byPage.set(t.pg, []); byPage.get(t.pg).push(t); } const hits = [];
     for (const [pg, arr] of byPage) for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) { const a = arr[i], b = arr[j]; const ow = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oh = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); if (ow > 0.75 && oh > 0.75) hits.push({ page: pg, a: a.s, b: b.s, at: [Math.round(a.x0), Math.round(a.y0)] }); }

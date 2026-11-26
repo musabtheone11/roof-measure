@@ -11,7 +11,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url)), REPO = path.resolve(H
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const slug = arg('slug'), out = arg('out'); if (!slug || !out) { console.error('--slug and --out required'); process.exit(2); }
 const M = JSON.parse(fs.readFileSync(path.join(REPO, 'bench', 'private', 'regional', 'manifest.json'), 'utf8'));
-const p = M.properties.find((q) => q.slug === slug); if (!p) { console.error('unknown slug'); process.exit(1); }
+const p = M.properties.find((q) => q.slug === slug) || (arg('address') ? { address: arg('address') } : null); if (!p) { console.error('unknown slug (pass --address for a property outside the benchmark)'); process.exit(1); }
 const prop = await fetchProperty(p.address, { slug });
 fs.mkdirSync(out, { recursive: true });
 

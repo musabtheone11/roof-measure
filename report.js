@@ -260,7 +260,7 @@ window.__rmLastReport = null;
 async function sha256Hex(blob) { try { const d = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()); return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join(''); } catch (_) { return ''; } }
 function reportSignature(opts = {}) {
   const wantEst = !!opts.both || (typeof xm !== 'undefined' && !!xm.appendToReport && state.facets.length > 0);
-  return JSON.stringify({ j: { ...serialize(), savedAt: null }, est: wantEst, mat: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked), co: company, w: state.waste });
+  return JSON.stringify({ j: { ...serialize(), savedAt: null }, est: wantEst, axon: !($('#chkPdf3d') && !$('#chkPdf3d').checked), mat: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked), co: company, w: state.waste });
 }
 function assertReportCurrent(sig, opts = {}) {
   if (sig !== reportSignature(opts)) throw new Error('The roof changed while this report was being prepared. Generate a new report.');
@@ -278,7 +278,7 @@ async function buildReportPDF(opts = {}) {
   if (RPT.rec && RPT.sig === sig) return RPT.rec;
   if (wantEst && typeof xmEnsureRoof === 'function' && !await xmEnsureRoof()) return null;
   if (typeof permitEnsure === 'function') { try { await permitEnsure(); } catch (_) { /* optional */ } }
-  const { doc, pages, layout } = await rpBuild({ materials: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked) });
+  const { doc, pages, layout } = await rpBuild({ materials: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked), axon: !($('#chkPdf3d') && !$('#chkPdf3d').checked) });
   // deterministic bytes: the file carries the report date, not the second it was built
   try { const d = new Date(); d.setHours(0, 0, 0, 0); doc.setCreationDate(d); doc.setFileId('00000000000000000000000000000000'); } catch (_) { /* older jsPDF */ }
   let extraPages = 0;
@@ -467,4 +467,14 @@ async function downloadPDF(what = "report") {
     el.value = company[k] || '';
     el.oninput = () => { company[k] = el.value.trim(); localStorage.setItem('rm.company', JSON.stringify(company)); };
   }
+})();
+
+// the optional 3D view of the traced roof: the same faces the report's 3D illustration uses, turned with a slider; the note
+// says whether the report will print it (elevations agree) or why not
+(function () {
+  const draw = () => { const c = document.getElementById('model3dCanvas'), r = document.getElementById('model3dTurn'), n = document.getElementById('model3dNote'); if (!c || typeof rpAxonPreview !== 'function') return;
+    try { const res = rpAxonPreview(c, +r.value); n.textContent = !document.getElementById('chkPdf3d').checked ? '3D illustration is turned off for the report.' : res.ok ? 'The report will include this 3D illustration (' + res.why + ').' : 'Not printed in the report: ' + res.why + '.'; } catch (e) { n.textContent = 'No 3D view: ' + (e.message || e); } };
+  const d = document.getElementById('model3d'); if (d) d.addEventListener('toggle', () => { if (d.open) draw(); });
+  const r = document.getElementById('model3dTurn'); if (r) r.addEventListener('input', draw);
+  document.getElementById('chkPdf3d')?.addEventListener('change', draw);
 })();
