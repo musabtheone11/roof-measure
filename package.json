@@ -2,6 +2,8 @@
   "name": "roof-measure-runtime",
   "private": true,
   "scripts": {
+    "org:cloud": "node --use-env-proxy organization/cloud-cycle.mjs",
+    "test:cloud": "node --test organization/cloud*.test.mjs",
     "org": "node --use-env-proxy organization/cli.mjs",
     "test:organization": "node --test organization/*.test.mjs",
     "start": "node --use-env-proxy server/main.mjs",

@@ -134,8 +134,9 @@ export function evaluate(f, context, options = renderOptions) {
       absoluteAreaErrorPct:rounded(100*Math.abs(area-ref.areaSqFt)/ref.areaSqFt),
       edgeMatches:measurements,missedEdges:lines.missed,extraEdges:lines.extra.map(i=>{
         const edge=output.edges[i];
+        const estimated=summarizeEngine({facets:output.facets,edges:[edge]},6,true).byType[edge.type];
         return {index:i,type:edge.type,lineM:edge.line.map(p=>p.map(rounded)),
-          estimatedFt:rounded(summarizeEngine({facets:output.facets,edges:[edge]},6,true).byType[edge.type])};
+          estimatedFt:Number.isFinite(estimated)?rounded(estimated):null};
       }),
       facetMatches:faces.selected.map(({i,j,cost})=>({truthId:ref.faces[i].id,predictedIndex:j,iou:rounded(1-cost)})),
       missedFacets:faces.missed,extraFacets:faces.extra};

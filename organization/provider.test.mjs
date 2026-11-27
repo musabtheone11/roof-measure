@@ -89,7 +89,7 @@ test('bounded provider body and structured content reject, without claiming free
 });
 
 test('malformed model JSON and forged actor fail strict local validation', async () => {
-  const badJSON = fixture({ chat: async () => json({ choices: [{ finish_reason: 'stop', message: { content: '```json\n{}\n```' } }] }) });
+  const badJSON = fixture({ chat: async () => json({ choices: [{ finish_reason: 'stop', message: { content: '```json\n{"unfinished":\n```' } }] }) });
   await assert.rejects(requestOrganizationRole(task, badJSON.options), { code: 'INVALID_AGENT_OUTPUT' });
   const forged = fixture({ chat: async () => json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ ...output(), actorId: 'verifier' }) } }] }) });
   await assert.rejects(requestOrganizationRole(task, forged.options), { code: 'INVALID_ORGANIZATION_CONTRACT' });
@@ -135,4 +135,12 @@ test('bounded original response is retained before invalid role output rejects',
   await assert.rejects(requestOrganizationRole(task,{...f.options,onResponse:r=>{record=r;}}),{code:'INVALID_AGENT_OUTPUT'});
   assert.equal(record.content,'not JSON'); assert.equal(record.execution.reportedUsd,.000012);
   assert.equal(f.events.at(-1)[0],'usage');
+});
+
+test('single JSON fence normalization preserves original evidence and rejects extra prose',async()=>{
+  const good=fixture({chat:async()=>json({model:'gpt-6.2-astra',usage:{cost_tokens:1},choices:[{finish_reason:'stop',message:{content:'```json\n'+JSON.stringify(output())+'\n```'}}]})});
+  let original;const result=await requestOrganizationRole(task,{...good.options,onResponse:r=>{original=r.content;}});
+  assert.equal(result.execution.normalization,'single-json-code-fence');assert.ok(original.startsWith('```json'));
+  const bad=fixture({chat:async()=>json({choices:[{finish_reason:'stop',message:{content:'Here is JSON:\n'+JSON.stringify(output())}}]})});
+  await assert.rejects(requestOrganizationRole(task,bad.options),{code:'INVALID_AGENT_OUTPUT'});
 });

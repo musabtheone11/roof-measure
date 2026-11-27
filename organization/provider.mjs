@@ -1,4 +1,5 @@
 import { validateTask, validateResult, MODEL_BY_ROLE, ROLE_PAYLOAD_CONTRACTS } from './contracts.mjs';
+import {normalizeAgentJSON} from '../server/contracts.mjs';
 
 const API_ROOT = 'https://api.apinex.bond/v1';
 const MAX_BODY = 2 * 1024 * 1024;
@@ -179,7 +180,7 @@ export async function requestOrganizationRole(task, {
     if (!choice || choice.finish_reason !== 'stop' || typeof choice.message?.content !== 'string') fail('INVALID_AGENT_OUTPUT', 'The model response is missing, incomplete, or unsupported');
     if (Buffer.byteLength(choice.message.content) > MAX_OUTPUT) fail('OUTPUT_TOO_LARGE', 'Agent JSON exceeds the accepted output limit');
     let result;
-    try { result = JSON.parse(choice.message.content); }
+    try { const normalized=normalizeAgentJSON(choice.message.content);execution.normalization=normalized.normalization;result = JSON.parse(normalized.text); }
     catch { fail('INVALID_AGENT_OUTPUT', 'The model did not return one JSON object'); }
     result = validateResult(result, task);
     const handoff = {taskId:task.id, hypothesis:result.payload.hypothesis || null,

@@ -11,6 +11,9 @@ leads-rates.log
 
 # local dev cache (downloaded rasters, generated customer PDFs) and private benchmark artifacts
 .devcache/
+.cloud-state/
+cloud-output/
+roof-cloud-reports.zip
 reports/
 bench/private/
 node_modules/

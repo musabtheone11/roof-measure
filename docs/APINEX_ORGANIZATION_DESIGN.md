@@ -367,3 +367,43 @@ review recovery. The old image-review runtime now has durable admitted-result
 recovery; it still is distinct from the new organization scheduler/database.
 No claim of real-field accuracy or production deployment is inferred from those
 remote changes. The design's original transient baseline describes `4806a12` only.
+
+## Cloud-native operation amendment — Windows dependency removed
+
+Owner instruction supersedes Downloads-as-required-reference: use independent
+cloud-generated cases and review own reports. Windows/local intake is now optional.
+Never copy the entire personal Downloads directory into a cloud account. Generated
+reports are outputs to test, not reference truth. A separate closed-form oracle
+creates roof dimensions/3D facets/edges before the actual app tracer runs; the
+verifier compares app outputs to that oracle and keeps failures/unknowns.
+
+Cloud cycle: immutable source checkout → fixed seeded fixture generation → actual
+app trace/measurement → customer PDF (no segmentation imagery) → deterministic
+independent numerical verification → APINEX independent critique → CEO recommendation
+→ hard gates → archived report/JSON/status ZIP. CEO cannot override numerical
+failures and cannot release application code. New code proposals remain PRs with
+independent verification. Generated accuracy is synthetic scope only.
+
+Run bounded cloud jobs daily via GitHub Actions with workflow_dispatch for an
+immediate run. A workflow only schedules on default branch. Deploy a minimal
+operations-only PR from main that pins the verified cloud-runner commit; do not
+merge all app/report changes merely to enable scheduling. Repository checks and
+merge policy remain authoritative. GitHub artifacts provide downloadable copies
+and bounded retention, not permanent archival or a live customer hosting URL.
+
+Use one global concurrency group and one global checkpoint chain across branches,
+including failed/cancelled predecessors. Before inference, durable budget reserve
+must exist; a missing/expired/newest checkpoint or uncertain predecessor blocks
+paid admission, never silently initializes a fresh budget. Upload checkpoint on
+failure as well as success. Daily checkpoints preserve carried reservations.
+Source/model/prompt/fixture/report hashes and reviewer identities remain recorded.
+The approved20USD rolling-week cap and existing lower caps remain unchanged.
+A provider fault stops review with visible status; deterministic work and archive
+creation still proceed. No unnecessary recurring calls when source/protocol/case
+fingerprint is unchanged; repeated daily runs rotate frozen evaluation seeds.
+
+Implementation ownership: cloud_case_runner owns independent fixtures/app/PDF
+runner; cloud_operations owns checkpoint/workflow; supervisor owns cycle/API/hard
+policy integration and actual scheduler deployment; cloud_independent_review
+challenges leakage, circular truth, cost recovery and operating claims. These are
+Codex implementation agents. Actual runtime critique/CEO calls use API NEX.

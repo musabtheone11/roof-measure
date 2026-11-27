@@ -23,7 +23,7 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
 2. **Measurement schedules**: building subtotals, area/pitch and edge schedules, with continuation pages when needed. Unknown values remain blank. Order quantities remain withheld for incomplete scope.
 3. **Private internal review**: the original plan-first vector sheets remain available through explicit `internalReview: true`; they are not the default customer preview/export.
 
-The durable local organization is documented in [workflow design](docs/APINEX_ORGANIZATION_DESIGN.md), [operations](docs/APINEX_ORGANIZATION_OPERATIONS.md) and [current validation](docs/APINEX_ORGANIZATION_VALIDATION.md). Its missing real-case/deployment adapters and local host access remain explicit blockers; it is not yet a verified always-on organization.
+The [self-contained cloud laboratory](docs/CLOUD_ROOF_LAB.md) generates cases, checks actual app outputs and retains downloadable reports without Windows Downloads. Optional local intake is described in the [organization design](docs/APINEX_ORGANIZATION_DESIGN.md) and [local runbook](docs/APINEX_ORGANIZATION_OPERATIONS.md). Generated diagnostics do not certify real roof accuracy.
 
 Preview, Print and Download use the same signature-cached PDF. A model edit during generation rejects the result; saved preview actions and delayed downloads also check the signature. Direct vector PDF generation checks the model revision across asynchronous image loading.
 
