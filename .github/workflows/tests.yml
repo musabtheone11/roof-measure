@@ -94,6 +94,11 @@ jobs:
           node bench/runtime-agents-test.mjs
       - name: Source-image report quantity and revision checks
         run: node bench/ai-report-test.mjs
+      - name: Durable organization and customer report contracts
+        run: |
+          npm ci --ignore-scripts
+          node --test organization/*.test.mjs
+          node bench/customer-report-test.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -101,7 +106,6 @@ jobs:
         run: python tools/dev/test_specialist_sweep.py
       - name: Install pinned browser test dependencies
         run: |
-          npm ci --ignore-scripts
           npx playwright install --with-deps chromium
           python -m pip install PyMuPDF==1.26.6
           sudo apt-get update

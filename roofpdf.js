@@ -829,7 +829,7 @@ function rpSheetSchedules(doc, M, S, spill, n, total) {
   let y = 150; const rowh = 13.5; const rowsAvail = Math.floor((RP.FOOT - 40 - y - 19) / rowh);
   const FW = [40, 90, 60, 70];
   if (spill.edges && spill.edges.length) { const { cols, stride } = rpSchedCols(S); const willUse = Math.min(cols, Math.ceil(spill.edges.length / rowsAvail)); const beside = spill.facets && spill.facets.length && willUse < cols && RP.R - (RP.L + willUse * stride) >= 174;
-    rpTitleBar(doc, y, S.refs ? 'Keyed dimensions (continued)' : S.grouped ? 'Edge lengths (continued)' : 'Edge schedule (continued)', beside ? null : 'Keys match the plan'); y += 11; let yEnd = y; let used = 0;
+    rpTitleBar(doc, y, S.refs ? 'Keyed dimensions (continued)' : S.grouped ? 'Edge lengths (continued)' : 'Edge schedule (continued)', beside ? null : M.customerReport ? 'Measurement identifiers' : 'Keys match the plan'); y += 11; let yEnd = y; let used = 0;
     for (let c = 0; c < cols; c++) { const chunk = spill.edges.slice(c * rowsAvail, (c + 1) * rowsAvail); if (!chunk.length) break; yEnd = Math.max(yEnd, rpTableD(doc, RP.L + c * stride, y, S.edgeWidths, S.edgeHead, chunk, { rowh, size: 8.4, headsz: 8, num: S.edgeNum })); used++; }
     spill.edges = spill.edges.slice(cols * rowsAvail);
     // leftover facet rows take the spare column beside the edges when one is free, else a block below
@@ -922,7 +922,7 @@ function rpSheetPlanFirst(doc, M, hero, n, total, ctx) {
   return res;
 }
 function rpSheetMeasurementSchedules(doc, M, S, spill, n, total) {
-  rpHeader(doc, M, 'Measurement schedules', 'Measurement schedules', 'Keyed to the roof plan / net measurements', n, total);
+  rpHeader(doc, M, 'Measurement schedules', 'Measurement schedules', M.customerReport ? 'Net measurements / geometry retained privately' : 'Keyed to the roof plan / net measurements', n, total);
   let y = 150;
   const rows = M.structs.map((B) => [B.name, M.kind === 'illustrative' || B.confirmed > 0 ? rpNum(B.confirmed, 2) : '', B.estimate > 0 ? rpNum(B.estimate, 2) : '', rpPitch(B.predominant)]);
   y = rpTableD(doc, RP.L, y, [200, 116, 116, 116], ['Building', M.kind === 'illustrative' ? 'Illustrative ft²' : 'Verified ft²', 'Inferred ft²', 'Pitch'], rows, { rowh: 18, size: 8.5, num: [1, 2, 3] }) + 24;
@@ -1046,7 +1046,9 @@ async function rpBuild(opts = {}) {
   if (!window.jspdf) throw new Error('PDF library did not load; check the internet connection');
   const revision = typeof serialize === 'function' ? RM.modelRevision(serialize()) : null;
   const M = rpModel(); if (!M || !M.facets.length) { if (state.trace && state.trace.failed) return rpBuildNoRoof(); throw new Error('Trace the roof first'); }
-  await rpLoadLogo(); const hero = await rpHeroAerial(M);
+  await rpLoadLogo();
+  if (opts.internalReview !== true) return rpBuildCustomer(M, opts, revision);
+  const hero = await rpHeroAerial(M);
   if (revision !== null && revision !== RM.modelRevision(serialize())) throw new Error('The roof changed while this report was being prepared. Generate a new report.');
   const S = rpSchedules(M);
   const doc = rpDoc(); doc.__rpText = []; const ctx = { spill: {} };
@@ -1088,6 +1090,32 @@ async function rpBuild(opts = {}) {
     layout.textOverlaps = { count: hits.length, first: hits.slice(0, 12) }; }
   doc.__rpText = null;
   return { doc, M, pages: doc.getNumberOfPages(), layout };
+}
+// Customer preview/export intentionally excludes all roof geometry and source imagery.
+// Internal plan-first sheets remain available only through rpBuild({internalReview:true}).
+function rpBuildCustomer(M, opts, revision) {
+  M.customerReport = true;
+  const S = rpSchedules(M), probe = rpDoc(), spill = {};
+  const infoPages = rpSheetInformation(probe, M, 1, 1);
+  rpSheetMeasurementSchedules(probe, M, S, spill, 1, 1);
+  let extraSchedules = 0;
+  while (((spill.edges && spill.edges.length) || (spill.facets && spill.facets.length)) && extraSchedules < 8) {
+    rpSheetSchedules(probe, M, S, spill, 1, 1); extraSchedules++;
+  }
+  if ((spill.edges && spill.edges.length) || (spill.facets && spill.facets.length)) throw new Error('Measurement schedules exceed report page limit');
+  const evidencePages = rpSheetEvidence(probe, M, 1, 1);
+  const total = infoPages + 1 + extraSchedules + evidencePages + (opts.materials && !M.review ? 1 : 0);
+  const doc = rpDoc(); doc.__rpText = [];
+  let n = 1; n += rpSheetInformation(doc, M, n, total) - 1;
+  doc.addPage('letter', 'portrait'); n++;
+  const actualSpill = {}; rpSheetMeasurementSchedules(doc, M, S, actualSpill, n, total);
+  for (let i = 0; i < extraSchedules; i++) { doc.addPage('letter', 'portrait'); n++; rpSheetSchedules(doc, M, S, actualSpill, n, total); }
+  doc.addPage('letter', 'portrait'); n++; n += rpSheetEvidence(doc, M, n, total) - 1;
+  if (opts.materials && !M.review) { doc.addPage('letter', 'portrait'); n++; rpSheetMaterials(doc, M, n, total); }
+  if (revision !== null && revision !== RM.modelRevision(serialize())) throw new Error('The roof changed while this report was being prepared. Generate a new report.');
+  doc.setProperties({title: `${M.line1} - roof measurement`, author: 'Diversity Contracting | Roof Measure', subject: 'Measurement tables and evidence notes; no roof segmentation imagery', creator: 'Roof Measure'});
+  doc.__rpText = null;
+  return {doc, M, pages: doc.getNumberOfPages(), layout: {internalReview:false, segmentationImagery:false, sheets:{total, schedules:1 + extraSchedules, evidence:evidencePages}}};
 }
 // no roof could be measured from the imagery: a one-sheet REVIEW REQUIRED report with what was found and what is needed
 function rpBuildNoRoof() {

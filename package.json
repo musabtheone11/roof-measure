@@ -2,6 +2,8 @@
   "name": "roof-measure-runtime",
   "private": true,
   "scripts": {
+    "org": "node --use-env-proxy organization/cli.mjs",
+    "test:organization": "node --test organization/*.test.mjs",
     "start": "node --use-env-proxy server/main.mjs",
     "test:runtime": "node --test server/*.test.mjs",
     "start:private-preview": "node --use-env-proxy server/preview.mjs"

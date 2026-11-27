@@ -278,7 +278,7 @@ async function buildReportPDF(opts = {}) {
   if (RPT.rec && RPT.sig === sig) return RPT.rec;
   if (wantEst && typeof xmEnsureRoof === 'function' && !await xmEnsureRoof()) return null;
   if (typeof permitEnsure === 'function') { try { await permitEnsure(); } catch (_) { /* optional */ } }
-  const { doc, pages, layout } = await rpBuild({ materials: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked), axon: !($('#chkPdf3d') && !$('#chkPdf3d').checked) });
+  const { doc, pages, layout } = await rpBuild({ internalReview: false, axon: false, materials: !!($('#chkPdfMaterials') && $('#chkPdfMaterials').checked) });
   // deterministic bytes: the file carries the report date, not the second it was built
   try { const d = new Date(); d.setHours(0, 0, 0, 0); doc.setCreationDate(d); doc.setFileId('00000000000000000000000000000000'); } catch (_) { /* older jsPDF */ }
   let extraPages = 0;
