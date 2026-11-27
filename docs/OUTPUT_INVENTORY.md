@@ -14,7 +14,7 @@ Verified 2026-11-27 on main `53b6816` with a real traced job (36 facets), driven
 | Report: 3D illustration option | Panel 6, options | Works | Toggles; drawn only when elevations validate |
 | Estimate PDF | Panel 7 | Works | 8 pages in about 22 s (direct check; the runner's 300 s wait missed it, a runner issue) |
 | Estimate HTML / Print | Panel 7 | Works | 67 kB, table and prices present; print requested |
-| Report + estimate PDF | Panels 6 and 7 | Works, two findings | 18 pages (report plus estimate). **Estimate pages are images: not searchable or copyable. Estimate header says "DIVERSITY ROOFING"; the report says "Diversity Contracting"** |
+| Report + estimate PDF | Panels 6 and 7 | Works | 18 pages (report plus estimate). Estimate pages now carry an invisible text layer, so they are searchable and copyable; the business name is Diversity Contracting (both fixed 2026-11-27, `tools/dev/estimate-text-test.mjs`) |
 | Drone flight plan | Panel 8, Plan flight | Works | Plan built; exports enabled |
 | Generic KMZ / Litchi CSV | Panel 8 | Works | Both download |
 | DJI Fly KMZ | Panel 8 | Needs user input | Asks the user to pick their DJI Fly placeholder route (.kmz) first, by design |
@@ -28,7 +28,7 @@ Verified 2026-11-27 on main `53b6816` with a real traced job (36 facets), driven
 
 No page errors occurred during the run.
 
-## Findings to fix in Milestone B
-1. Estimate pages in the PDF are raster images: the recipient can't search or copy line items.
-2. Brand name mismatch between the estimate ("DIVERSITY ROOFING") and the report ("Diversity Contracting").
-3. Commercial, leads and permits outputs still need a verification run.
+## Findings
+1. Fixed: estimate pages were raster images, so a recipient couldn't search or copy line items. Every page now has a text layer at the printed positions; the page images are unchanged.
+2. Fixed: the business name. The built-in default is now Diversity Contracting, and a browser that saved the old default is switched once; a name someone typed is kept. The cash-estimate builder (`cash/`, kept exactly as built) still says Diversity Roofing, pending an owner decision. The website domain diversity-roofing.com is unchanged.
+3. Open: commercial, leads and permits outputs still need a verification run.
