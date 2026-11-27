@@ -121,3 +121,18 @@ require fixed harness receipts, matching original source/candidate/dataset/polic
 distinct identities and scoped human approval. CEO cannot override a failed gate.
 Missing adapters are needs-human, not successful jobs. No customer collection,
 real-field accuracy improvement, production URL or installed 24/7 service is claimed.
+
+Budget settings can be lowered or adjusted within the authorized ceilings using
+`--budget-file ABSOLUTE_JSON_PATH` (or `ROOF_ORG_BUDGET_FILE`). Only requestLimit,
+maxUsd, hourUsd, dayUsd, weekUsd and monthUsd are accepted. Explicit zero disables
+that capacity; weekly values above20 reject. Example: `{"maxUsd":0,"weekUsd":20}`.
+Status prints default policy; startup prints the actual loaded limits. Health
+reports process heartbeat freshness separately from release readiness, which is
+false while required adapters/access remain missing. Filewatch and60-second scans
+run without inference; unstable files are revisited sooner until stable.
+
+For managed-proxy container builds, keep TLS verification enabled and optionally
+pass the trusted public CA as `docker build --secret id=build_ca,src=CA_PATH ...`.
+The secret mount exists only during dependency installation and is not embedded
+in the image. Runtime egress trust must be configured separately by the hosting
+operator when needed.

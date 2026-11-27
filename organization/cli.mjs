@@ -10,8 +10,9 @@ import {createWorkflow, CAPABILITIES} from './workflow.mjs';
 import {workOnce} from './worker.mjs';
 import {verifyRoster} from './provider.mjs';
 import {customerProjection, renderCustomerPDF} from './customer-report.mjs';
+import {AUTHORIZED_BUDGET,loadBudget} from './config.mjs';
+import {writeHealth,readHealth} from './health.mjs';
 
-export const AUTHORIZED_BUDGET = Object.freeze({requestLimit: 16, maxUsd: 1, hourUsd: 1, dayUsd: 3, weekUsd: 20, monthUsd: 80});
 const ACTORS = Object.freeze({extraction: 'extraction-local', reference: 'reference-curator', engineering: 'engineering-author',
   critique: 'critique-independent', verification: 'verification-isolated', ceo: 'ceo-advisory', operations: 'operations-trusted', reporting: 'reporting-publisher'});
 function sourceRevision() {
@@ -39,16 +40,17 @@ export function status(store) {
     lastSuccessfulProcessing: tasks.filter(t => t.status === 'complete' && t.stage === 'extraction').at(-1)?.updatedAt || null,
     lastSuccessfulEvaluation: tasks.filter(t => t.status === 'complete' && t.stage === 'verification').at(-1)?.updatedAt || null,
     accuracyTrends: null, actualUserDownloadsProcessed: 'not established by this status; inspect source inventory',
-    persistentOSService: 'not installed or verified by this CLI'};
+    worker:readHealth(store.directory),persistentOSService: 'not installed or verified by this CLI'};
 }
 export async function main(args = process.argv.slice(2)) {
   const command = args[0] || 'status';
   const arg = key => { const i = args.indexOf(key); return i < 0 ? null : args[i + 1]; };
   const directory = resolve(arg('--state') || process.env.ROOF_ORG_STATE || '.devcache/organization');
+  const budget=loadBudget(arg('--budget-file') || process.env.ROOF_ORG_BUDGET_FILE);
   const store = new OrgStore(directory);
   const print = value => console.log(JSON.stringify(value, null, 2));
   try {
-    if (command === 'status' || command === 'health') { print(status(store)); return; }
+    if (command === 'status' || command === 'health') { const current=status(store);print(command==='health'?current.worker:current);if(command==='health'&&!current.worker.processHealthy)process.exitCode=1;return; }
     if (['pause', 'resume', 'stop'].includes(command)) { store.setControl({pause: 'paused', resume: 'running', stop: 'stopped'}[command]); print({control: store.getControl()}); return; }
     if (command === 'cancel') { store.cancel(args[1]); print({cancelled: args[1]}); return; }
     if (command === 'retry') {
@@ -63,7 +65,7 @@ export async function main(args = process.argv.slice(2)) {
       writeFileSync(output, renderCustomerPDF(report), {mode: 0o600}); print({output}); return;
     }
     if (command === 'rollback') throw new Error('Rollback blocked: register an authenticated deployment adapter with recorded known-good digest and reconciliation; no deployment is claimed');
-    if (command === 'once') { print(await workOnce(store, {budget: AUTHORIZED_BUDGET})); return; }
+    if (command === 'once') { print(await workOnce(store, {budget})); return; }
     if (!['discover', 'start', 'run'].includes(command)) throw new Error('Commands: status health discover start run once pause resume stop cancel retry roster customer-report rollback');
     const root = arg('--downloads') || process.env.ROOF_DOWNLOADS;
     if (!root || !isAbsolute(root)) throw new Error('Configure the actual local absolute Downloads path with --downloads or ROOF_DOWNLOADS; this cloud cannot read your computer');
@@ -78,19 +80,20 @@ export async function main(args = process.argv.slice(2)) {
     try {
       try { watcher = watch(root, {recursive: true}, () => { dirty = true; }); watcher.on('error', () => { dirty = true; }); } catch { /* reconciliation remains authoritative */ }
       store.setControl('running');
-      print({started: true, root, state: directory, paidInferenceEnabled: false, reason: 'Source authorization and production role adapters are not installed', budget: AUTHORIZED_BUDGET});
+      print({started: true, root, state: directory, paidInferenceEnabled: false, reason: 'Source authorization and production role adapters are not installed', budget});
       while (!controller.signal.aborted && store.getControl() !== 'stopped') {
+        writeHealth(directory,{control:store.getControl()});
         if (store.getControl() === 'running') {
           if (dirty || Date.now() - lastScan >= 60000) {
-            const summary = await inventory(store, discovery); lastScan = Date.now(); dirty = false;
+            const summary = await inventory(store, discovery); lastScan = Date.now(); dirty = summary.unstable > 0;
             if (summary.enqueued || summary.inaccessible || summary.truncated) print({inventory: summary});
           }
-          const done = await workOnce(store, {budget: AUTHORIZED_BUDGET, signal: controller.signal});
+          const done = await workOnce(store, {budget, signal: controller.signal});
           if (done) print(done);
         }
         try { await delay(1000, null, {signal: controller.signal}); } catch { break; }
       }
-    } finally { controller.abort(); watcher?.close(); process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt); }
+    } finally { controller.abort(); watcher?.close();writeHealth(directory,{control:'stopped'}); process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt); }
   } finally { store.close(); }
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });

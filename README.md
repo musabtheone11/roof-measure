@@ -12,16 +12,18 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
    - **Lines**: ridge, hip, valley, eave, rake, step flashing, headwall. Hips, valleys and rakes are converted from plan length to actual length using the pitch.
    - Corner snapping, live length readout while drawing, drag-to-edit corners, right-click a corner to delete it.
 3. **Totals**: roof square feet, squares, squares with waste, linear footage per line type.
-4. **Plan-first report** with an original grayscale Diversity Contracting layout, vector plan and keyed measurement schedules.
+4. **Customer measurement report** with the grayscale Diversity Contracting design, measurement tables and review notes; no roof segmentation imagery. Private internal review retains the plan-first geometry.
 5. **Save / export**: save roofs in the browser, export CSV or JSON, import JSON.
 
 ## The report
 
 **Preview report**, **Print report** and **Download report** (panel 6) all use one generated PDF: the preview shows it inside the app, Print sends that same file to the print dialog, Download saves it. US Letter, grayscale, vector (selectable text), with the Diversity Contracting logo. The sheets are built from the selected job's own address, geometry and quantities:
 
-1. **Roof Measurement Report**: slim logo/address/date/status header, compact supported takeoff, and a dominant scaled north-up vector plan with feet-and-inches dimensions, scale bar, north arrow, and keyed callouts. An aerial reference is optional and small. A 3D illustration is available when verified elevations support it.
-2. **Measurement schedules**: separate building subtotals, edge and facet schedules keyed to the plan, and concise source/review notes. Detail and continuation sheets are added only when required for readable keys or schedules. Order quantities are withheld for incomplete scope.
-3. **Measurement summary** includes net area, pitch, orientation and waste scenarios. Bearings come from the fitted or modelled planes.
+1. **Customer measurement summary**: logo, property/date/status, supported area and length quantities, pitch information and review notes. No roof segmentation diagrams, source imagery or overlays appear in the default customer PDF.
+2. **Measurement schedules**: building subtotals, area/pitch and edge schedules, with continuation pages when needed. Unknown values remain blank. Order quantities remain withheld for incomplete scope.
+3. **Private internal review**: the original plan-first vector sheets remain available through explicit `internalReview: true`; they are not the default customer preview/export.
+
+The durable local organization is documented in [workflow design](docs/APINEX_ORGANIZATION_DESIGN.md), [operations](docs/APINEX_ORGANIZATION_OPERATIONS.md) and [current validation](docs/APINEX_ORGANIZATION_VALIDATION.md). Its missing real-case/deployment adapters and local host access remain explicit blockers; it is not yet a verified always-on organization.
 
 Preview, Print and Download use the same signature-cached PDF. A model edit during generation rejects the result; saved preview actions and delayed downloads also check the signature. Direct vector PDF generation checks the model revision across asynchronous image loading.
 

@@ -23,7 +23,7 @@ export async function workOnce(store, {workerId = 'local-worker', signal, provid
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, {once: true});
-  const timeout = setTimeout(abort, 120000);
+  const timeout = setTimeout(abort, Math.min(120000, task.constraints?.maxRuntimeMs ?? 120000));
   const heartbeat = setInterval(() => {
     try {
       if (store.getControl() === 'stopped') abort();
@@ -32,6 +32,7 @@ export async function workOnce(store, {workerId = 'local-worker', signal, provid
   }, 1000);
   let result, responseArtifact, settled = false;
   try {
+    if (task.constraints?.maxRuntimeMs === 0) throw Object.assign(new Error('Explicit zero runtime disables task execution'), {code:'BUDGET_DISABLED'});
     if (['staging', 'release'].includes(task.stage)) {
       if (!adapters.releaseBundle || !adapters.lookupEvidence || !adapters.lookupApproval)
         throw Object.assign(new Error('Trusted release evidence and human approval adapters are missing'), {code: 'RELEASE_GATE_BLOCKED'});
@@ -94,6 +95,15 @@ export async function workOnce(store, {workerId = 'local-worker', signal, provid
     return {taskId: task.id, status, nextTaskId: next?.id || null};
   } catch (error) {
     const code = error.code || 'TASK_FAILED';
+    if (error.retryable === true && error.automaticRetryAllowed !== false && !controller.signal.aborted) {
+      try {
+        const wait = Math.max(error.retryAfterMs || 0, 1000 * 2 ** Math.max(0, leased.attempts - 1) + Math.floor(Math.random() * 250));
+        if (wait <= 10000) {
+          store.retry(task.id, workerId, task.fence, {notBefore: now() + wait, error: code});
+          return {taskId:task.id,status:'pending',code,retryAfterMs:wait};
+        }
+      } catch { /* Unknown billing and exhausted attempts intentionally prevent automatic retry. */ }
+    }
     const status = ['ADAPTER_REQUIRED', 'CONTEXT_ADAPTER_REQUIRED', 'SOURCE_AUTHORIZATION_REQUIRED', 'BUDGET_LIMIT', 'BUDGET_DISABLED', 'RELEASE_GATE_BLOCKED'].includes(code) ? 'needs-human' : 'failed';
     try { store.finish(task.id, workerId, task.fence, {status, result: result || (responseArtifact ? {rawResponseHash: responseArtifact.hash} : null), error: JSON.stringify({code, message: error.message.slice(0, 500)})}); settled = true; } catch { /* expired fence remains recoverable; never overwrite its successor */ }
     return {taskId: task.id, status: settled ? status : 'lease-lost', code};

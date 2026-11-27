@@ -118,3 +118,18 @@ test('customer projection rejects geometry/images and unknown physical quantitie
   for(const key of ['sourceImage','facets','vertices','segmentation']) assert.throws(()=>customerProjection({...input,[key]:[]}));
   assert.throws(()=>customerProjection({...input,quantities:[{...input.quantities[0],value:10}]}));
 });
+
+test('budget configuration preserves zero and cannot exceed authorized weekly cap',async t=>{
+  const {root}=fixture(t); const {loadBudget}=await import('./config.mjs');const p=join(root,'budget.json');
+  writeFileSync(p,JSON.stringify({maxUsd:0,weekUsd:0})); assert.equal(loadBudget(p).maxUsd,0);
+  writeFileSync(p,JSON.stringify({weekUsd:21})); assert.throws(()=>loadBudget(p));
+  writeFileSync(p,JSON.stringify({unknown:1})); assert.throws(()=>loadBudget(p));
+});
+
+test('safe pre-dispatch transient failures schedule bounded retry without new paid request',async t=>{
+  const {store}=fixture(t); const task={...initial(store),id:'safe-retry',stage:'proposal',role:'engineering',actorId:'author'};
+  task.constraints.externalProcessingAuthorized=true;store.enqueue(task);store.setControl('running');
+  const outcome=await workOnce(store,{provider:async()=>{throw Object.assign(new Error('Temporary roster failure'),{code:'NETWORK_ERROR',retryable:true});},adapters:{resolveContext:async()=>({kind:'synthetic'})}});
+  assert.equal(outcome.status,'pending');assert.equal(store.ledger().requests,0); assert.equal(store.getTask(task.id).attempts,1);
+  assert.equal(await workOnce(store),null);
+});

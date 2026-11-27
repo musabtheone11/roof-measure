@@ -2,9 +2,13 @@
 FROM node:24-bookworm-slim@sha256:873f586f3794f52281bd039bf02c048a0be08fde619338f9941bad1eb6b34530
 WORKDIR /app
 COPY --chown=node:node package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN --mount=type=secret,id=build_ca \
+    if [ -f /run/secrets/build_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build_ca; fi; \
+    npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --chown=node:node bench/package.json bench/package-lock.json ./bench/
-RUN npm ci --prefix bench --omit=dev --ignore-scripts && npm cache clean --force
+RUN --mount=type=secret,id=build_ca \
+    if [ -f /run/secrets/build_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build_ca; fi; \
+    npm ci --prefix bench --omit=dev --ignore-scripts && npm cache clean --force
 COPY --chown=node:node *.js *.css index.html pdf-import.mjs ./
 COPY --chown=node:node vendor/ ./vendor/
 COPY --chown=node:node assets/ ./assets/

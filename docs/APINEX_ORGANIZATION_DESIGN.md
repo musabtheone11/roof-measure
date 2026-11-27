@@ -337,7 +337,7 @@ area/length/pitch/date/provider/property candidates. Validate a representative b
 against source before full processing; inventory never masquerades as completed
 review. Actual user's Downloads is unavailable to this cloud and remains blocked.
 
-Budget admission adds monthly cap (UTC calendar periods explicitly documented)
+Budget admission adds monthly cap (UTC calendar month, versus rolling hour/day/seven-day windows)
 to per-workflow/hour/day caps. Retry requires a fresh bounded admission and known
 safe outcome; unknown dispatched requests remain blocked. Operator retry cannot
 reset cumulative budget/attempt accounting. A meaningful notification is a durable
@@ -356,3 +356,14 @@ must state power/network/cloud dependencies and report counters without inventin
 unique-property or field results. Additional implementation ownership: supervisor
 inventory/extraction and CLI; persistence implementer monthly budget; dedicated
 report implementer actual customer preview/export; independent review reruns.
+
+
+## Post-reconciliation baseline
+
+The initial inspection preceded remote reconciliation. Remote branch advanced to
+`5c10081`; local organization/report changes were rebased on it, preserving its
+measurement safeguards, specialist evaluation artifacts and `server/job-store.mjs`
+review recovery. The old image-review runtime now has durable admitted-result
+recovery; it still is distinct from the new organization scheduler/database.
+No claim of real-field accuracy or production deployment is inferred from those
+remote changes. The design's original transient baseline describes `4806a12` only.

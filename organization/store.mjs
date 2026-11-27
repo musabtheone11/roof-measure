@@ -12,6 +12,7 @@ const fail = (code, message) => { const e = new Error(message); e.code = code; t
 const id = value => { if (typeof value !== 'string' || !ID.test(value)) fail('INVALID_ID', 'Invalid bounded identifier'); return value; };
 const finite = (n, name) => { if (!Number.isFinite(n) || n < 0) fail('INVALID_LIMIT', `${name} must be finite and nonnegative`); return n; };
 const json = value => { const s = JSON.stringify(value); if (typeof s !== 'string' || Buffer.byteLength(s) > 1024 * 1024) fail('INVALID_DATA', 'JSON data exceeds the storage bound'); return s; };
+const stageLimit = row => { const task=JSON.parse(row.body); return Math.min(2, task.maxAttempts ?? 2, task.constraints?.maxAttempts ?? 2); };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
 function noSymlinkPath(path) {
@@ -145,6 +146,7 @@ export class OrgStore {
       // Expired leases must be reconciled by recover() before another claim.
       if (this.db.prepare("SELECT count(*) AS n FROM tasks WHERE status='leased'").get().n >= 1) return null;
       const row = this.db.prepare("SELECT * FROM tasks WHERE status='pending' AND attempts<2 AND not_before<=? ORDER BY created,id").all(this.now()).find(candidate => {
+        if (candidate.attempts >= stageLimit(candidate)) return false;
         const previous = JSON.parse(candidate.body).constraints?.previousTaskId;
         if (previous == null) return true;
         return this.db.prepare('SELECT status FROM tasks WHERE id=?').get(String(previous))?.status === 'complete';
@@ -198,7 +200,7 @@ export class OrgStore {
     finite(notBefore, 'notBefore');
     return this.transaction(() => {
       const row = this.requireLease(taskId, workerId, fence);
-      if (row.attempts >= 2) fail('ATTEMPT_LIMIT', 'Stage acquisition limit exhausted');
+      if (row.attempts >= stageLimit(row)) fail('ATTEMPT_LIMIT', 'Stage acquisition limit exhausted');
       const unknown = this.db.prepare("SELECT count(*) AS n FROM attempts WHERE task_id=? AND state IN ('dispatched','unknown')").get(taskId).n;
       if (unknown) fail('UNKNOWN_BILLING', 'Ambiguous dispatched requests cannot be retried automatically');
       this.db.prepare("UPDATE attempts SET state='cancelled',charged_usd=0,updated=? WHERE task_id=? AND state='reserved'").run(this.now(), taskId);
@@ -212,7 +214,7 @@ export class OrgStore {
     return this.transaction(() => {
       const row = this.db.prepare('SELECT * FROM tasks WHERE id=?').get(id(taskId));
       if (!row || !['failed', 'needs-human'].includes(row.status)) fail('INVALID_STATUS', 'Only a failed or needs-human task can be explicitly retried');
-      if (row.attempts >= 2) fail('ATTEMPT_LIMIT', 'Stage attempt limit remains binding after human review');
+      if (row.attempts >= stageLimit(row)) fail('ATTEMPT_LIMIT', 'Stage attempt limit remains binding after human review');
       if (this.db.prepare("SELECT count(*) AS n FROM attempts WHERE task_id=? AND state IN ('dispatched','unknown')").get(taskId).n) fail('UNKNOWN_BILLING', 'Ambiguous requests require separate billing reconciliation before retry');
       this.db.prepare("UPDATE tasks SET status='pending',worker=NULL,lease_until=NULL,not_before=?,updated=? WHERE id=?").run(notBefore, this.now(), taskId);
       this.event(taskId, 'operator-retry', { operatorId, evidence, notBefore });
@@ -224,8 +226,8 @@ export class OrgStore {
       const rows = this.db.prepare("SELECT * FROM tasks WHERE status='leased' AND lease_until<=?").all(this.now());
       for (const row of rows) {
         const sent = this.db.prepare("SELECT count(*) AS n FROM attempts WHERE task_id=? AND fence=? AND state IN ('dispatched','unknown','settled')").get(row.id, row.fence).n;
-        const status = sent || row.attempts >= 2 ? 'needs-human' : 'pending';
-        this.db.prepare('UPDATE tasks SET status=?,worker=NULL,lease_until=NULL,updated=?,error=? WHERE id=?').run(status, this.now(), sent ? 'Ambiguous dispatched attempt; reconcile without automatic resubmission' : row.attempts >= 2 ? 'Stage attempt limit exhausted' : null, row.id);
+        const status = sent || row.attempts >= stageLimit(row) ? 'needs-human' : 'pending';
+        this.db.prepare('UPDATE tasks SET status=?,worker=NULL,lease_until=NULL,updated=?,error=? WHERE id=?').run(status, this.now(), sent ? 'Ambiguous dispatched attempt; reconcile without automatic resubmission' : row.attempts >= stageLimit(row) ? 'Stage attempt limit exhausted' : null, row.id);
         this.db.prepare("UPDATE attempts SET state='unknown',updated=? WHERE task_id=? AND state='dispatched'").run(this.now(), row.id);
         this.db.prepare("UPDATE attempts SET state='cancelled',charged_usd=0,updated=? WHERE task_id=? AND state='reserved'").run(this.now(), row.id);
         this.event(row.id, 'recovered', { status, fence: row.fence });
@@ -247,7 +249,7 @@ export class OrgStore {
       const week = this.db.prepare('SELECT coalesce(sum(charged_usd),0) AS usd FROM attempts WHERE created>=?').get(this.now() - 7 * 86400000).usd;
       const date = new Date(this.now()), monthStart = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
       const month = this.db.prepare('SELECT coalesce(sum(charged_usd),0) AS usd FROM attempts WHERE created>=?').get(monthStart).usd;
-      if (workflow.requests + 1 > requestLimit || stage.requests >= 2 || workflow.usd + usd > maxUsd || hour + usd > hourUsd || day + usd > dayUsd || week + usd > weekUsd || month + usd > monthUsd) fail('BUDGET_LIMIT', 'A persisted workflow, stage, hourly, daily, rolling-seven-day, or UTC-calendar-month ceiling prevents dispatch');
+      if (workflow.requests + 1 > requestLimit || stage.requests >= stageLimit(row) || workflow.usd + usd > maxUsd || hour + usd > hourUsd || day + usd > dayUsd || week + usd > weekUsd || month + usd > monthUsd) fail('BUDGET_LIMIT', 'A persisted workflow, stage, hourly, daily, rolling-seven-day, or UTC-calendar-month ceiling prevents dispatch');
       const attemptId = randomUUID();
       this.db.prepare("INSERT INTO attempts(id,task_id,workflow_id,worker,fence,state,reserve_usd,charged_usd,created,updated) VALUES (?,?,?,?,?,'reserved',?,?,?,?)").run(attemptId, taskId, row.workflow_id, workerId, fence, usd, usd, this.now(), this.now());
       this.event(taskId, 'reserved', { attemptId, usd }); return attemptId;

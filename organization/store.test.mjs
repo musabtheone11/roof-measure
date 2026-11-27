@@ -219,3 +219,11 @@ test('rejected results are terminal and cannot unblock dependent work', t => {
   assert.equal(store.finish(lease.id, 'worker', lease.fence, { status: 'rejected' }).status, 'rejected');
   assert.equal(store.claim('worker'), null);
 });
+
+test('an explicit one-attempt task is never expanded to two acquisitions', t => {
+  const dir=mkdtempSync(join(tmpdir(),'roof-org-one-attempt-'));let now=1000;const store=new OrgStore(dir,{now:()=>now});
+  t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+  store.enqueue({id:'one',maxAttempts:1});store.setControl('running');const a=store.claim('w',{leaseMs:10});assert.ok(a);
+  now+=11;store.recover();assert.equal(store.getTask('one').status,'needs-human');assert.equal(store.claim('next'),null);
+  assert.throws(()=>store.retryFailed('one',{operatorId:'owner',evidence:'Retry requested'}),{code:'ATTEMPT_LIMIT'});
+});
