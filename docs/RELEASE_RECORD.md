@@ -9,7 +9,14 @@ Read this first in every work cycle: resume at **Next unfinished check**.
 - The entry zig-zag is fixed. Two small blurred drop-off regions fitted at about 22/12 had been keeping each other as "roof planes at that pitch", so both survived as facets with a ring of short rake, step and wall lines. Regions steeper than 20/12 no longer vouch for each other (`autotrace2.js`, band absorption).
 - Regression checks: `bench/straight-edge-test.mjs` and `bench/steep-drop-test.mjs`, both of which fail on the previous engine.
 
-**Next unfinished check:** Milestone A closing evidence on a second real roof, showing that both fixes generalize and keep an intentional irregularity, followed by the start of Milestone B (output inventory). Owner: integration lead.
+**Second real roof (2026-11-27):** the earlier odd-plane property, traced fresh through the app. Shallow kinks 9 (before #11) → 4. Sloped area 4,256.8 → 4,260.9 ft² (+0.1%), reconcile 122/122.
+- The four remaining turns are not clean straight-eave cases. One is at a chimney on the north-west corner; three are where tree canopy covers the eave on the east and south-east. They stay unstraightened because the edge isn't visible there; snapping them would guess geometry.
+- The real irregularities survive: the stepped south side around the entry walk and the south-east gable bump.
+- The steep drop-off fix does not change this roof (no regions above 20/12).
+
+**Milestone A status:** closing evidence is complete (failing case, regression checks, before/after including downloaded reports, root cause, measurement deltas, second roof). Waiting on owner approval to merge PR #12.
+
+**Next unfinished check:** Milestone B step 1, the output inventory: every existing function and output, where it appears today, and the check proving it still works. Owner: integration lead.
 
 Entry fix, reproduction property: facets 38 → 36, lines 185 → 174. Sloped area 5,588.90 → 5,483.29 ft² (−1.9%) because the steep pixels are no longer counted at 22/12. Plan area 4,720.3 → 4,722.4 ft². Rakes −50.3 ft, step flashing −28.6 ft, wall flashing −5.6 ft, hips −1.7 ft, valleys −2.9 ft. Synthetic benchmark: area MAPE 1.35% → 1.30%; ridge+hip within 10% unchanged at 66.2%; eave+rake within 10% 74.6% → 73.2% (one house).
 
