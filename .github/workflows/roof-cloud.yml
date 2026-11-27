@@ -1,0 +1,130 @@
+name: Self-contained roof laboratory
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+# One global ledger, including manual runs on other branches. Never cancel a
+# runner that might have spent money before its checkpoint was uploaded.
+concurrency:
+  group: roof-cloud-shared-ledger
+  cancel-in-progress: false
+
+jobs:
+  generate-review-and-retain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      source_revision: ${{ steps.source.outputs.revision }}
+      browser_status: ${{ steps.browser.outcome }}
+      report_artifact_id: ${{ steps.reports.outputs.artifact-id }}
+    env:
+      STATE_DIR: .cloud-state
+      OUTPUT_DIR: cloud-output
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 1ed393399b72cb9ee413d18c1f3df6bbedd9e2a1
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Freeze source revision
+        id: source
+        run: |
+          echo "ROOF_SOURCE_REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Restore shared budget and workflow checkpoint
+        id: bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --use-env-proxy organization/cloud-operations.mjs bootstrap --state "$STATE_DIR"
+      - name: Install pinned dependencies
+        run: |
+          npm ci --ignore-scripts
+          npm ci --prefix bench --ignore-scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install real browser and PDF inspection tools
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          node -e "console.log('CHROMIUM_PATH='+require('playwright').chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Exercise the actual application PDF and ZIP workflow
+        id: browser
+        continue-on-error: true
+        run: node tools/dev/source-review-delivery-test.mjs
+      - name: Generate cases, run the application and independently review reports
+        id: cycle
+        continue-on-error: true
+        env:
+          APINEX_API_KEY: ${{ secrets.ROOF_ORG_APINEX_API_KEY || secrets.APINEX_API_KEY }}
+          ROOF_CLOUD_PAID_ALLOWED: ${{ steps.bootstrap.outputs.paid_allowed }}
+          ROOF_CLOUD_BROWSER_STATUS: ${{ steps.browser.outcome }}
+        run: node --use-env-proxy organization/cloud-cycle.mjs --state "$STATE_DIR" --output "$OUTPUT_DIR" --count 12 --seed "${{ github.run_number }}"
+      - name: Close and fingerprint cloud state
+        if: always() && steps.bootstrap.outcome == 'success'
+        run: node organization/cloud-operations.mjs checkpoint --state "$STATE_DIR"
+      - name: Retain durable workflow state
+        if: always() && steps.bootstrap.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: roof-cloud-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cloud-state/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Create downloadable report bundle
+        if: always() && steps.cycle.outcome != 'skipped'
+        run: node organization/cloud-operations.mjs pack --output "$OUTPUT_DIR" --archive roof-cloud-reports.zip
+      - name: Retain reports for users to download
+        id: reports
+        if: always() && steps.cycle.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: roof-cloud-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            roof-cloud-reports.zip
+            cloud-output/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Preserve failed-cycle status after retaining evidence
+        if: steps.cycle.outcome == 'failure' || steps.browser.outcome == 'failure'
+        run: exit 1
+  publish-status:
+    needs: generate-review-and-retain
+    if: always() && needs.generate-review-and-retain.outputs.source_revision != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.generate-review-and-retain.outputs.source_revision }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Download completed report artifact
+        if: needs.generate-review-and-retain.outputs.report_artifact_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: roof-cloud-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: publish-input
+      - name: Publish sanitized evaluation journal with compare-and-swap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ROOF_SOURCE_REVISION: ${{ needs.generate-review-and-retain.outputs.source_revision }}
+          ROOF_CLOUD_GENERATION_RESULT: ${{ needs.generate-review-and-retain.result }}
+          ROOF_CLOUD_BROWSER_STATUS: ${{ needs.generate-review-and-retain.outputs.browser_status }}
+          ROOF_CLOUD_ARTIFACT_AVAILABLE: ${{ needs.generate-review-and-retain.outputs.report_artifact_id != '' }}
+        run: node --use-env-proxy organization/cloud-operations.mjs publish-status --cycle publish-input/cloud-output/cycle.json
