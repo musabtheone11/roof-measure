@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "scope": "Development pilot; analytic generated cases, not field accuracy",
+  "sourceEngineRevision": "0a122f22808137032264f1625d7eda885633ec21",
+  "metrics": {
+    "attempted": 12,
+    "traceFailures": 0,
+    "diagnosticPasses": 5,
+    "reviewRequired": 7,
+    "generatedCustomerPDFs": 12,
+    "excludedCases": 0,
+    "propertyFamilies": 4,
+    "splits": {
+      "development": {
+        "cases": 6,
+        "propertyFamilies": 2
+      },
+      "validation": {
+        "cases": 3,
+        "propertyFamilies": 1
+      },
+      "holdout": {
+        "cases": 3,
+        "propertyFamilies": 1
+      }
+    },
+    "scenes": 12,
+    "traceErrors": 0,
+    "matchedEdges": 81,
+    "missedEdges": 15,
+    "extraEdges": 53,
+    "misclassifiedEdges": 0,
+    "missingLengths": 0,
+    "matchedFacets": 36,
+    "missedFacets": 0,
+    "extraFacets": 3,
+    "absoluteEdgeErrorFt": {
+      "n": 81,
+      "median": 0.119761,
+      "p95": 0.69402,
+      "worst": 1.377712
+    },
+    "absoluteAreaErrorPct": {
+      "n": 12,
+      "median": 0.69523,
+      "p95": 6.259547,
+      "worst": 6.259547
+    },
+    "perEdgeType": {
+      "eave": {
+        "n": 28,
+        "median": 0.10905,
+        "p95": 0.679975,
+        "worst": 0.69402
+      },
+      "ridge": {
+        "n": 10,
+        "median": 0.108844,
+        "p95": 0.69676,
+        "worst": 0.69676
+      },
+      "hip": {
+        "n": 22,
+        "median": 0.118251,
+        "p95": 1.269115,
+        "worst": 1.377712
+      },
+      "rake": {
+        "n": 21,
+        "median": 0.126026,
+        "p95": 0.389267,
+        "worst": 0.977133
+      }
+    }
+  },
+  "pdfReadback": {
+    "checked": 12,
+    "failed": 0
+  },
+  "decision": {
+    "status": "review-required",
+    "reasons": [
+      "NUMERICAL_OR_TOPOLOGY_FAILURES",
+      "MODEL_REVIEW_NOT_PASS"
+    ],
+    "productionReleaseApproved": false,
+    "fieldAccuracyValidated": false,
+    "meaning": "Monitoring of generated cases only; no application code is promoted by this decision"
+  },
+  "reviews": [
+    {
+      "role": "critique",
+      "decision": "needs-human",
+      "summary": "The supplied evidence contains concrete topology failures despite small area errors. Missing split-level records, policy definitions, and PDF review details require human review; neither operational success nor synthetic diagnostic agreement establishes measurement acceptance.",
+      "execution": {
+        "promptVersion": "organization-v1",
+        "settings": {
+          "maxOutputTokens": 2000,
+          "responseFormat": "json_object",
+          "stream": false
+        },
+        "requestedModel": "gpt-6.2-astra",
+        "returnedModel": "gpt-6.2-astra",
+        "requestId": "chatcmpl-EoyuWkSG8txJdGht9yIzXLOGUWoGp",
+        "reportedUsd": 0.001925,
+        "billingStatus": "provider-reported",
+        "normalization": "none"
+      }
+    },
+    {
+      "role": "ceo",
+      "decision": "needs-human",
+      "summary": "Needs human review. Only 5 of 12 synthetic cases passed diagnostics, with 15 missed edges, 53 extra edges, and 3 extra facets, so the candidate cannot be approved. Validation and holdout records, policy definitions, matching rules, and PDF review criteria are missing. Results apply only to synthetic diagnostics and support no field accuracy claim.",
+      "execution": {
+        "promptVersion": "organization-v1",
+        "settings": {
+          "maxOutputTokens": 2000,
+          "responseFormat": "json_object",
+          "stream": false
+        },
+        "requestedModel": "claude-opus-5.5",
+        "returnedModel": "claude-opus-5.5",
+        "requestId": "msg_019P5Rm6Xe7s44kFrxNa7oBV",
+        "reportedUsd": 0.006464,
+        "billingStatus": "provider-reported",
+        "normalization": "none"
+      }
+    }
+  ],
+  "reportedUsd": 0.008389,
+  "notes": [
+    "Initial pilot critic received aggregate split metrics; later adapter restricts it to development data.",
+    "These are not untouched holdout results. API calls were real, not mocked.",
+    "No customer documents or Windows Downloads were used."
+  ]
+}

@@ -349,6 +349,24 @@ async function goToAddress() {
   }
 }
 function locationGeneration() { return state.locationEpoch || 0; }
+async function runAutoTrace() {
+  const button = $('#btnAuto'), epoch = locationGeneration(), source = state.solar;
+  const request = state.traceButtonRequest = (state.traceButtonRequest || 0) + 1;
+  button.disabled = true; button.textContent = 'Tracing...';
+  try { await autoTraceRoof(); }
+  catch (e) {
+    if (epoch !== locationGeneration() || source !== state.solar || request !== state.traceButtonRequest) return;
+    toast('Auto-trace failed: ' + e.message, true);
+    if (!state.facets.length && source) {
+      const d = source.imageryDate;
+      state.trace = {engine:'v2.1',failed:e.message,buildingName:source.name,imageryQuality:source.imageryQuality || null,
+        imageryDate:d ? [d.year,String(d.month).padStart(2,'0'),String(d.day).padStart(2,'0')].join('-') : null};
+      recompute();
+    }
+  } finally {
+    if (request === state.traceButtonRequest) { button.disabled = !state.solar; button.textContent = 'Auto-trace roof'; }
+  }
+}
 function archiveLocationJob() {
   if (!state.facets.length && !state.edges.length) return;
   const job = serialize();
@@ -362,6 +380,7 @@ function archiveLocationJob() {
   } catch (_) { /* the in-memory snapshot remains available if browser storage is full */ }
 }
 function setLocation(loc, label) {
+  state.addressRequestEpoch++;
   const moved = state.location && (state.location.lat !== loc.lat || state.location.lng !== loc.lng);
   if (moved) {
     archiveLocationJob();
@@ -899,9 +918,11 @@ function restore(d) {
   if (!map) { toast('Load the map first (save your API key), then import.', true); return; }
   state.deferRecompute = (state.deferRecompute || 0) + 1;
   try {
+  // A reopened job is a different revision, even at the same coordinates.
+  state.locationEpoch = locationGeneration() + 1;
   clearAll();
-  state.jobName = d.jobName || ''; $('#jobName').value = state.jobName;
   if (d.location) setLocation(d.location, d.address);
+  state.jobName = d.jobName || ''; $('#jobName').value = state.jobName;
   if (d.defaultPitch != null) setDefaultPitch(d.defaultPitch);
   if (d.waste != null) { state.waste = d.waste; $('#waste').value = String(d.waste); }
   if (d.mat) { Object.assign(state.mat, d.mat); for (const k of Object.keys(state.mat)) { const el = $('#m_' + k); if (el) el.value = state.mat[k]; } }
@@ -997,7 +1018,7 @@ function wire() {
   $('#address').addEventListener('keydown', (e) => { if (e.key === 'Enter') goToAddress(); });
   $('#btnSolar').onclick = runSolar;
   $('#btnScan').onclick = scanStructures;
-  $('#btnAuto').onclick = async () => { const b = $('#btnAuto'); b.disabled = true; b.textContent = 'Tracing...'; try { await autoTraceRoof(); } catch (e) { toast('Auto-trace failed: ' + e.message, true); if (!state.facets.length && state.solar) { const d = state.solar.imageryDate; state.trace = { engine: 'v2.1', failed: e.message, buildingName: state.solar.name, imageryQuality: state.solar.imageryQuality || null, imageryDate: d ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}` : null }; recompute(); } } b.disabled = false; b.textContent = 'Auto-trace roof'; };
+  $('#btnAuto').onclick = runAutoTrace;
   $('#chkSolar').onchange = (e) => { state.showSolar = e.target.checked; drawSolar(); recompute(); };
   $('#chkFacetEdges').onchange = (e) => { state.showFacetEdges = e.target.checked; recompute(); };
   $('#chkAllLabels').onchange = (e) => { state.showAllLabels = e.target.checked; if (labels) labels.setItems(baseLabels()); };

@@ -943,12 +943,22 @@ function traceBuildingV2Core(tifIn, member, w, h, geo, lp, env) {
   label = absorbSlivers(tif.data, label, regions, w, h, lp, geo);
   // drop large blobs no plane could explain (trees over the roof)
   for (let i = 0; i < w * h; i++) if (!member[i] || label[i] < 0) label[i] = -1;
-  // refit every surviving region on its final pixels, robustly (two passes, drop >0.2 m outliers)
+  // On visible roofs, anchor both fits to the preceding plane so a blurred
+  // eave or a chimney cannot pull the first fit toward outlying heights.
+  // Canopy reconstruction keeps its existing two-pass fit on the visible support.
+  const visibleRoof = !st || (!st.inferred.some(Boolean) && !st.ghost.some(Boolean));
   const ids = [...new Set(label)].filter((l) => l >= 0);
   for (const id of ids) {
     for (let pass = 0; pass < 2; pass++) {
       const acc = new PlaneAcc(); const pl = regions[id].plane;
-      for (let i = 0; i < w * h; i++) { if (label[i] !== id || !(tif.data[i] > -1000)) continue; const x = i % w, y = (i - x) / w; const e = lp.Ecol[x], n = lp.Nrow[y]; const r = Math.abs(tif.data[i] - (pl.a * e + pl.b * n + pl.c)); if (pass && r > 0.2) continue; acc.add(e, n, tif.data[i]); }
+      for (let i = 0; i < w * h; i++) {
+        if (label[i] !== id || !(tif.data[i] > -1000)) continue;
+        const x = i % w, y = (i - x) / w;
+        const e = lp.Ecol[x], n = lp.Nrow[y];
+        const residual = Math.abs(tif.data[i] - (pl.a * e + pl.b * n + pl.c));
+        if ((visibleRoof || pass > 0) && residual > 0.2) continue;
+        acc.add(e, n, tif.data[i]);
+      }
       const f = acc.solve(); if (f) regions[id].plane = f;
     }
     let n = 0; for (let i = 0; i < w * h; i++) if (label[i] === id) n++; regions[id].n = n;

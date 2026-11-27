@@ -1,0 +1,14 @@
+{
+  "baseline": "1378d4d1d6cb931bb474fd30ac26e8fe22e55cb7",
+  "generator": "bench/run.mjs --exact using the baseline generator, renderer and truth scorer",
+  "development": { "first": 1, "count": 120 },
+  "holdout": { "first": 26001101, "count": 400 },
+  "integratedHoldout": { "first": 27110601, "count": 600 },
+  "integration": "After main advanced to f6ad88a, the first 400 cases were retired. Freeze a new 600-case split for the combined code. Compare previous PR head 1378d4d, updated main f6ad88a, and the integrated candidate on identical rendered inputs. Retain every old and new failure. No tuning on either holdout.",
+  "eligibility": "Existing analytic truth rules, before any trace. Count every attempted seed, each exclusion reason, all engine failures, and unavailable scores. No exclusions after looking at predictions.",
+  "area": "Absolute difference between predicted and true sloped area divided by true sloped area. Exactly 5 percent is within tolerance. Missing or nonfinite estimates and engine errors are failures on eligible roofs.",
+  "areaChecks": ["worst eligible roof <= 5 percent", "share of eligible roofs outside 5 percent <= 5 percent"],
+  "wholeRoof": "Report an additional wrong-roof rate: a pass requires correct facet count, area within 5 percent, and all existing spatial and edge-category thresholds (IoU >= 0.90, missing and extra plan area each <= 5 percent, edge totals within max(5 feet, 10 percent of reference)). Missing evidence fails. This is a partial test of takeoff: it does not validate the address, individual edge correspondence, or a delivered report.",
+  "statistics": "Report observed counts and one-sided exact 95 percent binomial upper bounds as conditional generator diagnostics, not field estimates. Do not pool development and holdout. Also report independent field sample size.",
+  "decision": "Select at most one candidate on development before reading holdout results. Score the entire holdout once. Keep failures visible. Retire any inspected holdout before further tuning."
+}

@@ -357,6 +357,6 @@ var RM = (function () {
     const out = []; for (const arr of at.values()) { const names = [...new Set(arr.map((q) => q.name))]; if (names.length < 2 || onBreak([arr[0].e, arr[0].n])) continue; const zs = arr.map((q) => q.z); const sp = Math.max(...zs) - Math.min(...zs); if (sp > tolM) out.push({ names, spreadM: sp, at: [arr[0].e, arr[0].n] }); }
     return out.sort((p, q) => q.spreadM - p.spreadM);
   }
-  return { netFacetAreas, evidenceRevision, modelRevision, auditEvidence, reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg, planeConflicts };
+  return { planeConflicts, netFacetAreas, evidenceRevision, modelRevision, auditEvidence, reportStatus, hatch, SQFT, FT, scale, frame, local, ringArea, planSqft, planFt, perimeterFt, pitchFactor, hipFactor, typeFactor, SLOPE_KIND, facetMeasure, lineMeasure, audit, autoFix, reconcile, statusOf, pointSeg };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = RM;

@@ -27,23 +27,15 @@ async function getBin(url, cacheFile) {
   const r = await fetch(url + '&key=' + KEY()); if (!r.ok) throw new Error('GeoTIFF download failed (' + r.status + ')');
   const b = Buffer.from(await r.arrayBuffer()); fs.mkdirSync(path.dirname(cacheFile), { recursive: true }); fs.writeFileSync(cacheFile, b); return b;
 }
-// same contract as loadTiff() in autotrace.js
+// Use the browser's pixel convention and CRS when replaying frozen rasters.
+import traceModule from '../autotrace.js';
 async function readTiff(buf, bands = 1) {
   const tiff = await fromArrayBuffer(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
-  const img = await tiff.getImage(); const ras = await img.readRasters();
-  const w = img.getWidth(), h = img.getHeight(); const [ox, oy] = img.getOrigin(); const [rx, ry] = img.getResolution();
-  const keys = img.getGeoKeys() || {}; const epsg = keys.ProjectedCSTypeGeoKey || keys.GeographicTypeGeoKey || 4326; const sy = ry > 0 ? -ry : ry;
-  let toLL;
-  if (epsg === 4326 || Math.abs(ox) <= 360) toLL = (x, y) => ({ lng: ox + x * rx, lat: oy + y * sy });
-  else {
-    let def = null;
-    if (epsg >= 32601 && epsg <= 32660) def = `+proj=utm +zone=${epsg - 32600} +datum=WGS84 +units=m +no_defs`;
-    else if (epsg >= 32701 && epsg <= 32760) def = `+proj=utm +zone=${epsg - 32700} +south +datum=WGS84 +units=m +no_defs`;
-    else if (epsg === 3857) def = 'EPSG:3857';
-    if (!def) throw new Error('Unsupported GeoTIFF projection EPSG:' + epsg);
-    toLL = (x, y) => { const p = proj4(def, 'EPSG:4326', [ox + x * rx, oy + y * sy]); return { lng: p[0], lat: p[1] }; };
-  }
-  return { data: ras[0], bands: bands > 1 ? [ras[0], ras[1], ras[2]] : null, w, h, toLL, rx, ry, epsg };
+  const img = await tiff.getImage();
+  const transform = traceModule.rmRasterTransform(img, proj4);
+  const ras = await img.readRasters();
+  return { data: ras[0], bands: bands > 1 ? [ras[0], ras[1], ras[2]] : null,
+    w: img.getWidth(), h: img.getHeight(), ...transform };
 }
 
 // address -> {lat,lng,formatted}; "lat,lng" strings pass straight through

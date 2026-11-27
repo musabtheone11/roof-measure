@@ -5,11 +5,14 @@ Node API or keep an APINEX credential secret. This preview serves the existing
 frontend and API from one long-running Node 24 process. It does not promote or
 modify the Pages production deployment.
 
-The current API owns jobs and sessions in memory. Use **one running instance**:
-a serverless function, autoscaling replicas, or a restart can lose the owner/job
-association or stop processing after the 202 response. Jobs are intentionally
-transient; download corrections/provenance before stopping the preview. Durable
-production deployment needs durable queue/state and account authentication.
+Run **one Node instance** behind authenticated HTTPS ingress. Its SQLite journal
+commits the owner binding, request nonce and job identity before dispatch. A restart
+recovers completed results. A job interrupted after dispatch returns a terminal
+failure with potentially unknown billing. The server never automatically repeats it.
+Request receipts and results expire after 15 minutes, sessions after one hour.
+Download a reviewed revision and its source bundle for retention beyond this window.
+The gateway uses shared preview credentials and separate owner cookies. Commercial
+multi-user operation still requires individual accounts and a retention policy.
 
 ## Prepared hosting path
 
@@ -31,23 +34,38 @@ from runtime environment secrets:
 | `PUBLIC_ORIGIN` | Exact HTTPS origin returned by the hosting provider |
 | `PREVIEW_TRUST_PROXY` | Set to `1` only behind a trusted TLS ingress that overwrites `X-Forwarded-Proto`; otherwise forwarded headers are ignored |
 | `HOST`, `PORT` | Usually `0.0.0.0` and provider-assigned port; default port 3000 |
+| `ROOF_STATE_DB` | SQLite database on the persistent private volume. The local default is `.devcache/runtime/jobs.sqlite`. The container default is `/var/lib/roof-measure/jobs.sqlite`. |
+| `ROOF_REVISION` | Full Git commit bound to the image at build time and reported by the health check. |
 
 The container must sit behind the provider's HTTPS ingress. Keep its raw port
 private. Explicitly set `PREVIEW_TRUST_PROXY=1` only when that ingress overwrites the forwarded-protocol header. Health
-checks at `/healthz` expose readiness and transient-storage mode only. All other
+checks at `/healthz` report readiness, storage mode and revision. All other
 routes require authentication. TLS session cookies receive `Secure` at the gateway.
 
 For a local container check, keep its published port on loopback and inherit
 already-configured environment variables without putting values in command args:
 
 ```sh
-docker build -t roof-measure-private-preview .
+docker build --build-arg ROOF_REVISION="$(git rev-parse HEAD)" -t roof-measure-private-preview .
 docker run --rm --init --read-only --tmpfs /tmp --cap-drop ALL \
   --security-opt no-new-privileges --pids-limit 128 --memory 768m \
   -p 127.0.0.1:3000:3000 \
+  --mount type=volume,src=roof-measure-preview-state,dst=/var/lib/roof-measure \
   -e APINEX_API_KEY -e PREVIEW_AUTH_USERNAME -e PREVIEW_AUTH_PASSWORD \
   -e PUBLIC_ORIGIN roof-measure-private-preview
 ```
+
+Record the built image digest and the current preview revision before replacing an
+instance. Stop accepting new work, wait for active requests to finish, and snapshot
+the volume after the process stops. Reuse the volume when replacing the instance.
+Verify that the reported revision matches the deployed digest's commit, the storage
+mode is SQLite, unauthenticated application access returns 401, and an authorized
+synthetic upload downloads a revision-matched PDF.
+
+To roll back, drain and stop the candidate, keep its volume snapshot, and start the
+previous recorded digest with its compatible volume snapshot and the same HTTPS ingress.
+Verify its revision, private routes and synthetic review again. Bookkeeping for
+interrupted provider calls must be reconciled before requesting another analysis.
 
 Nonloopback listeners refuse to start without `PUBLIC_ORIGIN`. The raw backend port must remain private to the trusted TLS ingress. Never expose it directly or trust client-controlled forwarded headers.
 
@@ -58,7 +76,7 @@ runtime admission limits still apply behind the gateway.
 
 ## Vercel preview option and current access blocker
 
-An ordinary Vercel serverless deployment is not compatible with the in-memory
+An ordinary Vercel serverless deployment is not compatible with this single-process
 background-job lifecycle. A **Vercel Sandbox session** is a viable ephemeral
 preview: run the same Node service continuously, expose port 3000, and set
 `PUBLIC_ORIGIN` to the session's HTTPS route. The process must bind `0.0.0.0`.

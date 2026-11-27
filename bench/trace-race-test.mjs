@@ -12,3 +12,9 @@ for(const mode of ['location','solar','request']){
  assert.equal(removed,0,'old geometry is not cleared for '+mode);assert.equal(c.state.facets[0],sentinel);
 }
 console.log('trace race: changed location, changed Solar record and superseded trace preserve geometry');
+let edited;
+await assert.rejects(runApp(prop,undefined,{quiet:true,hook:ctx=>{
+  ctx.serialize=()=>({facets:ctx.state.facets.map(f=>f.name)});
+  ctx.rmNewerRecords=async()=>{edited={name:'manual correction'};ctx.state.facets.push(edited);return [];};
+}}),/edited while tracing/);
+console.log('trace race: an intervening manual edit supersedes the pending trace');

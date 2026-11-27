@@ -1,5 +1,7 @@
 # Roof Measure
 
+The current supervised preview, known accuracy regressions and outstanding release gates are documented in the [release validation report](docs/RELEASE_VALIDATION.md).
+
 A self-contained roof measurement and takeoff tool, like Roofr Measurements or EagleView, that runs in your browser from satellite imagery. No install needed.
 
 ## What it does
@@ -10,20 +12,18 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
    - **Lines**: ridge, hip, valley, eave, rake, step flashing, headwall. Hips, valleys and rakes are converted from plan length to actual length using the pitch.
    - Corner snapping, live length readout while drawing, drag-to-edit corners, right-click a corner to delete it.
 3. **Totals**: roof square feet, squares, squares with waste, linear footage per line type.
-4. **Plan-first report** with an original grayscale Diversity Contracting layout, vector plan and keyed measurement schedules.
+4. **Customer measurement report** with the grayscale Diversity Contracting design, measurement tables and review notes; no roof segmentation imagery. Private internal review retains the plan-first geometry.
 5. **Save / export**: save roofs in the browser, export CSV or JSON, import JSON.
 
 ## The report
 
 **Preview report**, **Print report** and **Download report** (panel 6) all use one generated PDF: the preview shows it inside the app, Print sends that same file to the print dialog, Download saves it. US Letter, grayscale, vector (selectable text), with the Diversity Contracting logo. The sheets are built from the selected job's own address, geometry and quantities:
 
-1. **Roof plan** (sheet 1): a slim header (black-and-white logo, "Roof Measurement Report", address, imagery and report dates, status: COMPLETE, REVIEW REQUIRED, SOURCE TAKEOFF or ILLUSTRATIVE), one summary strip (net sloped area or confirmed area, squares, predominant pitch, eave / rake / ridge / hip / valley / flashing totals in feet and inches; a zero prints as "none seen" unless the whole roof was measured), then the scaled, north-up vector plan filling the rest of the sheet. Exterior edges heavy, interior lines lighter, one grayscale style per type (eave solid, rake long dash, ridge solid, hip dash, valley dot, flashing dash-dot); estimated lines dashed and lighter, unsupported lines stippled, hidden zones and unsupported planes hatched, canopy edges faint and dotted (never part of an outline). Each line carries its key and true length beside it (`E3 20'-4"`); where a label would collide it becomes a keyed callout on a leader; small facet and zone IDs. A legend, scale bar and north arrow sit in a band under the plan; the aerial is added as a small reference inset only when a corner of the drawing is empty.
-2. **Takeoff** (sheet 2): the buildings (numbered; detached buildings on their own rows), other line totals, net measurements before waste and ordering quantities side by side, edge lengths by type (key, type, ft-in, ft, building) and facet areas and pitch, items for field review, and the imagery source and date. Every key and facet ID in the tables is on the plan and every ID on the plan is a table row (checked on every build). A small 3D illustration from the same planes is added only when the elevations support it: omitted, with the reason printed, when heights would come from the pitch alone, a plane has no height, neighbouring planes disagree by more than 1 ft at a shared corner off a drawn step or wall, a face folds in the view, or the roof is simple enough that the plan says it all. *3D illustration when the elevations support it* (panel 6) turns it off; *3D view of the traced roof* shows the same model in the app with a turn slider and says whether the report will print it.
-3. **Plan detail** sheets only when a key finds no room on sheet 1 even as a callout, **Takeoff (continued)** only when the tables outgrow sheet 2.
-4. **Measurement summary**: area classes (net, measured, inferred, pitched, flat, projected, two-story, two-layer), linear totals by category, pitch distribution by nominal pitch, facet orientation (downhill bearing), and waste scenarios kept apart from the net measurements. Unknown values stay blank; waste and order quantities are withheld while the report needs review or part of the roof is unseen.
-5. **Evidence used** for measured jobs (views and sources checked and what each settled), and optional **Material order quantities** (purchase rounding only; net measurements stay unrounded).
+1. **Customer measurement summary**: logo, property/date/status, supported area and length quantities, pitch information and review notes. No roof segmentation diagrams, source imagery or overlays appear in the default customer PDF.
+2. **Measurement schedules**: building subtotals, area/pitch and edge schedules, with continuation pages when needed. Unknown values remain blank. Order quantities remain withheld for incomplete scope.
+3. **Private internal review**: the original plan-first vector sheets remain available through explicit `internalReview: true`; they are not the default customer preview/export.
 
-Every printed quantity carries provenance. An auto-trace records, for each facet geometry / pitch / area and each line geometry / type / length it measured, the dated Google Solar layers it came from and how it was derived, bound to the current geometry (an edit makes it stale). Inferred continuations stay estimates; unresolved items and undated imagery get none, so their quantities print blank. Jobs saved before this get the same provenance on load only for output still exactly as the engine produced it. The building selection is never self-certified: until a person confirms it in the review panel the report stays REVIEW REQUIRED and order quantities are withheld; the georeferenced scale is recorded from the raster registration check.
+The [self-contained cloud laboratory](docs/CLOUD_ROOF_LAB.md) generates cases, checks actual app outputs and retains downloadable reports without Windows Downloads. Optional local intake is described in the [organization design](docs/APINEX_ORGANIZATION_DESIGN.md) and [local runbook](docs/APINEX_ORGANIZATION_OPERATIONS.md). Generated diagnostics do not certify real roof accuracy.
 
 Preview, Print and Download use the same signature-cached PDF. A model edit during generation rejects the result; saved preview actions and delayed downloads also check the signature. Direct vector PDF generation checks the model revision across asynchronous image loading.
 

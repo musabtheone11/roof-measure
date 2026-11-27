@@ -167,7 +167,7 @@ try {
     console.log(`     estimate: ${est.items.length} lines, line items ${est.lineItemTotal.toFixed(2)}, tax ${est.tax.toFixed(2)}, total ${est.rcv.toFixed(2)}`);
   }
   const t = data.totals; console.log(`${address || path.basename(arg('job', ''))}: ${Math.round(t.slopedSqft)} sqft, ${t.facetCount} facets, predominant ${t.predominant}/12, ${t.structures.length} structure(s)`);
-} catch (e) { code = 1; console.log('ERROR ' + scrub(String(e && e.stack || e).split('\n').slice(0, 4).join(' | '))); try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
+} catch (e) { code = 1; console.error('FAIL run: ' + scrub(e.message)); try { await page.screenshot({ path: path.join(out, 'failure.png') }); } catch (_) { /* ignore */ } }
 fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));
 if (dialogs.length) console.log('export gate asked: ' + dialogs.join(' | ').replace(/\n+/g, ' '));
 await browser.close(); srv.close(); process.exit(code);

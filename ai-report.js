@@ -75,7 +75,13 @@
     const total = (key, value) => { if (!physical || value == null) return null; if (!facets.length || facets.some(f => f[key] == null)) fail('A roof total includes unsupported facet quantities.'); return number(value, facets.reduce((n, f) => n + f[key], 0), 'roof total'); };
     const annotations = model.annotations || payload.originalAI?.structure?.annotations || [];
     if (!Array.isArray(annotations) || annotations.length > 300) fail('Too many source annotations for one review.');
-    const annotationRows = annotations.map((a, i) => ({ key: 'A' + (i + 1), id: String(a.id || ''), kind: String(a.kind || 'annotation'), text: String(a.text || ''), status: 'SOURCE-REPORTED / UNVERIFIED' }));
+    const annotationRows = annotations.map((a, i) => {
+      const region = a.region?.length ? ring(a.region, 3) : [];
+      const xs = region.map(point => point[0]), ys = region.map(point => point[1]);
+      return { key: 'A' + (i + 1), id: String(a.id || ''), kind: String(a.kind || 'annotation'),
+        text: String(a.text || ''), status: 'SOURCE-REPORTED / UNVERIFIED',
+        bounds: region.length ? [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] : null };
+    });
     const issues = [...(m.issues || []), ...(payload.originalAI?.quality?.issues || []), ...(payload.originalAI?.adjudication?.decisions || [])].map(q => typeof q === 'string' ? q : String(q.text || q.message || q.reason || q.code || 'Review required') + (q.ids?.length ? ' [' + q.ids.join(', ') + ']' : ''));
     const reviewRecords = [...model.facets.map(f => ({ item: f, kind: 'Facet' })), ...model.edges.map(e => ({ item: e, kind: 'Edge' }))].filter(q => q.item.geometryReview && typeof q.item.geometryReview === 'object').map(({ item, kind }) => {
       const r = item.geometryReview, bounded = value => String(value ?? '').slice(0, 10000);
@@ -88,7 +94,8 @@
       status: 'SOURCE IMAGE REVIEW', fingerprint: stable({ revision: payload.revision, model, metadata, latestResult: result, measurementSnapshot: snapshot, sourceImage: payload.sourceImage }) };
   }
 
-  async function buildAIReviewPDF(payload) {
+  async function buildAIReviewPDF(payload, options = {}) {
+    const internalReview = options.internalReview === true;
     if (!host.jspdf?.jsPDF) fail('The PDF library has not loaded.');
     const prepared = prepareAIReviewReport(payload), data = copy(payload);
     const stillCurrent = () => { if (prepareAIReviewReport(payload).fingerprint !== prepared.fingerprint) fail('The review changed while the PDF was being prepared. Export the current revision again.'); };
@@ -109,9 +116,18 @@
     let page = 1, y = 0;
     const text = (value, x, yy, size = 9, bold = false, width = null, align = 'left') => { doc.setCharSpace(0); doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); doc.setTextColor(26); const lines = width ? doc.splitTextToSize(String(value), width) : [String(value)]; doc.text(lines, x, yy, { align, lineHeightFactor: 1.3 }); for (let i = 0; i < lines.length; i++) { const w = doc.getTextWidth(lines[i]); textBoxes.push({ page, x0: align === 'right' ? x - w : x, x1: align === 'right' ? x : x + w, y0: yy + i * size * 1.3 - size, y1: yy + i * size * 1.3 + size * .3 }); } return yy + lines.length * size * 1.3; };
     const line = (yy) => { doc.setDrawColor(150); doc.setLineWidth(.5); doc.line(L, yy, R, yy); };
-    const header = title => { if (logo) doc.addImage(logo, 'PNG', 32, 20, 92, 45); else text('DIVERSITY CONTRACTING', 32, 38, 10, true); text('SOURCE IMAGE REVIEW', 144, 32, 8, true); text('REVIEW REQUIRED', R, 32, 8, true, null, 'right'); text('Revision ' + prepared.revision, 144, 48, 9, true); text('Source date: ' + (prepared.metadata.date || 'not recorded'), R, 48, 8, false, null, 'right'); line(76); text(title, L, 108, 21, true); y = 132; };
+    const header = title => { if (logo) doc.addImage(logo, 'PNG', 32, 20, 92, 45); else text('DIVERSITY CONTRACTING', 32, 38, 10, true); text(internalReview ? 'SOURCE IMAGE REVIEW' : 'ROOF MEASUREMENT SUMMARY', 144, 32, 8, true); text('REVIEW REQUIRED', R, 32, 8, true, null, 'right'); text('Revision ' + prepared.revision, 144, 48, 9, true); text('Source date: ' + (prepared.metadata.date || 'not recorded'), R, 48, 8, false, null, 'right'); line(76); text(title, L, 108, 21, true); y = 132; };
     const next = title => { doc.addPage('letter', 'portrait'); page++; header(title); };
-    const paragraph = (value, size = 8.5) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(size); const lines = doc.splitTextToSize(String(value), 548); for (const row of lines) { if (y + size * 1.3 > FOOT - 20) next('Review notes (continued)'); y = text(row, L, y, size); } y += 7; };
+    const paragraph = (value, size = 8.5, gap = 7) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(size);
+      const lines = doc.splitTextToSize(String(value), 548);
+      if (lines.length <= 4 && y + lines.length * size * 1.3 > FOOT - 20) next('Review notes (continued)');
+      for (const row of lines) {
+        if (y + size * 1.3 > FOOT - 20) next('Review notes (continued)');
+        y = text(row, L, y, size);
+      }
+      y += gap;
+    };
     const section = title => { if (y + 35 > FOOT - 20) next('Review schedules (continued)'); y = text(title, L, y, 12, true) + 4; };
     const table = (title, widths, headings, rows) => {
       section(title);
@@ -128,14 +144,16 @@
       y += 17;
     };
     const number = (value, factor = 1, digits = 2) => value == null ? '' : (value * factor).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-    header('Source image review');
-    text('Proposed geometry / independent review required', L, 130, 8, false);
-    const columns = [['PROJECTED AREA / PROVISIONAL', number(prepared.projected, SQFT) + (prepared.projected == null ? '' : ' ft²')], ['SLOPED AREA / PROVISIONAL', number(prepared.sloped, SQFT) + (prepared.sloped == null ? '' : ' ft²')], ['FACETS / EDGES', prepared.facets.length + ' / ' + prepared.edges.length]];
+    header(internalReview ? 'Source image review' : 'Roof measurement summary');
+    text(internalReview ? 'Proposed geometry / independent review required' : 'Provisional quantities / independent review required', L, 130, 8, false);
+    const columns = [['PROJECTED AREA / PROVISIONAL', number(prepared.projected, SQFT) + (prepared.projected == null ? '' : ' ft²')], ['SLOPED AREA / PROVISIONAL', number(prepared.sloped, SQFT) + (prepared.sloped == null ? '' : ' ft²')], internalReview ? ['FACETS / EDGES', prepared.facets.length + ' / ' + prepared.edges.length] : ['ROOF SQUARES / PROVISIONAL', number(prepared.sloped, SQFT / 100)]];
     columns.forEach(([label, value], i) => { text(label, L + i * 184, 156, 7.2, true); text(value, L + i * 184, 176, 14, true); }); line(190);
+    let box = null, bounds = null, scale = null;
+    if (internalReview) {
     const sourcePoints = [prepared.outline, ...prepared.facets.map(f => f.polygon), ...prepared.edges.map(e => e.points)].flat();
-    const xs = sourcePoints.map(p => p[0]), ys = sourcePoints.map(p => p[1]), bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    const xs = sourcePoints.map(p => p[0]), ys = sourcePoints.map(p => p[1]); bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     if (!sourcePoints.length) fail('No source geometry is available to draw.');
-    const box = { x: 46, y: 212, w: 520, h: 370 }, scale = Math.min((box.w - 36) / Math.max(1, bounds[2] - bounds[0]), (box.h - 36) / Math.max(1, bounds[3] - bounds[1]));
+    box = { x: 46, y: 212, w: 520, h: 370 }; scale = Math.min((box.w - 36) / Math.max(1, bounds[2] - bounds[0]), (box.h - 36) / Math.max(1, bounds[3] - bounds[1]));
     const P = p => [box.x + box.w / 2 + (p[0] - (bounds[0] + bounds[2]) / 2) * scale, box.y + box.h / 2 + (p[1] - (bounds[1] + bounds[3]) / 2) * scale];
     const path = (points, closed, fill, dashed) => { const pts = points.map(P); doc.setLineWidth(.7); doc.setDrawColor(45); if (fill != null) doc.setFillColor(fill); doc.setLineDashPattern(dashed ? [4, 2] : [], 0); doc.lines(pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], closed && fill != null ? 'FD' : 'S', closed); doc.setLineDashPattern([], 0); };
     for (const f of prepared.facets) path(f.polygon, true, f.status === 'unresolved' ? 247 : 239, true);
@@ -159,29 +177,58 @@
     if (data.sourceImage) { const k = Math.min(140 / prepared.metadata.width, 70 / prepared.metadata.height), w = prepared.metadata.width * k, h = prepared.metadata.height * k; doc.addImage(data.sourceImage, undefined, R - w, 646, w, h); text('Source preview / reference only', 440, 730, 7); }
     text('SOURCE IMAGE REVIEW / not a geographic job or certified roof measurement.', L, 667, 8.5, true, data.sourceImage ? 395 : 548);
     text('Unknown quantities are blank. Source-printed dimensions are unverified statements. No order quantities.', L, 690, 8.2, false, data.sourceImage ? 395 : 548);
-    next('Current measurement schedules');
+    } else {
+      y = 222;
+      paragraph('Unknown quantities are blank. Source-printed dimensions are unverified statements. No order quantities. No geographic north or map scale is established here.');
+      paragraph('Squares equal 100 square feet. Projected area is horizontal footprint area; sloped area requires supported pitch.');
+    }
+    if (internalReview) next('Current measurement schedules');
     const modelId = row => row.key === row.id ? row.key : row.key + ' / ' + row.id;
-    table('Facet schedule / provisional areas', [118, 86, 100, 100, 144], ['Key / model ID / status', 'Image px²', 'Projected ft²', 'Sloped ft²', 'Sourced pitch'], prepared.facets.map(f => [modelId(f) + ' / ' + f.status, number(f.pixels2), number(f.projected, SQFT), number(f.sloped, SQFT), f.pitch ? number(f.pitch.rise / f.pitch.run * 12, 1, 1) + ' / 12 ±' + number(f.pitch.uncertainty, 1, 2) : '']));
-    table('Edge schedule / path lengths, not chords', [118, 110, 88, 116, 116], ['Key / model ID', 'Candidate type', 'Image px', 'Horizontal ft', 'True sloped ft'], prepared.edges.map(e => [modelId(e), e.type + ' / ' + e.status + ' / unverified', number(e.pixels), number(e.horizontal, FT), '']));
+    const pitchText = f => f.pitch ? number(f.pitch.rise / f.pitch.run * 12, 1, 1) + ' / 12 ±' + number(f.pitch.uncertainty, 1, 2) : '';
+    if (internalReview) {
+      table('Facet schedule / provisional areas', [118, 86, 100, 100, 144], ['Key / model ID / status', 'Image px²', 'Projected ft²', 'Sloped ft²', 'Sourced pitch'], prepared.facets.map(f => [modelId(f) + ' / ' + f.status, number(f.pixels2), number(f.projected, SQFT), number(f.sloped, SQFT), pitchText(f)]));
+      table('Edge schedule / path lengths, not chords', [118, 110, 88, 116, 116], ['Key / model ID', 'Candidate type', 'Image px', 'Horizontal ft', 'True sloped ft'], prepared.edges.map(e => [modelId(e), e.type + ' / ' + e.status + ' / unverified', number(e.pixels), number(e.horizontal, FT), '']));
+    } else {
+      table('Area and pitch schedule / provisional', [160, 120, 120, 148], ['Reference / status', 'Projected ft²', 'Sloped ft²', 'Sourced pitch'], prepared.facets.map(f => [modelId(f) + ' / ' + f.status, number(f.projected, SQFT), number(f.sloped, SQFT), pitchText(f)]));
+      table('Edge measurement schedule / provisional', [160, 150, 118, 120], ['Reference', 'Type / status', 'Horizontal ft', 'True sloped ft'], prepared.edges.map(e => [modelId(e), e.type + ' / ' + e.status + ' / unverified', number(e.horizontal, FT), '']));
+    }
     if (unplaced.length) paragraph('Keys not placed on the plan because of density: ' + unplaced.join(', ') + '. Their model IDs and quantities remain in the schedules.');
-    paragraph('Facet and edge IDs refer only to source pixels in this revision. Physical quantities, when present, use the stated calibration and sourced pitch; they are provisional review values. True sloped edge lengths are not established by a planar image.');
+    paragraph((internalReview ? 'Facet and edge IDs refer only to source pixels in this revision. ' : '') + 'Physical quantities, when present, use the stated calibration and sourced pitch; they are provisional review values. True sloped edge lengths are not established by a planar image.');
     next('Source and review notes');
     paragraph('Source: ' + (prepared.metadata.source || 'not recorded') + '. Source date: ' + (prepared.metadata.date || 'not recorded') + '. Purpose: ' + (prepared.metadata.purpose || 'image') + '; page ' + (prepared.metadata.sourcePage || 1) + '; rotation ' + (prepared.metadata.rotation || 0) + ' degrees.');
     paragraph('Image: ' + prepared.metadata.width + ' × ' + prepared.metadata.height + ' pixels. Fingerprint: ' + (prepared.metadata.imageFingerprint?.sha256 || 'not provided') + '. Current model revision: ' + prepared.revision + '.');
     paragraph(prepared.physical ? 'Physical basis: ' + (prepared.metadata.georef?.source || prepared.metadata.calibration?.source || 'recorded calibration') + '. This does not certify the roof outline, pitch or source statements.' : 'Physical quantities withheld: ' + (prepared.restricted ? 'perspective, oblique or uncalibrated source orientation.' : !prepared.geometryOK ? 'geometry validation requires correction.' : prepared.metadata.georef?.verified ? 'georeferenced quantities require the geographic validation/report path; this PDF validates image calibration only.' : 'no usable verified image calibration.'));
-    if (prepared.annotations.length) { section('Source-reported annotations / never verified takeoff'); for (const a of prepared.annotations) { paragraph(a.key + (a.id ? ' / ' + a.id : '') + ' / ' + a.kind + ' / ' + a.status, 8.5); paragraph(a.text); } }
+    if (prepared.physical && prepared.metadata.calibration) {
+      const c = prepared.metadata.calibration;
+      paragraph('Horizontal reference segment ' + (c.a || c.start).join(', ') + ' to ' + (c.b || c.end).join(', ') +
+        ' px, ' + (c.distance ?? c.lengthFt) + ' ' + (c.unit || 'ft') + '. Calibration date ' + (c.date || 'unknown') + '.');
+    }
+    const pitched = prepared.facets.filter(f => f.pitch);
+    if (pitched.length) {
+      section('Pitch evidence');
+      for (const f of pitched) paragraph(modelId(f) + ' / ' + f.pitch.source);
+    }
+    if (prepared.annotations.length) {
+      section('Source-reported annotations / never verified takeoff');
+      for (const a of prepared.annotations) {
+        paragraph(a.key + (a.id ? ' / ' + a.id : '') + ' / ' + a.kind + ' / ' + a.status, 8.5);
+        paragraph('Source page ' + (prepared.metadata.sourcePage || 1) + (a.bounds
+          ? ', image region from (' + a.bounds.slice(0, 2).join(', ') + ') to (' + a.bounds.slice(2).join(', ') + ') px.' : ', image region unavailable.'));
+        paragraph(a.text);
+      }
+    }
     if (prepared.reviewRecords.length) { section('User boundary reviews / not independent certification'); for (const r of prepared.reviewRecords) { paragraph(r.kind + ' / ' + r.id + ' / ' + r.status, 8.5); paragraph('Source: ' + (r.source || 'not recorded') + '; date: ' + (r.date || 'not recorded') + '. ' + r.note); } }
     if (prepared.issues.length) { section('Review findings'); prepared.issues.forEach(q => paragraph(q)); }
-    if (prepared.corrections.length) { section('Current revision correction history'); prepared.corrections.forEach(q => paragraph(q)); }
+    if (prepared.corrections.length) { section('Current revision correction history'); prepared.corrections.forEach(q => paragraph(q, 8.5, 3)); }
     paragraph('Prior reviews retained in the saved JSON: ' + prepared.previousReviews + '. This PDF contains current-revision quantities only. Preserve the review JSON and original image for the complete audit.');
     const pages = doc.getNumberOfPages();
-    for (let i = 1; i <= pages; i++) { doc.setPage(i); page = i; line(748); text('DIVERSITY CONTRACTING / SOURCE IMAGE REVIEW', L, 764, 7, true); text(i + ' of ' + pages, R, 764, 7, true, null, 'right'); }
+    for (let i = 1; i <= pages; i++) { doc.setPage(i); page = i; line(748); text('DIVERSITY CONTRACTING / ' + (internalReview ? 'SOURCE IMAGE REVIEW' : 'ROOF MEASUREMENT SUMMARY'), L, 764, 7, true); text(i + ' of ' + pages, R, 764, 7, true, null, 'right'); }
     const outside = textBoxes.filter(b => b.x0 < 0 || b.x1 > W || b.y0 < 0 || b.y1 > H);
     if (outside.length) fail('A source review text item would be clipped. Shorten its identifier or metadata.');
     stillCurrent();
-    doc.setProperties({ title: 'Source image review / revision ' + prepared.revision, author: 'Diversity Contracting', subject: 'REVIEW REQUIRED; source-pixel geometry, no geographic or purchasing certification' });
+    doc.setProperties({ title: (internalReview ? 'Source image review' : 'Roof measurement summary') + ' / revision ' + prepared.revision, author: 'Diversity Contracting', subject: internalReview ? 'REVIEW REQUIRED; source-pixel geometry, no geographic or purchasing certification' : 'REVIEW REQUIRED; provisional measurement tables; no segmentation imagery or certification' });
     const blob = new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
-    blob.reviewReport = { revision: prepared.revision, pages, status: prepared.status, plan: { box, bounds, uniformPointsPerPixel: scale }, unplacedKeys: unplaced, clippedText: outside.length };
+    blob.reviewReport = { revision: prepared.revision, pages, status: prepared.status, internalReview, plan: internalReview ? { box, bounds, uniformPointsPerPixel: scale } : null, unplacedKeys: unplaced, clippedText: outside.length };
     return blob;
   }
   host.buildAIReviewPDF = buildAIReviewPDF;

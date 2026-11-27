@@ -1,0 +1,3094 @@
+{
+  "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+  "fixtureSha256": "2c2638088f6bbc8b7550246274f43823fd9b7cddc8f4e4c85667345d21e8a6b0",
+  "observedUtc": "2026-11-26T03:38:37.365855+00:00",
+  "publicJsonCount": 44,
+  "authenticatedCount": 44,
+  "balanceRead": true,
+  "positiveSpendableBalance": true,
+  "activeReservation": false,
+  "balanceRpm": 30,
+  "headerRpm": "60",
+  "freeAllowance": {
+    "mode": "subscription",
+    "allowed": true,
+    "unlimited": false,
+    "remainingReported": true
+  },
+  "catalog": "https://apinex.bond/api/public/models",
+  "registry": [
+    {
+      "model": "claude-fable-5.1",
+      "assignment": "Release scope and systemic failure modes",
+      "case": "SCOPE-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "claude-fable-5.2",
+      "assignment": "Approval state and quantity provenance",
+      "case": "APP-1",
+      "listed": true,
+      "inputRate": 1,
+      "outputRate": 1,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 1049476,
+      "illustrativeMicroUsd": 8900
+    },
+    {
+      "model": "claude-opus-5.5",
+      "assignment": "Ambiguous sketch dimensions",
+      "case": "DOC-1",
+      "listed": true,
+      "inputRate": 0.5,
+      "outputRate": 0.5,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 524738,
+      "illustrativeMicroUsd": 4450
+    },
+    {
+      "model": "claude-sonnet-5.5",
+      "assignment": "Selected-page ingestion and rotation patch",
+      "case": "DOC-2",
+      "listed": true,
+      "inputRate": 0.4,
+      "outputRate": 0.4,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 419791,
+      "illustrativeMicroUsd": 3560
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "assignment": "Provider retry classification",
+      "case": "HTTP-1",
+      "listed": true,
+      "inputRate": 0.05,
+      "outputRate": 0.05,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": false,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 52474,
+      "illustrativeMicroUsd": 445
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "assignment": "Deterministic area and edge oracle",
+      "case": "GEO-1",
+      "listed": true,
+      "inputRate": 0.07,
+      "outputRate": 0.07,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": false,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 73464,
+      "illustrativeMicroUsd": 623
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "assignment": "Metamorphic property design",
+      "case": "GEO-1",
+      "listed": true,
+      "inputRate": 0.06,
+      "outputRate": 0.06,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 62969,
+      "illustrativeMicroUsd": 534
+    },
+    {
+      "model": "drex-v2.0",
+      "assignment": "Malformed geometry routing",
+      "case": "VAL-1",
+      "listed": true,
+      "inputRate": 0.04,
+      "outputRate": 0,
+      "capacity": 134144,
+      "weight": null,
+      "visionClaim": false,
+      "toolsClaim": false,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 5366,
+      "illustrativeMicroUsd": 320
+    },
+    {
+      "model": "free/claude-opus-4.6",
+      "assignment": "Independent uncertainty challenge",
+      "case": "DOC-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/claude-sonnet-4.6",
+      "assignment": "Regression review of coordinate patches",
+      "case": "PEN-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/deepseek-v4-flash-0731",
+      "assignment": "Permanent-error counterexamples",
+      "case": "HTTP-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": false,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/deepseek-v4-pro-0813",
+      "assignment": "Independent area and edge formula review",
+      "case": "GEO-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": false,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/deepseek-v4.1-flash",
+      "assignment": "Additional geometry counterexamples",
+      "case": "GEO-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/gemini-3.1-pro",
+      "assignment": "Independent multipage dimension review",
+      "case": "DOC-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 2,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/gemini-3.8-flash",
+      "assignment": "Rotation and page triage challenge",
+      "case": "DOC-2",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/gemini-4-hydrogen",
+      "assignment": "Wrong-building selection challenge",
+      "case": "PIN-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 5,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/glm-5.3",
+      "assignment": "Cross-stage schema audit",
+      "case": "JSON-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 4,
+      "visionClaim": false,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/glm-5.3-flash",
+      "assignment": "Pitch and unit normalization audit",
+      "case": "UNIT-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/glm-5.3-flashx",
+      "assignment": "Malformed response parser tests",
+      "case": "JSON-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/gpt-6-luna",
+      "assignment": "Independent summary/detail agreement",
+      "case": "PDF-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/hy4",
+      "assignment": "Ambiguous manual review",
+      "case": "UX-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 2,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/hy4-flash",
+      "assignment": "Actionable correction instructions",
+      "case": "UX-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 2,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/jev-1.13",
+      "assignment": "Independent report completeness",
+      "case": "PDF-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "free/kimi-k2.8",
+      "assignment": "Retained evidence across job history",
+      "case": "PROV-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 2,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/kimi-k3",
+      "assignment": "Independent rollback validation",
+      "case": "HOST-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/mimo-v2.6-flash",
+      "assignment": "Upload and parser boundary inputs",
+      "case": "VAL-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 2,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/mimo-v2.6-pro",
+      "assignment": "Save/reopen revision consistency",
+      "case": "REV-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 2,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/minimax-m3",
+      "assignment": "Keyboard correction and undo",
+      "case": "UI-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 2,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/minimax-m3.1-flash",
+      "assignment": "Interrupted dispatch recovery",
+      "case": "JOB-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/muse-spark-1.3",
+      "assignment": "Independent plan label legibility",
+      "case": "LAY-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": false,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "free/qwen-3.8-max",
+      "assignment": "Independent structured geometry check",
+      "case": "GEO-1",
+      "listed": true,
+      "inputRate": 0,
+      "outputRate": 0,
+      "capacity": 1048576,
+      "weight": 3,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 0,
+      "illustrativeMicroUsd": 0
+    },
+    {
+      "model": "gemini-3.1-pro",
+      "assignment": "Multipage dimensions and contradictions",
+      "case": "DOC-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "assignment": "Page triage and orientation",
+      "case": "DOC-3",
+      "listed": true,
+      "inputRate": 0.1,
+      "outputRate": 0.1,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 104948,
+      "illustrativeMicroUsd": 890
+    },
+    {
+      "model": "gemini-4-argon",
+      "assignment": "Difficult segmentation and occlusion",
+      "case": "TREE-1",
+      "listed": true,
+      "inputRate": 0.5,
+      "outputRate": 0.5,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 524738,
+      "illustrativeMicroUsd": 4450
+    },
+    {
+      "model": "gemini-4-carbon",
+      "assignment": "Independent segmentation disagreement",
+      "case": "TREE-1",
+      "listed": true,
+      "inputRate": 0.5,
+      "outputRate": 0.5,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 524738,
+      "illustrativeMicroUsd": 4450
+    },
+    {
+      "model": "gemini-4-hydrogen",
+      "assignment": "Main house and accessory separation",
+      "case": "PIN-1",
+      "listed": true,
+      "inputRate": 0.3,
+      "outputRate": 0.3,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 314843,
+      "illustrativeMicroUsd": 2670
+    },
+    {
+      "model": "glm-5.3",
+      "assignment": "Cross-stage geometry contract",
+      "case": "JSON-1",
+      "listed": true,
+      "inputRate": 0.15,
+      "outputRate": 0.15,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": false,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 157422,
+      "illustrativeMicroUsd": 1335
+    },
+    {
+      "model": "glm-5.3-flash",
+      "assignment": "Unit and pitch normalization",
+      "case": "UNIT-1",
+      "listed": true,
+      "inputRate": 0.05,
+      "outputRate": 0.05,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 52474,
+      "illustrativeMicroUsd": 445
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "assignment": "Touch and high-DPI coordinate conversion",
+      "case": "PEN-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "gpt-6-astra",
+      "assignment": "Independent physical-coordinate oracle",
+      "case": "GEO-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "gpt-6-luna",
+      "assignment": "Summary/detail unit and area agreement",
+      "case": "PDF-1",
+      "listed": true,
+      "inputRate": 0.075,
+      "outputRate": 0.075,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 78711,
+      "illustrativeMicroUsd": 668
+    },
+    {
+      "model": "gpt-6-luna-decisions",
+      "assignment": "Typed review routing",
+      "case": "UX-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "assignment": "Stale results and revision consistency",
+      "case": "REV-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "assignment": "Pen, zoom and pointer coordinate regression",
+      "case": "PEN-1",
+      "listed": true,
+      "inputRate": 0.17,
+      "outputRate": 0.17,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 178411,
+      "illustrativeMicroUsd": 1513
+    },
+    {
+      "model": "gpt-6.2-astra",
+      "assignment": "Registration, topology and source identity",
+      "case": "REG-1",
+      "listed": true,
+      "inputRate": 0.5,
+      "outputRate": 0.5,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 524738,
+      "illustrativeMicroUsd": 4450
+    },
+    {
+      "model": "gpt-6.2-sol",
+      "assignment": "Targeted registration regression fix",
+      "case": "REG-1",
+      "listed": true,
+      "inputRate": 0.3,
+      "outputRate": 0.3,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 314843,
+      "illustrativeMicroUsd": 2670
+    },
+    {
+      "model": "grok-4.7",
+      "assignment": "Adversarial false confidence audit",
+      "case": "SCOPE-1",
+      "listed": true,
+      "inputRate": 0.3,
+      "outputRate": 0.3,
+      "capacity": 512000,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 153870,
+      "illustrativeMicroUsd": 2670
+    },
+    {
+      "model": "hy4-preview",
+      "assignment": "Uncertain-boundary correction UX",
+      "case": "UX-1",
+      "listed": true,
+      "inputRate": 0.3,
+      "outputRate": 0.3,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 314843,
+      "illustrativeMicroUsd": 2670
+    },
+    {
+      "model": "jev-1.13",
+      "assignment": "Measurement-report completeness",
+      "case": "PDF-1",
+      "listed": true,
+      "inputRate": 0.042,
+      "outputRate": 0,
+      "capacity": 65536,
+      "weight": null,
+      "visionClaim": false,
+      "toolsClaim": false,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 2753,
+      "illustrativeMicroUsd": 336
+    },
+    {
+      "model": "kimi-k3",
+      "assignment": "Node hosting and CI acceptance",
+      "case": "HOST-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    },
+    {
+      "model": "kimi-k3.1-pro",
+      "assignment": "Source and revision provenance",
+      "case": "PROV-1",
+      "listed": true,
+      "inputRate": 0.3,
+      "outputRate": 0.3,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 314843,
+      "illustrativeMicroUsd": 2670
+    },
+    {
+      "model": "muse-spark-1.3",
+      "assignment": "Plan-first readability",
+      "case": "LAY-1",
+      "listed": true,
+      "inputRate": 0.3,
+      "outputRate": 0.3,
+      "capacity": 1048576,
+      "weight": null,
+      "visionClaim": true,
+      "toolsClaim": true,
+      "freePlanFlag": true,
+      "reserveMicroUsd": 314843,
+      "illustrativeMicroUsd": 2670
+    },
+    {
+      "model": "subq-snap-preview",
+      "assignment": "Advisory triage on uncertain boundaries",
+      "case": "UX-1",
+      "listed": false,
+      "blocker": "absent from authenticated GET /models"
+    }
+  ],
+  "tasks": {
+    "free/claude-opus-4.6/assignment": {
+      "mode": "assignment",
+      "scope": "Independent uncertainty challenge",
+      "model": "free/claude-opus-4.6",
+      "returnedModel": "free/claude-opus-4.6",
+      "requestId": "gen_01M8AWYRX9F2AKQ8A377EC0MFY",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "3ba4c69f1cd3133bc4d978e49c4b56ac164d81a8e587b1b2c013055d2ae0d619",
+      "inputBytes": 835,
+      "sourceRefs": [
+        "CAL-1",
+        "DOC-1"
+      ],
+      "case": "DOC-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 10860,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 668,
+        "completion_tokens": 813,
+        "total_tokens": 1481,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "67f5ace6906880999ae166971452f51582c4dc8b99b0364def0ad4af0c5d8f4e",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "retain_conflict",
+        "refs": [
+          "CAL-1",
+          "DOC-1"
+        ],
+        "test": "Add regression test: conflicting unauthoritative 18 ft and 21 ft dimensions remain unresolved, projected area stays 108 sq ft, sloped area stays null."
+      }
+    },
+    "free/claude-sonnet-4.6/assignment": {
+      "mode": "assignment",
+      "scope": "Regression review of coordinate patches",
+      "model": "free/claude-sonnet-4.6",
+      "returnedModel": "free/claude-sonnet-4.6",
+      "requestId": "gen_01M8AWZ89P98BKRQNTB4XG27RY",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "3dc48f823dd30f1c4d07c41a0834c474d3e8df3227706e339abdac2df789ddbe",
+      "inputBytes": 855,
+      "sourceRefs": [
+        "CAL-1",
+        "PEN-1"
+      ],
+      "case": "PEN-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 1310005,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 685,
+        "completion_tokens": 970,
+        "total_tokens": 1655,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "b2860148b28af09496ca360f3ff2b8dc4892018b78fdc7e251b0c45858df6046",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "source_x_400",
+        "refs": [
+          "CAL-1",
+          "PEN-1"
+        ],
+        "test": "Regression test: canvas offset 100, scale 2, clientX 300 should map to source x 400."
+      }
+    },
+    "free/deepseek-v4-flash-0731/assignment": {
+      "mode": "assignment",
+      "scope": "Permanent-error counterexamples",
+      "model": "free/deepseek-v4-flash-0731",
+      "returnedModel": "free/deepseek-v4-flash-0731",
+      "requestId": "gen_01M8AYA2GBHSWKCC1JHHJ3ETVD",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "3c01cf59839e2af6a6216af59a400d57ec8172c1c78ffad2ef363e039f042070",
+      "inputBytes": 816,
+      "sourceRefs": [
+        "CAL-1",
+        "HTTP-1"
+      ],
+      "case": "HTTP-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 6885,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 563,
+        "completion_tokens": 517,
+        "total_tokens": 1080,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "58a4940ae0619c0a911a907f53836a703bd2b02a89db9b35fc29530d7db7f527",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "permanent_for_account",
+        "refs": [
+          "CAL-1",
+          "HTTP-1"
+        ],
+        "test": "Add unit test asserting a 12x9 orthographic facet with verified scale and no pitch yields projectedSqFt 108 and slopedSqFt null."
+      }
+    },
+    "free/deepseek-v4-pro-0813/assignment": {
+      "mode": "assignment",
+      "scope": "Independent area and edge formula review",
+      "model": "free/deepseek-v4-pro-0813",
+      "returnedModel": "free/deepseek-v4-pro-0813",
+      "requestId": "gen_01M8AYA8T6KSPN98BB9F8726SC",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "c780005d8c8346668a1c87a33948828cf558135a4ceb36c8e89948497002a74a",
+      "inputBytes": 821,
+      "sourceRefs": [
+        "CAL-1",
+        "GEO-1"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 9705,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 579,
+        "completion_tokens": 823,
+        "total_tokens": 1402,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "2fc7784ce8d8a3f1e21cd4b54ac7efa7a037f0fdda231cb3ad6e560dcbf9e738",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "area_12",
+        "refs": [
+          "CAL-1",
+          "GEO-1"
+        ],
+        "test": "Regression: assert 4x3 rectangle area remains 12 after translate 50 ft east and vertical mirror; CAL-1 projected area stays 108 with null sloped area."
+      }
+    },
+    "free/deepseek-v4.1-flash/assignment": {
+      "mode": "assignment",
+      "scope": "Additional geometry counterexamples",
+      "model": "free/deepseek-v4.1-flash",
+      "returnedModel": "free/deepseek-v4.1-flash",
+      "requestId": "gen_01M8AYAHY2BC0E1RRED6R3JDX5",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "fb1161a4b4bf2585f5ec128b93074bbf7eeb762f1e6cd7f1b3437f60b69c4ef4",
+      "inputBytes": 815,
+      "sourceRefs": [
+        "CAL-1",
+        "GEO-1"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 12638,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 576,
+        "completion_tokens": 1424,
+        "total_tokens": 2000,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "1e214ef269228507a0840a3529528d2b26f99915bb46c6d66422179e03853608",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "area_12",
+        "refs": [
+          "CAL-1",
+          "GEO-1"
+        ],
+        "test": "Regression test: assert area of 4x3 rectangle stays 12 after 50 ft east translation and vertical mirror."
+      }
+    },
+    "free/gemini-3.1-pro/assignment": {
+      "mode": "assignment",
+      "scope": "Independent multipage dimension review",
+      "model": "free/gemini-3.1-pro",
+      "returnedModel": "free/gemini-3.1-pro",
+      "requestId": "gen_01M8AYAYWEAEYYSQMSS65AEH4W",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "bcc13b1a7c9ec1acb09705877237d65e3ff398d6b40c0fda9196c1226aa42baf",
+      "inputBytes": 839,
+      "sourceRefs": [
+        "CAL-1",
+        "DOC-1"
+      ],
+      "case": "DOC-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 11561,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 579,
+        "completion_tokens": 1189,
+        "total_tokens": 1768,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "b7b33785e59f531ede092bddfb3632d02378b890d02b4286f316afd614e861bd",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "retain_conflict",
+        "refs": [
+          "CAL-1",
+          "DOC-1"
+        ],
+        "test": "Regression: 12x9 orthographic facet with no pitch yields projectedSqFt 108 and slopedSqFt null; conflicting 18 ft vs 21 ft readings stay unresolved."
+      }
+    },
+    "free/gemini-3.8-flash/assignment": {
+      "mode": "assignment",
+      "scope": "Rotation and page triage challenge",
+      "model": "free/gemini-3.8-flash",
+      "returnedModel": "free/gemini-3.8-flash",
+      "requestId": "gen_01M8AYB9JT2PG1PSXMS3053N05",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "fcf19da74ba9a78bdd4a449ac2b9a13a674bfa0a035cddd2620a4e3b9d7eb570",
+      "inputBytes": 849,
+      "sourceRefs": [
+        "CAL-1",
+        "DOC-2"
+      ],
+      "case": "DOC-2",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 6765,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 571,
+        "completion_tokens": 852,
+        "total_tokens": 1423,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "36151820df7a05b1b26ffe3e4f97142d47240d49bfdf0fdea4884b4d823878a0",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "use_rendered_frame",
+        "refs": [
+          "CAL-1",
+          "DOC-2"
+        ],
+        "test": "Regression test: 12x9 ft facet with no pitch returns projectedSqFt 108 and slopedSqFt null; rendered-pixel selection on a 90-degree intrinsically rotated page does not apply rotate_again."
+      }
+    },
+    "free/gemini-4-hydrogen/assignment": {
+      "mode": "assignment",
+      "scope": "Wrong-building selection challenge",
+      "model": "free/gemini-4-hydrogen",
+      "returnedModel": "free/gemini-4-hydrogen",
+      "requestId": "gen_01M8AYBH1549ZP6X1YQ8374YRT",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "b87d92f2813c338072c32ff60c130a807fc61abc69656d03d7b7feaa731ef98d",
+      "inputBytes": 868,
+      "sourceRefs": [
+        "CAL-1",
+        "PIN-1"
+      ],
+      "case": "PIN-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 12411,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 571,
+        "completion_tokens": 1136,
+        "total_tokens": 1707,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "983b703307378c2c6631ec047c255e02ddf6ad3e5856d4d7a095993b1aa030ae",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "target_missing",
+        "refs": [
+          "CAL-1",
+          "PIN-1"
+        ],
+        "test": "Regression test: CAL-1 12x9 orthographic facet returns projectedSqFt 108 and null slopedSqFt; PIN-1 asserts mask excludes garage and target pin outside mask yields target_missing."
+      }
+    },
+    "free/glm-5.3/assignment": {
+      "mode": "assignment",
+      "scope": "Cross-stage schema audit",
+      "model": "free/glm-5.3",
+      "returnedModel": "free/glm-5.3",
+      "requestId": "gen_01M8AYBWY1C80E832Z7PM84TBE",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "1448ea5833453cfe9c210f3464dd1b5b60b84f66ac03739d6d758706c53584fa",
+      "inputBytes": 802,
+      "sourceRefs": [
+        "CAL-1",
+        "JSON-1"
+      ],
+      "case": "JSON-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 7388,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 575,
+        "completion_tokens": 634,
+        "total_tokens": 1209,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "6b902e5a707a5db216f0631c6195403cb8e7a50cddca9938d4d67c8557452cff",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "reject_quantity",
+        "refs": [
+          "CAL-1",
+          "JSON-1"
+        ],
+        "test": "Add schema regression test rejecting outline area claims when calibration metadata is missing."
+      }
+    },
+    "free/glm-5.3-flash/assignment": {
+      "mode": "assignment",
+      "scope": "Pitch and unit normalization audit",
+      "model": "free/glm-5.3-flash",
+      "returnedModel": "free/glm-5.3-flash",
+      "requestId": "gen_01M8AYC3F2Q2R5MB25R099Y5C9",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "b8e2d9cc7896938eb512112a779e2f8d1dbf07aa735ab3a49f69710e0070001f",
+      "inputBytes": 811,
+      "sourceRefs": [
+        "CAL-1",
+        "UNIT-1"
+      ],
+      "case": "UNIT-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 13088,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 581,
+        "completion_tokens": 1079,
+        "total_tokens": 1660,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "a360d8796ea6745bd0c1454f460f3913bc13c00c751513244066fc80214a9752",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "retain_dimension_kinds",
+        "refs": [
+          "CAL-1",
+          "UNIT-1"
+        ],
+        "test": "Regression test: assert a 6:12 pitch label remains a dimensionless ratio while a 6 ft mark remains a length, with no cross-unit normalization."
+      }
+    },
+    "free/glm-5.3-flashx/assignment": {
+      "mode": "assignment",
+      "scope": "Malformed response parser tests",
+      "model": "free/glm-5.3-flashx",
+      "returnedModel": "free/glm-5.3-flashx",
+      "requestId": "gen_01M8AYCGRN5CWY7KYRZJ0J6BE2",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "545f3a84cb789147090330e90a8ca0eacd5ac4ef8a5070f8d5e52a9a59de212f",
+      "inputBytes": 816,
+      "sourceRefs": [
+        "CAL-1",
+        "JSON-1"
+      ],
+      "case": "JSON-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 13150,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 576,
+        "completion_tokens": 505,
+        "total_tokens": 1081,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "c4d51a4517d8dc4684f75c831e40e5e24df31bd6a373854325388111ac5487e4",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "reject_quantity",
+        "refs": [
+          "CAL-1",
+          "JSON-1"
+        ],
+        "test": "Add parser test asserting uncalibrated exact-area claims are rejected before quantity acceptance."
+      }
+    },
+    "free/gpt-6-luna/assignment": {
+      "mode": "assignment",
+      "scope": "Independent summary/detail agreement",
+      "model": "free/gpt-6-luna",
+      "returnedModel": "free/gpt-6-luna",
+      "requestId": "gen_01M8AYCX7E8RFMWRCWS7V4HDB6",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "86f23f2990ccce9d4dabe30f5eb68c4758f8621cb82c707b573f7400016a72ae",
+      "inputBytes": 845,
+      "sourceRefs": [
+        "CAL-1",
+        "PDF-1"
+      ],
+      "case": "PDF-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 11557,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 580,
+        "completion_tokens": 1267,
+        "total_tokens": 1847,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "7fd9baaa33f50ba6edfbb38587d881d330805ba557bfa9bf529a9f6d99fbb107",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "withhold_total",
+        "refs": [
+          "CAL-1",
+          "PDF-1"
+        ],
+        "test": "Regression: CAL-1 null-pitch facet keeps slopedSqFt null and PDF withholds whole-roof sloped total instead of printing 90."
+      }
+    },
+    "free/hy4/assignment": {
+      "mode": "assignment",
+      "scope": "Ambiguous manual review",
+      "model": "free/hy4",
+      "returnedModel": "free/hy4",
+      "requestId": "gen_01M8AYD98QT4YA2YKSYCGRDRJ9",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "adfef1b99eb115af076325b0101db9bdc85af8524f462338f799e12f758aebf1",
+      "inputBytes": 762,
+      "sourceRefs": [
+        "CAL-1",
+        "UX-1"
+      ],
+      "case": "UX-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 6849,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 560,
+        "completion_tokens": 704,
+        "total_tokens": 1264,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "ef78e8d0723782165e398b53c560cd2c29408771596d6c34dfc8186d849ad921",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "preserve_unknown",
+        "refs": [
+          "CAL-1",
+          "UX-1"
+        ],
+        "test": "Regression: 12x9 orthographic facet with no pitch yields projected 108 and null sloped area; ambiguous tree-occluded boundary keeps review open."
+      }
+    },
+    "free/hy4-flash/assignment": {
+      "mode": "assignment",
+      "scope": "Actionable correction instructions",
+      "model": "free/hy4-flash",
+      "returnedModel": "free/hy4-flash",
+      "requestId": "gen_01M8AYDGQMX0KJJRWRR0AGV480",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "791432fafd19c3c912a738870ebd5c10bf0ec21a84dcda058ad6142ca4e52e83",
+      "inputBytes": 779,
+      "sourceRefs": [
+        "CAL-1",
+        "UX-1"
+      ],
+      "case": "UX-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 9072,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 560,
+        "completion_tokens": 942,
+        "total_tokens": 1502,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "94a7fa56698dfdaabbbd28dfd1b97ceeb601a3f37521e30ee07e3b9eb085cb25",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "preserve_unknown",
+        "refs": [
+          "CAL-1",
+          "UX-1"
+        ],
+        "test": "Regression test: CAL-1 projected area stays 108 sq ft with null pitch; UX-1 leaves occluded boundary unknown rather than force-closing."
+      }
+    },
+    "free/kimi-k2.8/assignment": {
+      "mode": "assignment",
+      "scope": "Retained evidence across job history",
+      "model": "free/kimi-k2.8",
+      "returnedModel": "free/kimi-k2.8",
+      "requestId": "gen_01M8AYDWC8KHF10EY5H2DYM0MZ",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "d543171b783903c63155300f2a04fb4ff84756e701e8e6f33dd195ac3794e25c",
+      "inputBytes": 865,
+      "sourceRefs": [
+        "CAL-1",
+        "PROV-1"
+      ],
+      "case": "PROV-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 18407,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 584,
+        "completion_tokens": 1289,
+        "total_tokens": 1873,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "c5b78b7950afc3f1f8d3fc4d5bd79dec61b39d477aa528ee21ad243dcc6e6dcc",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "bind_file_revision",
+        "refs": [
+          "CAL-1",
+          "PROV-1"
+        ],
+        "test": "Regression test: for a 12x9 orthographic facet with no pitch, expect projectedSqFt=108 and slopedSqFt=null; after same-name file replacement, provenance must bind the citation to the original file revision, not the replacement."
+      }
+    },
+    "free/kimi-k3/assignment": {
+      "mode": "assignment",
+      "scope": "Independent rollback validation",
+      "model": "free/kimi-k3",
+      "returnedModel": "free/kimi-k3",
+      "requestId": "gen_01M8AYEAW9KE8TP026QSK2K84H",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "b28e4a29db2f69245b1b2d1a2288d4e13b75424b3fd871a81599da780a94d168",
+      "inputBytes": 832,
+      "sourceRefs": [
+        "CAL-1",
+        "HOST-1"
+      ],
+      "case": "HOST-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 6514,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 575,
+        "completion_tokens": 644,
+        "total_tokens": 1219,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "aa3be4a89bad765c0bce586be17f423af0cd62182f6b10dfb60120955af5ef8c",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "backend_unverified",
+        "refs": [
+          "CAL-1",
+          "HOST-1"
+        ],
+        "test": "Regression test: POST /node-job and assert response is not static index.html; fail if body matches fallback HTML."
+      }
+    },
+    "free/mimo-v2.6-flash/assignment": {
+      "mode": "assignment",
+      "scope": "Upload and parser boundary inputs",
+      "model": "free/mimo-v2.6-flash",
+      "returnedModel": "free/mimo-v2.6-flash",
+      "requestId": "gen_01M8AYEGG8AYNE6ESNBB12RYP6",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "e37503616a3436fe141c7be2be1bff6331498f1cf4e0c8f3f63e1a13e049ad1e",
+      "inputBytes": 825,
+      "sourceRefs": [
+        "CAL-1",
+        "VAL-1"
+      ],
+      "case": "VAL-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 7580,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 565,
+        "completion_tokens": 516,
+        "total_tokens": 1081,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "3c0149b33fb2aa780dc5350090bf144f5ab034f7fc49f92c6adb31311fe0b451",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "reject_or_review",
+        "refs": [
+          "CAL-1",
+          "VAL-1"
+        ],
+        "test": "Add parser regression test rejecting polygons with duplicate vertices and self-intersecting edges before area calculation."
+      }
+    },
+    "free/mimo-v2.6-pro/assignment": {
+      "mode": "assignment",
+      "scope": "Save/reopen revision consistency",
+      "model": "free/mimo-v2.6-pro",
+      "returnedModel": "free/mimo-v2.6-pro",
+      "requestId": "gen_01M8AYERD8YPMX6S755QCRGZ06",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "95a2a1115e0e0d979e11b737710ee6e556b9b8fcdad58247033488ad062cda97",
+      "inputBytes": 821,
+      "sourceRefs": [
+        "CAL-1",
+        "REV-1"
+      ],
+      "case": "REV-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 8526,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 570,
+        "completion_tokens": 889,
+        "total_tokens": 1459,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "b69f0b8881400bff5d6a13cd7d81b8273ef6677bc1762fc1a36be24974790207",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "reject_job_identity",
+        "refs": [
+          "CAL-1",
+          "REV-1"
+        ],
+        "test": "Regression test: after opening roof 2 while job A (roof 1, revision 1) is running, completing job A must return reject_job_identity and leave both roofs at revision 1."
+      }
+    },
+    "free/minimax-m3/assignment": {
+      "mode": "assignment",
+      "scope": "Keyboard correction and undo",
+      "model": "free/minimax-m3",
+      "returnedModel": "free/minimax-m3",
+      "requestId": "gen_01M8AYF2483ETGAENP3P3A5YVD",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "de4aa7c4b405f07190ce20f83e2e60ea1100c6edb3cc3f3d2fafcb7c9cc02e8b",
+      "inputBytes": 842,
+      "sourceRefs": [
+        "CAL-1",
+        "UI-1"
+      ],
+      "case": "UI-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 6543,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 570,
+        "completion_tokens": 511,
+        "total_tokens": 1081,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "c9160abd38a9bc37954564f68b7873ff7a1db89bc0961f52e41ebaef388a89a0",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "keyboard_blocked",
+        "refs": [
+          "CAL-1",
+          "UI-1"
+        ],
+        "test": "Add keyboard-accessible undo and confirmation controls; regression test edits a vertex with keyboard-only input and verifies revert without pointer."
+      }
+    },
+    "free/minimax-m3.1-flash/assignment": {
+      "mode": "assignment",
+      "scope": "Interrupted dispatch recovery",
+      "model": "free/minimax-m3.1-flash",
+      "returnedModel": "free/minimax-m3.1-flash",
+      "requestId": "gen_01M8AYF7G58W5YGZBCQTAMRDFE",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "93c0dbb659887ee7d1ac6b9d65fffb1b353f86766e93228458e90c3f93e7ed70",
+      "inputBytes": 856,
+      "sourceRefs": [
+        "CAL-1",
+        "JOB-1"
+      ],
+      "case": "JOB-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 7476,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 576,
+        "completion_tokens": 661,
+        "total_tokens": 1237,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "27fdfaa5e896b658250c268923ee64a46d3a014c59c3eaac19fb24c9b8791117",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "hold_unknown_dispatch",
+        "refs": [
+          "CAL-1",
+          "JOB-1"
+        ],
+        "test": "Regression: interrupted dispatch with unknown provider idempotency stays held; CAL-1 projected area remains 108 sq ft and sloped area null."
+      }
+    },
+    "free/muse-spark-1.3/assignment": {
+      "mode": "assignment",
+      "scope": "Independent plan label legibility",
+      "model": "free/muse-spark-1.3",
+      "returnedModel": "free/muse-spark-1.3",
+      "requestId": "gen_01M8AYFFHHWXPMRQCZ3Y96K7Q7",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "2f565e23326d09cce17fe1373a4da4c024546b795ff964568aa9e89e6991a15e",
+      "inputBytes": 815,
+      "sourceRefs": [
+        "CAL-1",
+        "LAY-1"
+      ],
+      "case": "LAY-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 9707,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 562,
+        "completion_tokens": 807,
+        "total_tokens": 1369,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "f042713f609922fb290cedb202a9e8c3e16dd5481ea5b59ec9fb160abb8cc254",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "move_or_key_labels",
+        "refs": [
+          "CAL-1",
+          "LAY-1"
+        ],
+        "test": "Regression test: two facet dimension labels with intersecting rendered boxes on one plan must yield move_or_key_labels."
+      }
+    },
+    "free/qwen-3.8-max/assignment": {
+      "mode": "assignment",
+      "scope": "Independent structured geometry check",
+      "model": "free/qwen-3.8-max",
+      "returnedModel": "free/qwen-3.8-max",
+      "requestId": "gen_01M8AYFS6DC0PTSSTNX250FEYH",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "63425bffa8a1779704d7cd2be5c4cde3158d567b90466ea9ad59168f2280185f",
+      "inputBytes": 810,
+      "sourceRefs": [
+        "CAL-1",
+        "GEO-1"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 11734,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 576,
+        "completion_tokens": 1218,
+        "total_tokens": 1794,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "6ff3be6093424255bf5fee25be84ffe2ad15bacecff9da56138f01f4d8c45d7e",
+      "proposal": {
+        "projectedSqFt": 108,
+        "slopedSqFt": null,
+        "decision": "area_12",
+        "refs": [
+          "CAL-1",
+          "GEO-1"
+        ],
+        "test": "Add regression test: transform 4x3 rectangle by translate(50,0) then mirror vertical; assert area equals 12."
+      }
+    },
+    "free/qwen-3.8-max/vision": {
+      "mode": "vision",
+      "scope": "Independent structured geometry check",
+      "model": "free/qwen-3.8-max",
+      "returnedModel": "free/qwen-3.8-max",
+      "requestId": "gen-1795663866-b9aZFlNHXI0w1JtedrEj",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "81570eafc0738d3fe2f2d991582488e502b32b812d7853bcebd9eef9ee70a703",
+      "inputBytes": 3468,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 15303,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 728,
+        "completion_tokens": 9,
+        "total_tokens": 737,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "2aa6d7076bec4166659624a0a17eef960fc79a4e6c24522743f8ce2038fafb2e",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/qwen-3.8-max/tools": {
+      "mode": "tools",
+      "scope": "Independent structured geometry check",
+      "model": "free/qwen-3.8-max",
+      "returnedModel": "free/qwen-3.8-max",
+      "requestId": "gen_01M8AYGJYBCM6P3PV26M7EF7DC",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "a50a7530ffc34f50c871c54f06c0126b9cdabddcc5cb606122e70efc8f2e48ad",
+      "inputBytes": 504,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "latencyMs": 2671,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 459,
+        "completion_tokens": 41,
+        "total_tokens": 500,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "responseSha256": "5ec6b588f855013278515c805a05c72e61d67bbc0dc11edf78ed78aabe058844",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/claude-opus-4.6/vision": {
+      "mode": "vision",
+      "scope": "Independent uncertainty challenge",
+      "model": "free/claude-opus-4.6",
+      "returnedModel": "free/claude-opus-4.6",
+      "requestId": "gen-1795664315-138aLI5eVx0Dv2WGtF89",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "80224e97a1c6b92268f9e6d72571532e0901dd36a72c539c70facf96e64ea04a",
+      "inputBytes": 3471,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "DOC-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:38:37.409131+00:00",
+      "latencyMs": 2032,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 776,
+        "completion_tokens": 41,
+        "total_tokens": 817,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2451,
+      "responseSha256": "5a4f43c493ae4945f7b7333e1dcf4b6d716217d60f646bd6e05c91dc1dcd4fcc",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/claude-opus-4.6/tools": {
+      "mode": "tools",
+      "scope": "Independent uncertainty challenge",
+      "model": "free/claude-opus-4.6",
+      "returnedModel": "free/claude-opus-4.6",
+      "requestId": "gen_01M8AYY3C4JD2YJXNK3SJKJHVV",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "6c4d9674a48ebf354b9af11b761a7033b8bdbf90750430e021b0e8134f57ab90",
+      "inputBytes": 507,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "DOC-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:38:39.535737+00:00",
+      "latencyMs": 2158,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 546,
+        "completion_tokens": 39,
+        "total_tokens": 585,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1755,
+      "responseSha256": "136bd28881efc524d0fa3c95d87eb7ae65be023c07b08624683a9595950a39e0",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/claude-sonnet-4.6/vision": {
+      "mode": "vision",
+      "scope": "Regression review of coordinate patches",
+      "model": "free/claude-sonnet-4.6",
+      "returnedModel": "free/claude-sonnet-4.6",
+      "requestId": "gen-1795664319-Uy8VguxEG0mxvOQL49bA",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "a249dc85df2fc72f70c28d9271e3212bc8061cb43a358994c897352ec83813e2",
+      "inputBytes": 3473,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "PEN-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:38:41.725996+00:00",
+      "latencyMs": 2087,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 776,
+        "completion_tokens": 46,
+        "total_tokens": 822,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2466,
+      "responseSha256": "675de13dfbb1785a0191fc5efa948e4cd7f06304c8ba79de29f81bb0373888cc",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/claude-sonnet-4.6/tools": {
+      "mode": "tools",
+      "scope": "Regression review of coordinate patches",
+      "model": "free/claude-sonnet-4.6",
+      "returnedModel": "free/claude-sonnet-4.6",
+      "requestId": "gen_01M8AYY7HFK7YKAJGS74GFA4Q0",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "2d6ce1fffe7bb21d0ee93492ba46c222828bb83c95d6f084231b47ff6f4cc137",
+      "inputBytes": 509,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "PEN-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:38:43.845003+00:00",
+      "latencyMs": 1966,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 548,
+        "completion_tokens": 37,
+        "total_tokens": 585,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1755,
+      "responseSha256": "e1851fe1e48081b2b8840604ae9837d286d08e51d3190e4d6838b513308d7a2d",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/deepseek-v4-flash-0731/tools": {
+      "mode": "tools",
+      "scope": "Permanent-error counterexamples",
+      "model": "free/deepseek-v4-flash-0731",
+      "returnedModel": "free/deepseek-v4-flash-0731",
+      "requestId": "gen_01M8AYYAE55DNQCSQ46CR4935K",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "6ac82b3581d7d0c87046e717535d15b0293ee638aaaea7a05974683a96bd2389",
+      "inputBytes": 514,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "HTTP-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:38:45.875924+00:00",
+      "latencyMs": 3558,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 462,
+        "completion_tokens": 53,
+        "total_tokens": 515,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1545,
+      "responseSha256": "e9e81bf23da4b6d72b0033ab33c7fa581414683c2fd96cf9fa3b09ab27317868",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/deepseek-v4-pro-0813/tools": {
+      "mode": "tools",
+      "scope": "Independent area and edge formula review",
+      "model": "free/deepseek-v4-pro-0813",
+      "returnedModel": "free/deepseek-v4-pro-0813",
+      "requestId": "gen_01M8AYYDT3EBJH8RPD74Y7CJMW",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "d7f1bca33a884274e0d4259da19d98ba558e133ed7ab83eaca57ba58309c54ff",
+      "inputBytes": 512,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:38:49.483017+00:00",
+      "latencyMs": 3063,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 463,
+        "completion_tokens": 53,
+        "total_tokens": 516,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1548,
+      "responseSha256": "fc7bd5c0ccb986506e8298aae4d964d503e6f6a0486eb5a20bf3ab745d0b0f1c",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/deepseek-v4.1-flash/vision": {
+      "mode": "vision",
+      "scope": "Additional geometry counterexamples",
+      "model": "free/deepseek-v4.1-flash",
+      "returnedModel": "free/deepseek-v4.1-flash",
+      "requestId": "gen-1795664340-KZiCPY4xYVsWosKPniRV",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "60349e2b42bea4548b261391b66a7dcc43111e6ab6eb7cb73be6f94055d7ae3b",
+      "inputBytes": 3475,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:38:52.626754+00:00",
+      "latencyMs": 15785,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 728,
+        "completion_tokens": 9,
+        "total_tokens": 737,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2211,
+      "responseSha256": "29c47098c8ee9e61c4ee17617e93baaf0af3afeecef838a8cf5ed3c442e338b4",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/deepseek-v4.1-flash/tools": {
+      "mode": "tools",
+      "scope": "Additional geometry counterexamples",
+      "model": "free/deepseek-v4.1-flash",
+      "returnedModel": "free/deepseek-v4.1-flash",
+      "requestId": "gen_01M8AYYYXPJWXYAD06D624ENFG",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "5996ca5200cf3f9666d7a8676ff0f7936485af2b82d163fc5f1ad43676dcff90",
+      "inputBytes": 511,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "GEO-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:08.457865+00:00",
+      "latencyMs": 1366,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 461,
+        "completion_tokens": 54,
+        "total_tokens": 515,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1545,
+      "responseSha256": "f7ba040de1ef792f7a966245954acef17bc6e81266550c5f1bef25a36b141ee7",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/gemini-3.1-pro/vision": {
+      "mode": "vision",
+      "scope": "Independent multipage dimension review",
+      "model": "free/gemini-3.1-pro",
+      "returnedModel": "free/gemini-3.1-pro",
+      "requestId": "gen-1795664348-CBJPX2Gdg67vFQIR0joO",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "ed1df96918a67f39b64e4e6a7f6518f4175db32b772ec0c476e7b8c63a27dca3",
+      "inputBytes": 3470,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "DOC-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:39:10.460247+00:00",
+      "latencyMs": 1539,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 688,
+        "completion_tokens": 32,
+        "total_tokens": 720,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1440,
+      "responseSha256": "d92cfc42e3fd795ac107e55e1a6bf5b512dd93ae7f54acd133c1433753aaae25",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/gemini-3.1-pro/tools": {
+      "mode": "tools",
+      "scope": "Independent multipage dimension review",
+      "model": "free/gemini-3.1-pro",
+      "returnedModel": "free/gemini-3.1-pro",
+      "requestId": "gen_01M8AYZ2RQ490R30T0VWQ4WW9H",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "0707bb95b29f967e015dbc509faacd94385fba427e4a8d7f256c4edcbe365a2c",
+      "inputBytes": 506,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "DOC-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:39:12.461301+00:00",
+      "latencyMs": 1618,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 460,
+        "completion_tokens": 57,
+        "total_tokens": 517,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1034,
+      "responseSha256": "b5783498d40bfe2df0c0ceafed611e3f9dbd6ffcee9bff64fe970ba7bfc8fe5d",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/gemini-3.8-flash/vision": {
+      "mode": "vision",
+      "scope": "Rotation and page triage challenge",
+      "model": "free/gemini-3.8-flash",
+      "returnedModel": "free/gemini-3.8-flash",
+      "requestId": "gen-1795664353-Kn7l2mgJUyLkXlls6WU4",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "699e68a9b0af2f686baf561b208b25bd470d22b24eef63747d42f9c69d10736e",
+      "inputBytes": 3472,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "DOC-2",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:14.462407+00:00",
+      "latencyMs": 3375,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 720,
+        "completion_tokens": 9,
+        "total_tokens": 729,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2187,
+      "responseSha256": "9c792850d53f8bc51ffe030981635ab12c7f44245f4cc66bacacb72d6a3741f8",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/gemini-3.8-flash/tools": {
+      "mode": "tools",
+      "scope": "Rotation and page triage challenge",
+      "model": "free/gemini-3.8-flash",
+      "returnedModel": "free/gemini-3.8-flash",
+      "requestId": "gen_01M8AYZ8ANS9D0VAH6GB5A8Y25",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "ba8047c21ca66357b0099b06e6a10cded092f5190879b8cc82c18df131410915",
+      "inputBytes": 508,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "DOC-2",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:17.870270+00:00",
+      "latencyMs": 1768,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 457,
+        "completion_tokens": 69,
+        "total_tokens": 526,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1578,
+      "responseSha256": "5b14faf77b6bb26c7ba77b9c1748127263d6c0ae5501d4bac7ddfd3bfaa67851",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/gemini-4-hydrogen/vision": {
+      "mode": "vision",
+      "scope": "Wrong-building selection challenge",
+      "model": "free/gemini-4-hydrogen",
+      "returnedModel": "free/gemini-4-hydrogen",
+      "requestId": "gen-1795664357-wrCJTNlamk6wozU4KRZr",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "d3a02b7a32e2c912a2f5dfd8713cdb282481390c459786937bf1b8493914a736",
+      "inputBytes": 3473,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "PIN-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 5247380,
+      "dispatchUtc": "2026-11-26T03:39:19.886105+00:00",
+      "latencyMs": 1458,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 691,
+        "completion_tokens": 38,
+        "total_tokens": 729,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 3645,
+      "responseSha256": "2ef44cd6abc6d86b66d3fb32ca16080910f9aeee0625be87a4e83e3422b91920",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/gemini-4-hydrogen/tools": {
+      "mode": "tools",
+      "scope": "Wrong-building selection challenge",
+      "model": "free/gemini-4-hydrogen",
+      "returnedModel": "free/gemini-4-hydrogen",
+      "requestId": "gen_01M8AYZCX1KXRTRX0G230BBTBQ",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "cfdb2d1d36330a5fceac608942c909eb989f2a9d4aa6bb92fe329f96d0d03b96",
+      "inputBytes": 509,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "PIN-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 5247380,
+      "dispatchUtc": "2026-11-26T03:39:21.901401+00:00",
+      "latencyMs": 2352,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 457,
+        "completion_tokens": 47,
+        "total_tokens": 504,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2520,
+      "responseSha256": "6f851ccf37e5351d768ab8b0f1b0b545f9bb2f67b1c96f9f01543fd626f7d66f",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/glm-5.3/tools": {
+      "mode": "tools",
+      "scope": "Cross-stage schema audit",
+      "model": "free/glm-5.3",
+      "returnedModel": "free/glm-5.3",
+      "requestId": "gen_01M8AYZF60NVH5NQKTZ9NH40W0",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "fcc22418444ca24b2aa87197338562bda351e8cd058e974f0d229e8aa6572dfa",
+      "inputBytes": 499,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "JSON-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 4197904,
+      "dispatchUtc": "2026-11-26T03:39:24.350574+00:00",
+      "latencyMs": 2366,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 468,
+        "completion_tokens": 42,
+        "total_tokens": 510,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2040,
+      "responseSha256": "0b63e6d5b47bd8dec8880df9a25b0af9f0e3d8377bd4710f78529f86b5e90778",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/glm-5.3-flash/vision": {
+      "mode": "vision",
+      "scope": "Pitch and unit normalization audit",
+      "model": "free/glm-5.3-flash",
+      "returnedModel": "free/glm-5.3-flash",
+      "requestId": "gen-1795664364-26FRmWlqySGqc12AeTBb",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "b3be0162c9ff78dd725c0919f75d665680d7c05cf5e1c3ae7a8f176dc1e8068f",
+      "inputBytes": 3469,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "UNIT-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:26.781274+00:00",
+      "latencyMs": 1932,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 699,
+        "completion_tokens": 26,
+        "total_tokens": 725,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2175,
+      "responseSha256": "ae58ce975cbc56585d03162e636ec05c2e54ea323bc6d83fdea114b15e689e80",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/glm-5.3-flash/tools": {
+      "mode": "tools",
+      "scope": "Pitch and unit normalization audit",
+      "model": "free/glm-5.3-flash",
+      "returnedModel": "free/glm-5.3-flash",
+      "requestId": "gen_01M8AYZM2QCVAMM796P6M6CK0D",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "2b051938eae4ea8114960a44195f95579cc5f3195dcd36a37359e7f40779386a",
+      "inputBytes": 505,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "UNIT-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:28.782496+00:00",
+      "latencyMs": 6196,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 467,
+        "completion_tokens": 42,
+        "total_tokens": 509,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1527,
+      "responseSha256": "29264054cb9f57ef090c6fc020c1b8a285074f373a67171e1c326c031efd5e5e",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/glm-5.3-flashx/vision": {
+      "mode": "vision",
+      "scope": "Malformed response parser tests",
+      "model": "free/glm-5.3-flashx",
+      "returnedModel": "free/glm-5.3-flashx",
+      "requestId": "gen-1795664374-t7KDQsIzMPg72yzrhEDC",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "66dd5897d7e858bf35da40e1b3ad5f4f74be5d493e05d13e5919f0bb9319d634",
+      "inputBytes": 3470,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "JSON-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:35.027458+00:00",
+      "latencyMs": 3087,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 700,
+        "completion_tokens": 49,
+        "total_tokens": 749,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2247,
+      "responseSha256": "1c97f153a300c356684d8c054bbb8e00390454dda24d6f0199d2dabec473216b",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/glm-5.3-flashx/tools": {
+      "mode": "tools",
+      "scope": "Malformed response parser tests",
+      "model": "free/glm-5.3-flashx",
+      "returnedModel": "free/glm-5.3-flashx",
+      "requestId": "gen_01M8AYZZ98JRYB072PYAGPQST2",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "02ab27077e3f5f85363f467027d04facbb1b6b4f6b668974513cbc423957b062",
+      "inputBytes": 506,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "JSON-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:38.206488+00:00",
+      "latencyMs": 5366,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 471,
+        "completion_tokens": 58,
+        "total_tokens": 529,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1587,
+      "responseSha256": "0af724476879942ebff441650db422a816ab127a1e29a6f6cd18882d6020307d",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/gpt-6-luna/vision": {
+      "mode": "vision",
+      "scope": "Independent summary/detail agreement",
+      "model": "free/gpt-6-luna",
+      "returnedModel": "free/gpt-6-luna",
+      "requestId": "gen-1795664381-8T76Yh0DoJwEBrdOmhBP",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "30afe6f276e2a12968a1eff89db4d886d63053dff58df0e7dfa6da5fd8b2caf0",
+      "inputBytes": 3466,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "PDF-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:43.642268+00:00",
+      "latencyMs": 1438,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 687,
+        "completion_tokens": 67,
+        "total_tokens": 754,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2262,
+      "responseSha256": "3d3ea1dbd29a818e11b6e6d06d2f6c74c80e263a1df8195d237abcd9bbffdb43",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/gpt-6-luna/tools": {
+      "mode": "tools",
+      "scope": "Independent summary/detail agreement",
+      "model": "free/gpt-6-luna",
+      "returnedModel": "free/gpt-6-luna",
+      "requestId": "gen_01M8AZ04S3CZN6QYYFQ6A5KPQ0",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "9b3e8d612fadd026f5ae687f61040a58b66ae56fba417cf5412ad25ed99e3cf8",
+      "inputBytes": 502,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "PDF-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:39:45.638536+00:00",
+      "latencyMs": 3048,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 463,
+        "completion_tokens": 39,
+        "total_tokens": 502,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1506,
+      "responseSha256": "da040c18a603289e17745aebafcf747e62a1dfc7db12729738cfde3203b951d1",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/hy4/vision": {
+      "mode": "vision",
+      "scope": "Ambiguous manual review",
+      "model": "free/hy4",
+      "returnedModel": "free/hy4",
+      "requestId": "gen-1795664386-BVPcYfoYc5S8dQIDWskG",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "ca002fd28b429f40fc04992dbc170ed78422624de42abc9ecd1b902bd46f8987",
+      "inputBytes": 3459,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "UX-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:39:48.731325+00:00",
+      "latencyMs": 1980,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 694,
+        "completion_tokens": 52,
+        "total_tokens": 746,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1492,
+      "responseSha256": "10dac50f421d7c9b0fa365e3a57dc63e4d1bb013859058aff28f613f6167093d",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/hy4/tools": {
+      "mode": "tools",
+      "scope": "Ambiguous manual review",
+      "model": "free/hy4",
+      "returnedModel": "free/hy4",
+      "requestId": "gen_01M8AZ090PGD3N1W6T2NBTB7YZ",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "340980aad1a2235282d5bb04ccd5dffee19783e2297d0b46bfc57f01bdae459c",
+      "inputBytes": 495,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "UX-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:39:50.817541+00:00",
+      "latencyMs": 2174,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 466,
+        "completion_tokens": 49,
+        "total_tokens": 515,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1030,
+      "responseSha256": "d271d5a71488881b42cf382c2af47018f9fbe7b739e62793baf5ffe2d37374c2",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/hy4-flash/vision": {
+      "mode": "vision",
+      "scope": "Actionable correction instructions",
+      "model": "free/hy4-flash",
+      "returnedModel": "free/hy4-flash",
+      "requestId": "gen-1795664390-kzKQxPxcy5y9ADadAf4b",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "21b16d3f624f9f10ad052205387b9b82a2e87442d31bc4f2e505436f272edae0",
+      "inputBytes": 3465,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "UX-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:39:53.109820+00:00",
+      "latencyMs": 1640,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 694,
+        "completion_tokens": 50,
+        "total_tokens": 744,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1488,
+      "responseSha256": "c0277ff72c57bd066ff9857183b3e4fa6df0b63e7d409f88f65ed1e738810f0d",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/hy4-flash/tools": {
+      "mode": "tools",
+      "scope": "Actionable correction instructions",
+      "model": "free/hy4-flash",
+      "returnedModel": "free/hy4-flash",
+      "requestId": "gen_01M8AZ0D0HN5E9CW6149ZR1TH1",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "27339bf6ca487f16e219a4f15d1097fe42f8d403c17042e5df4a9ce0a14a5cf9",
+      "inputBytes": 501,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "UX-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:39:55.109937+00:00",
+      "latencyMs": 1943,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 464,
+        "completion_tokens": 41,
+        "total_tokens": 505,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1010,
+      "responseSha256": "584edbf172f6185731332e6902f93852ff049d71b1b1ceff8824cdda6f53c213",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/kimi-k2.8/vision": {
+      "mode": "vision",
+      "scope": "Retained evidence across job history",
+      "model": "free/kimi-k2.8",
+      "returnedModel": "free/kimi-k2.8",
+      "requestId": "gen-1795664396-b2zNtRcj3b6Ui087Mlqo",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "ea547b667ceeb1fa91d7f0f7ee1b53dc255253406cd14f2d7d5d6c50d1e33cea",
+      "inputBytes": 3465,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "PROV-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:39:57.114115+00:00",
+      "latencyMs": 5538,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 730,
+        "completion_tokens": 9,
+        "total_tokens": 739,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1478,
+      "responseSha256": "40673194f5e847df76e6a56175f6b341a62a78ef00d638d544b33631ee3bc353",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/kimi-k2.8/tools": {
+      "mode": "tools",
+      "scope": "Retained evidence across job history",
+      "model": "free/kimi-k2.8",
+      "returnedModel": "free/kimi-k2.8",
+      "requestId": "gen_01M8AZ0MB8TQ56PH2V1BW277DB",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "0c64350a1fca029c122c9cf74c651765f96e2a7236a3fd934277a4154ad8950a",
+      "inputBytes": 501,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "PROV-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:40:02.681156+00:00",
+      "latencyMs": 1977,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 465,
+        "completion_tokens": 49,
+        "total_tokens": 514,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1028,
+      "responseSha256": "2d95c7c65b5892f7a0bb38aa6ea705ccc40b1c4e8df3f913701e41f5fa738554",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/kimi-k3/vision": {
+      "mode": "vision",
+      "scope": "Independent rollback validation",
+      "model": "free/kimi-k3",
+      "returnedModel": "free/kimi-k3",
+      "requestId": "gen-1795664402-OkbINyMsqbSLQoGKX1QH",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "dfb3f88280add8a6f7147382dccfb02c733e97c4b4ad59aefb6fe5e95e943cce",
+      "inputBytes": 3463,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "HOST-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:40:04.706843+00:00",
+      "latencyMs": 1629,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 698,
+        "completion_tokens": 51,
+        "total_tokens": 749,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2247,
+      "responseSha256": "989cbc7c5efd227f050ba693b98d337755610579ac3fe08d98208248b425fa1c",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/kimi-k3/tools": {
+      "mode": "tools",
+      "scope": "Independent rollback validation",
+      "model": "free/kimi-k3",
+      "returnedModel": "free/kimi-k3",
+      "requestId": "gen_01M8AZ0RAVDZ7QY3MQHB4SZJBB",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "caaeef8027eec9720af29acaaa4501d1caff2608a46c6ddb0d58c889fcf13356",
+      "inputBytes": 499,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "HOST-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:40:06.701829+00:00",
+      "latencyMs": 2205,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 468,
+        "completion_tokens": 52,
+        "total_tokens": 520,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1560,
+      "responseSha256": "683ad3db45ff4f6aaf6146ef1458ec50a54ab0acf4e3c4d3ace4f5d67ea5c8c0",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/mimo-v2.6-flash/vision": {
+      "mode": "vision",
+      "scope": "Upload and parser boundary inputs",
+      "model": "free/mimo-v2.6-flash",
+      "returnedModel": "free/mimo-v2.6-flash",
+      "requestId": "gen-1795664406-e0rdisQzyJOsxsGctxx6",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "530f92cb26afd1281240d5ffe73c9f5061638c8c3c17bbc44a83df62c20f4083",
+      "inputBytes": 3471,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "VAL-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:40:08.948425+00:00",
+      "latencyMs": 1825,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 694,
+        "completion_tokens": 75,
+        "total_tokens": 769,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1538,
+      "responseSha256": "1307c8fd8e14b06b5b877d6bcdaa1aa5061eae85a28af2b6c23c42a1addbac80",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/mimo-v2.6-flash/tools": {
+      "mode": "tools",
+      "scope": "Upload and parser boundary inputs",
+      "model": "free/mimo-v2.6-flash",
+      "returnedModel": "free/mimo-v2.6-flash",
+      "requestId": "gen_01M8AZ0WF5XNKWQNYSJVRWJ5H2",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "30e8196bbc21b99e23cd4acb1473fcd98119e96c80589a3d26b3f30e5a2abc45",
+      "inputBytes": 507,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "VAL-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:40:10.947748+00:00",
+      "latencyMs": 2142,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 462,
+        "completion_tokens": 41,
+        "total_tokens": 503,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1006,
+      "responseSha256": "acb77a64cc77b38dec92f85c8dd2fb1f0e794e02971042f4c77e107c407bec4c",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/mimo-v2.6-pro/vision": {
+      "mode": "vision",
+      "scope": "Save/reopen revision consistency",
+      "model": "free/mimo-v2.6-pro",
+      "returnedModel": "free/mimo-v2.6-pro",
+      "requestId": "gen-1795664411-PTJsoMTw2VbOmtB9SMvh",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "35b3cb6fc359140a0e894a4ef75be4c4407dc3e30e93077dec96d051a40e0eb8",
+      "inputBytes": 3469,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "REV-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:40:13.137400+00:00",
+      "latencyMs": 1942,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 696,
+        "completion_tokens": 24,
+        "total_tokens": 720,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1440,
+      "responseSha256": "33c19fc56e0bc0f88906329bf477a04b63d37406dab930b695c79577899f3faf",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/mimo-v2.6-pro/tools": {
+      "mode": "tools",
+      "scope": "Save/reopen revision consistency",
+      "model": "free/mimo-v2.6-pro",
+      "returnedModel": "free/mimo-v2.6-pro",
+      "requestId": "gen_01M8AZ11DN7H24ETKX6GHHM6RQ",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "5be308a19d217a4bbf3abf43cddc7a2edcba0e06e917e88bd6a7c518744cd47c",
+      "inputBytes": 505,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "REV-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:40:15.135189+00:00",
+      "latencyMs": 3410,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 462,
+        "completion_tokens": 57,
+        "total_tokens": 519,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1038,
+      "responseSha256": "117adb203f2718906033f063a28090b4175a67e2ac0e541039d115dfc7eca7e1",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/minimax-m3/vision": {
+      "mode": "vision",
+      "scope": "Keyboard correction and undo",
+      "model": "free/minimax-m3",
+      "returnedModel": "free/minimax-m3",
+      "requestId": "gen-1795664418-DGTDxtFJFlwDCnCyg00a",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "58f7374a0c3a5f98e631a27036efa6e463c42acf414e7930209a60e4b8bd09f9",
+      "inputBytes": 3466,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "UI-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:40:18.792141+00:00",
+      "latencyMs": 3949,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 694,
+        "completion_tokens": 37,
+        "total_tokens": 731,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1462,
+      "responseSha256": "c4ac10450e82b2825c6c9896f8e86983023bf6aa4a9e310d53a38878a7c6db9a",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/minimax-m3/tools": {
+      "mode": "tools",
+      "scope": "Keyboard correction and undo",
+      "model": "free/minimax-m3",
+      "returnedModel": "free/minimax-m3",
+      "requestId": "gen_01M8AZ1AA7Y1SHW2HGZ7Y6N20B",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "05497acd20fe3704ca45cec028de75574ba06f65940543b4fb58e3ce33b37d41",
+      "inputBytes": 502,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "UI-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 2098952,
+      "dispatchUtc": "2026-11-26T03:40:23.658324+00:00",
+      "latencyMs": 3700,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 462,
+        "completion_tokens": 44,
+        "total_tokens": 506,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1012,
+      "responseSha256": "c7e38c5bea231c4726c0958685508d2b0c73acd0f38251955789851f4e04b830",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/minimax-m3.1-flash/vision": {
+      "mode": "vision",
+      "scope": "Interrupted dispatch recovery",
+      "model": "free/minimax-m3.1-flash",
+      "returnedModel": "free/minimax-m3.1-flash",
+      "requestId": "gen-1795664437-MICSTZWgVWuHwKM1X3vo",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "a77efbbe5c4cf53ed4c9183613bfc9ddf3ac7861c4e2ee9169bc1cea19771979",
+      "inputBytes": 3474,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "JOB-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:40:27.723770+00:00",
+      "latencyMs": 13970,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 696,
+        "completion_tokens": 29,
+        "total_tokens": 725,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2175,
+      "responseSha256": "5cdc6251b44e6ec0631c2bf224d50c672b9afa4fb1e8cdc9ff18f30629746cd7",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/minimax-m3.1-flash/tools": {
+      "mode": "tools",
+      "scope": "Interrupted dispatch recovery",
+      "model": "free/minimax-m3.1-flash",
+      "returnedModel": "free/minimax-m3.1-flash",
+      "requestId": "gen_01M8AZ1T9YQTYC3HBQQJ2PJPH6",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "d7810989172d7edb6b74055e73c5b96ed1ded4e7894e52f7569d2d326cb49610",
+      "inputBytes": 510,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "JOB-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:40:41.733316+00:00",
+      "latencyMs": 1609,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 465,
+        "completion_tokens": 44,
+        "total_tokens": 509,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1527,
+      "responseSha256": "648d0bbf70873ad060de4cc2d17b7c462256894c10d6485de5192c3eeda323dc",
+      "proposal": {
+        "matched": true
+      }
+    },
+    "free/muse-spark-1.3/vision": {
+      "mode": "vision",
+      "scope": "Independent plan label legibility",
+      "model": "free/muse-spark-1.3",
+      "returnedModel": "free/muse-spark-1.3",
+      "requestId": "gen-1795664442-rkM3RnTOiloZWzqDygSV",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "1486720d5789140ab069d0e45fa4e9ff1195b8cf5e657c1822848ea21c6c846a",
+      "inputBytes": 3470,
+      "sourceRefs": [
+        "253245bac1cfb7ab89f1397a3f311a1aff7a6c5c57e58095ccfec6f32140b101"
+      ],
+      "case": "LAY-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:40:43.736501+00:00",
+      "latencyMs": 2979,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 688,
+        "completion_tokens": 41,
+        "total_tokens": 729,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 2187,
+      "responseSha256": "51403e6d6a5a37984f7d37e29721a459910efedd7e98da3bbfb6efc71566c1a7",
+      "proposal": {
+        "quadrant": "top-right"
+      }
+    },
+    "free/muse-spark-1.3/tools": {
+      "mode": "tools",
+      "scope": "Independent plan label legibility",
+      "model": "free/muse-spark-1.3",
+      "returnedModel": "free/muse-spark-1.3",
+      "requestId": "gen_01M8AZ1ZGZNEXBCK0ZCXTRQWVZ",
+      "sourceRevision": "4806a129bea3fe6aa18d20a613f2cad494485082",
+      "requestSha256": "e87acc790e477353484a27f05944fcfaeba2b7706878185e631c240f1f670c2d",
+      "inputBytes": 506,
+      "sourceRefs": [
+        "TOOL-1"
+      ],
+      "case": "LAY-1",
+      "route": "chat/completions",
+      "timeoutSeconds": 45,
+      "maxOutputTokens": 900,
+      "reserveMicroUsd": 0,
+      "reserveFreeUnits": 3148428,
+      "dispatchUtc": "2026-11-26T03:40:46.873470+00:00",
+      "latencyMs": 2784,
+      "http": 200,
+      "status": "oracle-pass",
+      "usage": {
+        "prompt_tokens": 460,
+        "completion_tokens": 51,
+        "total_tokens": 511,
+        "cost_tokens": 0
+      },
+      "costMicroUsd": 0,
+      "costField": "usage.cost_tokens",
+      "estimatedFreeUnits": 1533,
+      "responseSha256": "1e66c4a8b8e2f98360761fb21700669d2f538f7edecc0abac951511f978d5822",
+      "proposal": {
+        "matched": true
+      }
+    }
+  }
+}

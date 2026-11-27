@@ -32,12 +32,13 @@ try {
   for (const [name, flags] of [['calibrated', { boundaryReview: true, obstruction: true }], ['unknown', { metadata: { calibration: null } }], ['perspective', { perspective: true }], ['missing-outline', { missingOutline: true }], ['unresolved-facet', { unresolvedFacet: true }], ['source-perspective', { metadata: { sourceRestrictions: { perspective: true } } }]]) {
     const p = fixture(flags); p.sourceImage = source.image; p.imageMetadata.imageFingerprint = { algorithm: 'SHA-256', sha256: source.sha256 };
     p.measurementSnapshot.imageMetadata = structuredClone(p.imageMetadata); p.latestResult = analyzeRoofModel(p.model, p.imageMetadata, { revision: p.revision });
-    const result = await page.evaluate(async p => { const blob = await buildAIReviewPDF(p); return { bytes: Array.from(new Uint8Array(await blob.arrayBuffer())), layout: blob.reviewReport }; }, p);
+    const result = await page.evaluate(async p => { const blob = await buildAIReviewPDF(p, {internalReview: true}); return { bytes: Array.from(new Uint8Array(await blob.arrayBuffer())), layout: blob.reviewReport }; }, p);
     fs.writeFileSync(path.join(out, name + '.pdf'), Buffer.from(result.bytes)); layouts[name] = result.layout;
-    const r = spawnSync('pdftotext', ['-layout', path.join(out, name + '.pdf'), '-'], { encoding: 'utf8' }); assert.equal(r.status, 0);
+    const r = spawnSync('pdftotext', ['-enc', 'UTF-8', '-layout', path.join(out, name + '.pdf'), '-'], { encoding: 'utf8' }); assert.equal(r.status, 0);
     fs.writeFileSync(path.join(out, name + '.txt'), r.stdout);
     assert.match(r.stdout, /SOURCE IMAGE REVIEW/); assert.match(r.stdout, /REVIEW REQUIRED/); assert.doesNotMatch(r.stdout, /\bCOMPLETE\b/);
     assert.match(r.stdout, /SOURCE-REPORTED \/ UNVERIFIED/); assert.match(r.stdout, /40 ft printed on source; not independently verified/);
+    assert.match(r.stdout, /Source page 1, image region from \(120, 90\) to \(186, 108\) px/);
     assert.match(r.stdout, /No geographic north or map scale is established/); assert.match(r.stdout, /No order quantities/);
     if (name === 'calibrated') {
       assert.match(r.stdout, /Confirmed visible synthetic upper boundary; no independent certification/);
@@ -56,12 +57,23 @@ try {
     }
     assert.equal(result.layout.clippedText, 0); assert.equal(result.layout.unplacedKeys.length, 0);
   }
+  const customer = fixture({boundaryReview:true}); customer.sourceImage = source.image;
+  customer.imageMetadata.imageFingerprint = {algorithm:'SHA-256',sha256:source.sha256};
+  customer.measurementSnapshot.imageMetadata = structuredClone(customer.imageMetadata);
+  customer.latestResult = analyzeRoofModel(customer.model,customer.imageMetadata,{revision:customer.revision});
+  const customerResult = await page.evaluate(async p => { const blob = await buildAIReviewPDF(p); return {bytes:Array.from(new Uint8Array(await blob.arrayBuffer())),layout:blob.reviewReport}; },customer);
+  assert.equal(customerResult.layout.internalReview,false); assert.equal(customerResult.layout.plan,null);
+  fs.writeFileSync(path.join(out,'customer-no-segmentation.pdf'),Buffer.from(customerResult.bytes));
+  const customerText = spawnSync('pdftotext',['-layout',path.join(out,'customer-no-segmentation.pdf'),'-'],{encoding:'utf8'});
+  assert.equal(customerText.status,0); assert.match(customerText.stdout,/960\.00 ft²/); assert.match(customerText.stdout,/1,073\.31 ft²/);
+  assert.match(customerText.stdout,/Roof measurement summary/);
+  assert.doesNotMatch(customerText.stdout,/uniformly fitted vector plan/);
   const stale = fixture(); stale.sourceImage = source.image; stale.imageMetadata.imageFingerprint = { algorithm: 'SHA-256', sha256: source.sha256 };
   stale.measurementSnapshot.imageMetadata = structuredClone(stale.imageMetadata); stale.latestResult = analyzeRoofModel(stale.model, stale.imageMetadata, { revision: stale.revision });
-  const mutation = await page.evaluate(async input => { const build = buildAIReviewPDF(input); input.imageMetadata.source = 'Changed during generation'; try { await build; return 'accepted'; } catch (e) { return e.message; } }, stale);
+  const mutation = await page.evaluate(async input => { const build = buildAIReviewPDF(input, {internalReview:true}); input.imageMetadata.source = 'Changed during generation'; try { await build; return 'accepted'; } catch (e) { return e.message; } }, stale);
   assert.match(mutation, /differs|changed/);
   const wrongImage = structuredClone(stale); wrongImage.imageMetadata.imageFingerprint.sha256 = '0'.repeat(64); wrongImage.measurementSnapshot.imageMetadata = structuredClone(wrongImage.imageMetadata);
-  assert.match(await page.evaluate(async input => { try { await buildAIReviewPDF(input); return 'accepted'; } catch (e) { return e.message; } }, wrongImage), /preview differs/);
+  assert.match(await page.evaluate(async input => { try { await buildAIReviewPDF(input, {internalReview:true}); return 'accepted'; } catch (e) { return e.message; } }, wrongImage), /preview differs/);
   assert.equal(downloads, 0, 'The builder has no automatic download side effects.');
   assert.deepEqual(errors, []);
   fs.writeFileSync(path.join(out, 'layout.json'), JSON.stringify(layouts, null, 2));
@@ -78,6 +90,9 @@ for draw in p.get_drawings()[lines[-1]+1:]:
 sources=[im for im in p.get_images() if im[2:4]==(640,480)]
 assert len(sources)==1
 r=p.get_image_rects(sources[0][0])[0];assert abs(r.width/r.height-640/480)<1e-5,'Source preview aspect must be preserved'
+customer=fitz.open(root/'customer-no-segmentation.pdf')
+assert not any(im[2:4]==(640,480) for pg in customer for im in pg.get_images()),'Customer PDF leaked source imagery'
+assert not any(item[0]=='l' and abs(item[1].y-item[2].y)>.01 for pg in customer for draw in pg.get_drawings() for item in draw['items']),'Customer PDF leaked roof geometry'
 for file in root.glob('*.pdf'):
  pdf=fitz.open(file)
  for i,page in enumerate(pdf):

@@ -15,11 +15,13 @@ function systemPrompt(role) {
 }
 export async function runRoofAgents(input, options={}) {
  validateInput(input);
- const started=Date.now(),signal=options.signal,fetcher=options.fetchImpl||fetch,key=options.apiKey||process.env.APINEX_API_KEY;
+ const deadline=AbortSignal.timeout(number(options.jobTimeoutMs,300000,100,780000));
+ const signal=options.signal?AbortSignal.any([options.signal,deadline]):deadline;
+ const started=Date.now(),fetcher=options.fetchImpl||fetch,key=options.apiKey||process.env.APINEX_API_KEY;
  if(!key)stop('MISSING_API_KEY','The server APINEX_API_KEY is not configured');
  const budget=input.budget||{},maxRequests=budget.maxRequests??8,maxTokens=budget.maxTokens??3200000,maxUsd=budget.maxUsd??budget.maxCostUsd??1.6,maxOutput=budget.maxOutputTokens??2400;
  const pricing={...VERIFIED_PRICING,...options.pricing},models={...VERIFIED_MODELS,...input.models};
- const ledger={requests:0,completed:0,promptTokens:0,completionTokens:0,billedUsd:0,billedCostTokens:0,usageMissing:0,reportedUsageRequests:0,unknownBillingRequests:0,exactCostRequests:0,rateEstimatedCostRequests:0,reservedTokens:0,reservedUsd:0,pricingSources:[],costStatus:'provider-reported when available; failed or missing usage retains conservative reservation'};
+ const ledger={requests:0,completed:0,promptTokens:0,completionTokens:0,billedUsd:0,rateEstimatedUsd:0,billedCostTokens:0,usageMissing:0,reportedUsageRequests:0,unknownBillingRequests:0,exactCostRequests:0,rateEstimatedCostRequests:0,reservedTokens:0,reservedUsd:0,pricingSources:[],costStatus:'Only explicit provider debit counts as billed; missing debit retains the dollar reservation.'};
  const failures=[],events=[],raw={},originalOutputs={},originalOutputHistory={},results={};
  const current=()=>{aborted(signal);if(options.isCurrent&&!options.isCurrent(input.revision))stop('STALE_REVISION','The roof changed while agents were processing');};
  const emit=(role,state,detail={})=>{const e={role,state,...detail,elapsedMs:Date.now()-started};events.push(e);options.onProgress?.(e);};
@@ -74,13 +76,20 @@ export async function runRoofAgents(input, options={}) {
    const response=await readBoundedJSON(r);
    current();
    const usage=response.usage;const prompt=usage?.prompt_tokens,completion=usage?.completion_tokens;
-   if(Number.isFinite(prompt)&&prompt>=0&&Number.isFinite(completion)&&completion>=0){ledger.usageMissing--;ledger.unknownBillingRequests--;ledger.reportedUsageRequests++;ledger.promptTokens+=prompt;ledger.completionTokens+=completion;const actual=prompt+completion;ledger.reservedTokens+=actual-tokenReserve;
-    const costTokens=usage.cost_tokens??response.cost_tokens;const usd=Number.isFinite(costTokens)&&costTokens>=0?costTokens/1e6:(prompt*price.inputPerMillion+completion*price.outputPerMillion)/1e6;
-    ledger.reservedUsd+=usd-usdReserve;ledger.billedUsd+=usd;if(Number.isFinite(costTokens)&&costTokens>=0){ledger.billedCostTokens+=costTokens;ledger.exactCostRequests++;}else ledger.rateEstimatedCostRequests++;
+   const costTokens=usage?.cost_tokens??response.cost_tokens;
+   const debitKnown=Number.isFinite(costTokens)&&costTokens>=0;
+   if (debitKnown) {
+     ledger.billedUsd+=costTokens/1e6;ledger.billedCostTokens+=costTokens;ledger.exactCostRequests++;
+     ledger.unknownBillingRequests--;ledger.reservedUsd+=costTokens/1e6-usdReserve;
+   }
+   if(Number.isFinite(prompt)&&prompt>=0&&Number.isFinite(completion)&&completion>=0){ledger.usageMissing--;ledger.reportedUsageRequests++;ledger.promptTokens+=prompt;ledger.completionTokens+=completion;const actual=prompt+completion;ledger.reservedTokens+=actual-tokenReserve;
+    if(!debitKnown){ledger.rateEstimatedCostRequests++;ledger.rateEstimatedUsd+=(prompt*price.inputPerMillion+completion*price.outputPerMillion)/1e6;}
    }
    if(ledger.reservedTokens>maxTokens||ledger.reservedUsd>maxUsd)stop('BUDGET_LIMIT','Provider usage exceeded the conservative reservation; further requests stopped');
    const choice=response.choices?.[0];
    const record={requestedModel:model,returnedModel:typeof response.model==='string'?response.model.slice(0,200):null,content:typeof choice?.message?.content==='string'?choice.message.content.slice(0,250000):null,truncated:typeof choice?.message?.content==='string'&&choice.message.content.length>250000,originalLength:typeof choice?.message?.content==='string'?choice.message.content.length:null,finishReason:choice?.finish_reason||null,repairAttempt:repair,usage:usage?structuredClone(usage):null};
+   const responseId=response.id??r.headers?.get('x-request-id');
+   record.requestId=typeof responseId==='string'?responseId.slice(0,200):null;
    originalOutputs[role]=record;(originalOutputHistory[role]??=[]).push(record);
    try {
     if(!choice||choice.finish_reason==='length')stop('INVALID_AGENT_OUTPUT','The model response was missing or truncated');

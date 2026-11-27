@@ -72,9 +72,10 @@ const empty = new Uint8Array(house.mask.length);
 // report said COMPLETE. Now the distance from the address point to the measured building is checked.
 {
   const P = property(house); const far = { ...P.loc, lng: P.loc.lng + 25 / KX };
-  const r = await runApp({ ...P, loc: far }, ROOT, { quiet: true, hook: altHook(P) }); const tr = r.ctx.state.trace;
-  const st = RM.reportStatus({ facets: r.facets.length, reconcileOk: true, imageryQuality: 'HIGH', addressCheck: tr.addressCheck });
-  out(tr.addressCheck && tr.addressCheck.distM > 15 && st.status === 'REVIEW REQUIRED' && st.reasons.some((q) => q.code === 'selection'), 'D5 address point 25 m from the measured building: REVIEW REQUIRED (building selection)', JSON.stringify(tr.addressCheck));
+  let rejected = false;
+  try { await runApp({ ...P, loc: far }, ROOT, { quiet: true, hook: altHook(P) }); }
+  catch (e) { rejected = /does not support the selected roof pin/.test(e.message); }
+  out(rejected, 'D5 address point 25 m from roof stops before publishing neighbouring geometry');
   const r2 = await runApp(P, ROOT, { quiet: true, hook: altHook(P) }); const ac = r2.ctx.state.trace.addressCheck;
   out(ac && ac.distM === 0 && !RM.reportStatus({ facets: 3, reconcileOk: true, addressCheck: ac }).reasons.length, 'D5 address point on the roof: no selection reason');
 }
@@ -156,6 +157,8 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
   const byS = {}; for (const f of r.facets) { const k = f.structure || 1; byS[k] = (byS[k] || 0) + sloped(f); }
   const keys = Object.keys(byS).map(Number).sort(); const tHouse = 180 * Math.sqrt(1.25), tShed = 35 * Math.sqrt(1 + 0.16);
   out(keys.length === 2, 'D10 two structures traced', `structures ${JSON.stringify(byS)}`);
+  out([...r.facets,...r.edges].every(shape => !!shape.omit === (shape.structure > 1)),
+    'D10 detached candidates stay outside the report until a reviewer includes their structure');
   out(keys.length === 2 && Math.abs(byS[keys[0]] - tHouse) / tHouse < 0.06 && Math.abs(byS[keys[1]] - tShed) / tShed < 0.12, 'D10 each structure carries its own area (house 201.2, shed 37.7 m2)', `got ${keys.map((k) => byS[k].toFixed(1)).join(' / ')}`);
 }
 // D11 (brief: "shifted 3D overlay"): a second height dataset offset 1.0 m east of the first fails the configuration check and is not

@@ -1,0 +1,435 @@
+{
+  "protocol": "five-percent-protocol.json",
+  "baseline": "1378d4d1d6cb931bb474fd30ac26e8fe22e55cb7",
+  "selectedCandidate": "5ff9b41e9b72109a986be2ffae4a332740ed9cc0",
+  "developmentBaseline": {
+    "areaErrorPct": {
+      "median": 0.8479,
+      "p95": 4.65507,
+      "worst": 7.1493
+    },
+    "areaOutside5": {
+      "failed": 4,
+      "eligible": 71,
+      "percent": 5.6338,
+      "upper95Pct": 12.4299
+    },
+    "wholeRoofWrong": {
+      "failed": 58,
+      "eligible": 71,
+      "percent": 81.6901,
+      "upper95Pct": 88.8157
+    },
+    "componentFailures": {
+      "engine": 0,
+      "area": 4,
+      "facets": 46,
+      "spatial": 3,
+      "edges": 58
+    },
+    "everyAreaWithin5": false,
+    "areaFailureRateAtMost5": false,
+    "wholeRoofFailureRateAtMost5": false,
+    "outsideAreaToleranceSeeds": [
+      12,
+      56,
+      79,
+      120
+    ]
+  },
+  "developmentCandidates": {
+    "islands": {
+      "areaErrorPct": {
+        "median": 0.8479,
+        "p95": 4.45331,
+        "worst": 7.1493
+      },
+      "areaOutside5": {
+        "failed": 4,
+        "eligible": 71,
+        "percent": 5.6338,
+        "upper95Pct": 12.4299
+      },
+      "wholeRoofWrong": {
+        "failed": 58,
+        "eligible": 71,
+        "percent": 81.6901,
+        "upper95Pct": 88.8157
+      },
+      "componentFailures": {
+        "engine": 0,
+        "area": 4,
+        "facets": 49,
+        "spatial": 3,
+        "edges": 58
+      },
+      "everyAreaWithin5": false,
+      "areaFailureRateAtMost5": false,
+      "wholeRoofFailureRateAtMost5": false,
+      "outsideAreaToleranceSeeds": [
+        12,
+        56,
+        79,
+        120
+      ]
+    },
+    "robust": {
+      "areaErrorPct": {
+        "median": 0.41936,
+        "p95": 4.16244,
+        "worst": 9.13204
+      },
+      "areaOutside5": {
+        "failed": 2,
+        "eligible": 71,
+        "percent": 2.8169,
+        "upper95Pct": 8.6028
+      },
+      "wholeRoofWrong": {
+        "failed": 57,
+        "eligible": 71,
+        "percent": 80.2817,
+        "upper95Pct": 87.6668
+      },
+      "componentFailures": {
+        "engine": 0,
+        "area": 2,
+        "facets": 48,
+        "spatial": 2,
+        "edges": 57
+      },
+      "everyAreaWithin5": false,
+      "areaFailureRateAtMost5": true,
+      "wholeRoofFailureRateAtMost5": false,
+      "outsideAreaToleranceSeeds": [
+        12,
+        56
+      ]
+    },
+    "fit": {
+      "areaErrorPct": {
+        "median": 0.43843,
+        "p95": 4.59471,
+        "worst": 9.13204
+      },
+      "areaOutside5": {
+        "failed": 3,
+        "eligible": 71,
+        "percent": 4.2254,
+        "upper95Pct": 10.5598
+      },
+      "wholeRoofWrong": {
+        "failed": 57,
+        "eligible": 71,
+        "percent": 80.2817,
+        "upper95Pct": 87.6668
+      },
+      "componentFailures": {
+        "engine": 0,
+        "area": 3,
+        "facets": 46,
+        "spatial": 2,
+        "edges": 57
+      },
+      "everyAreaWithin5": false,
+      "areaFailureRateAtMost5": true,
+      "wholeRoofFailureRateAtMost5": false,
+      "outsideAreaToleranceSeeds": [
+        12,
+        56,
+        103
+      ]
+    },
+    "faces": {
+      "areaErrorPct": {
+        "median": 0.41936,
+        "p95": 4.59471,
+        "worst": 9.13204
+      },
+      "areaOutside5": {
+        "failed": 3,
+        "eligible": 71,
+        "percent": 4.2254,
+        "upper95Pct": 10.5598
+      },
+      "wholeRoofWrong": {
+        "failed": 57,
+        "eligible": 71,
+        "percent": 80.2817,
+        "upper95Pct": 87.6668
+      },
+      "componentFailures": {
+        "engine": 0,
+        "area": 3,
+        "facets": 46,
+        "spatial": 2,
+        "edges": 57
+      },
+      "everyAreaWithin5": false,
+      "areaFailureRateAtMost5": true,
+      "wholeRoofFailureRateAtMost5": false,
+      "outsideAreaToleranceSeeds": [
+        12,
+        56,
+        103
+      ]
+    },
+    "visible": {
+      "areaErrorPct": {
+        "median": 0.47329,
+        "p95": 4.65507,
+        "worst": 7.1493
+      },
+      "areaOutside5": {
+        "failed": 4,
+        "eligible": 71,
+        "percent": 5.6338,
+        "upper95Pct": 12.4299
+      },
+      "wholeRoofWrong": {
+        "failed": 57,
+        "eligible": 71,
+        "percent": 80.2817,
+        "upper95Pct": 87.6668
+      },
+      "componentFailures": {
+        "engine": 0,
+        "area": 4,
+        "facets": 45,
+        "spatial": 3,
+        "edges": 57
+      },
+      "everyAreaWithin5": false,
+      "areaFailureRateAtMost5": false,
+      "wholeRoofFailureRateAtMost5": false,
+      "outsideAreaToleranceSeeds": [
+        12,
+        56,
+        79,
+        120
+      ]
+    }
+  },
+  "untouchedMixedHoldout": {
+    "attempted": 400,
+    "excludedBeforeTrace": {
+      "degenerate": 160,
+      "gt-clip": 1
+    },
+    "summary": {
+      "baseline": {
+        "areaErrorPct": {
+          "median": 0.94324,
+          "p95": 3.71921,
+          "worst": 11.06101
+        },
+        "areaOutside5": {
+          "failed": 4,
+          "eligible": 239,
+          "percent": 1.6736,
+          "upper95Pct": 3.7888
+        },
+        "wholeRoofWrong": {
+          "failed": 205,
+          "eligible": 239,
+          "percent": 85.7741,
+          "upper95Pct": 89.3514
+        },
+        "componentFailures": {
+          "engine": 0,
+          "area": 4,
+          "facets": 177,
+          "spatial": 4,
+          "edges": 203
+        },
+        "everyAreaWithin5": false,
+        "areaFailureRateAtMost5": true,
+        "wholeRoofFailureRateAtMost5": false,
+        "outsideAreaToleranceSeeds": [
+          26001377,
+          26001430,
+          26001461,
+          26001493
+        ]
+      },
+      "candidate": {
+        "areaErrorPct": {
+          "median": 0.51034,
+          "p95": 3.13408,
+          "worst": 11.06101
+        },
+        "areaOutside5": {
+          "failed": 3,
+          "eligible": 239,
+          "percent": 1.2552,
+          "upper95Pct": 3.2121
+        },
+        "wholeRoofWrong": {
+          "failed": 205,
+          "eligible": 239,
+          "percent": 85.7741,
+          "upper95Pct": 89.3514
+        },
+        "componentFailures": {
+          "engine": 0,
+          "area": 3,
+          "facets": 178,
+          "spatial": 4,
+          "edges": 201
+        },
+        "everyAreaWithin5": false,
+        "areaFailureRateAtMost5": true,
+        "wholeRoofFailureRateAtMost5": false,
+        "outsideAreaToleranceSeeds": [
+          26001377,
+          26001430,
+          26001461
+        ]
+      }
+    },
+    "candidateByImagery": {
+      "canopy": {
+        "areaErrorPct": {
+          "median": 1.34444,
+          "p95": 3.98376,
+          "worst": 11.06101
+        },
+        "areaOutside5": {
+          "failed": 2,
+          "eligible": 78,
+          "percent": 2.5641,
+          "upper95Pct": 7.8521
+        },
+        "wholeRoofWrong": {
+          "failed": 73,
+          "eligible": 78,
+          "percent": 93.5897,
+          "upper95Pct": 97.4404
+        },
+        "componentFailures": {
+          "engine": 0,
+          "area": 2,
+          "facets": 61,
+          "spatial": 4,
+          "edges": 72
+        },
+        "everyAreaWithin5": false,
+        "areaFailureRateAtMost5": true,
+        "wholeRoofFailureRateAtMost5": false,
+        "outsideAreaToleranceSeeds": [
+          26001377,
+          26001461
+        ]
+      },
+      "noCanopy": {
+        "areaErrorPct": {
+          "median": 0.35741,
+          "p95": 2.45518,
+          "worst": 5.85052
+        },
+        "areaOutside5": {
+          "failed": 1,
+          "eligible": 161,
+          "percent": 0.6211,
+          "upper95Pct": 2.9125
+        },
+        "wholeRoofWrong": {
+          "failed": 132,
+          "eligible": 161,
+          "percent": 81.9876,
+          "upper95Pct": 86.804
+        },
+        "componentFailures": {
+          "engine": 0,
+          "area": 1,
+          "facets": 117,
+          "spatial": 0,
+          "edges": 129
+        },
+        "everyAreaWithin5": false,
+        "areaFailureRateAtMost5": true,
+        "wholeRoofFailureRateAtMost5": false,
+        "outsideAreaToleranceSeeds": [
+          26001430
+        ]
+      }
+    }
+  },
+  "indistinguishableCanopy": {
+    "scope": "Analytic impossibility fixture. This pair is outside the random holdout.",
+    "smallestPossibleWorstRelativeErrorPct": 11.11111111111111,
+    "results": [
+      {
+        "lengthM": 16,
+        "inputHash": "da8e255c511235e9c0a1c7127b60d9399f225fbb4470842822b21c678e53dba4",
+        "truthSqFt": 1925.5068316384823,
+        "estimateSqFt": 1581.7693039351252,
+        "errorPct": 17.85179476153084,
+        "reviewStatus": "REVIEW REQUIRED",
+        "inferredFacets": 2,
+        "hiddenZones": 1
+      },
+      {
+        "lengthM": 20,
+        "inputHash": "da8e255c511235e9c0a1c7127b60d9399f225fbb4470842822b21c678e53dba4",
+        "truthSqFt": 2406.8835395481024,
+        "estimateSqFt": 1581.7693039351252,
+        "errorPct": 34.28143580922466,
+        "reviewStatus": "REVIEW REQUIRED",
+        "inferredFacets": 2,
+        "hiddenZones": 1
+      }
+    ]
+  },
+  "eightKnownAnalyticRoofs": {
+    "scenes": 8,
+    "traceErrors": 0,
+    "matchedEdges": 64,
+    "missedEdges": 0,
+    "extraEdges": 3,
+    "misclassifiedEdges": 0,
+    "missingLengths": 0,
+    "matchedFacets": 24,
+    "missedFacets": 0,
+    "extraFacets": 0,
+    "absoluteEdgeErrorFt": {
+      "n": 64,
+      "median": 0.047445,
+      "p95": 1.10407,
+      "worst": 1.555632
+    },
+    "absoluteAreaErrorPct": {
+      "n": 8,
+      "median": 0.327782,
+      "p95": 1.03687,
+      "worst": 1.03687
+    },
+    "perEdgeType": {
+      "eave": {
+        "n": 24,
+        "median": 0.036764,
+        "p95": 1.288129,
+        "worst": 1.555632
+      },
+      "ridge": {
+        "n": 8,
+        "median": 0.067391,
+        "p95": 0.130941,
+        "worst": 0.130941
+      },
+      "hip": {
+        "n": 16,
+        "median": 0.044554,
+        "p95": 0.618717,
+        "worst": 0.618717
+      },
+      "rake": {
+        "n": 16,
+        "median": 0.068979,
+        "p95": 1.064756,
+        "worst": 1.064756
+      }
+    }
+  },
+  "verifiedFieldRoofs": 0
+}
