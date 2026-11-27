@@ -791,7 +791,12 @@ function absorbBands(dsm, label, regions, w, h, lp, geo) {
         for (const [q, c] of bigShare) { if (c / shTot >= 0.8) island = true; else if (tot && c / tot >= 0.8 && angleBetween(P.a, P.b, regions[q].plane.a, regions[q].plane.b) < 10) island = true; }
       }
       // steeper than 45 degrees, small, and no other plane of the roof has that pitch: the blurred step between two roof levels
-      const stepBlur = p12 > 12.5 && !shareable && aM2 <= AT2.bandMaxM2;
+      // a neighbour vouches for the pitch only if it is not itself a small steep region: two blurred drop-offs side by side
+      // (an entry roof's front and side drop to the porch) must not keep each other as roof planes
+      // (only above AT2.bandSteep: a real small plane blurred to 13-17/12 still vouches for a neighbour at that pitch)
+      const steepSmall = (q) => slopeOf(q) * 12 > AT2.bandSteep && (area.get(q) || 0) * geo.pxM2 <= AT2.bandMaxM2 * 2;
+      const shareableRoof = nbs.some(([q]) => !steepSmall(q) && Math.abs(slopeOf(q) - s) * 12 <= AT2.bandPitchTol) || big.some(([q]) => q !== l && !steepSmall(q) && Math.abs(slopeOf(q) - s) * 12 <= AT2.bandPitchTol * 0.6);
+      const stepBlur = p12 > 12.5 && !shareableRoof && aM2 <= AT2.bandMaxM2;
       if ((steepWall && (thin || outsideShare > 0.3)) || (thin && (!shareable || flatOnPitched)) || island || stepBlur) bandIds.push(l);
     }
     if (!bandIds.length) break;
