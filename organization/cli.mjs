@@ -11,7 +11,7 @@ import {workOnce} from './worker.mjs';
 import {verifyRoster} from './provider.mjs';
 import {customerProjection, renderCustomerPDF} from './customer-report.mjs';
 import {AUTHORIZED_BUDGET,loadBudget} from './config.mjs';
-import {writeHealth,readHealth} from './health.mjs';
+import {writeHealth,readHealth,startProcessHeartbeat} from './health.mjs';
 
 const ACTORS = Object.freeze({extraction: 'extraction-local', reference: 'reference-curator', engineering: 'engineering-author',
   critique: 'critique-independent', verification: 'verification-isolated', ceo: 'ceo-advisory', operations: 'operations-trusted', reporting: 'reporting-publisher'});
@@ -76,13 +76,13 @@ export async function main(args = process.argv.slice(2)) {
     const controller = new AbortController();
     const interrupt = () => controller.abort();
     process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
-    let watcher, dirty = true, lastScan = 0;
+    let watcher, stopHeartbeat, dirty = true, lastScan = 0;
     try {
       try { watcher = watch(root, {recursive: true}, () => { dirty = true; }); watcher.on('error', () => { dirty = true; }); } catch { /* reconciliation remains authoritative */ }
       store.setControl('running');
+      stopHeartbeat=startProcessHeartbeat(directory,()=>store.getControl());
       print({started: true, root, state: directory, paidInferenceEnabled: false, reason: 'Source authorization and production role adapters are not installed', budget});
       while (!controller.signal.aborted && store.getControl() !== 'stopped') {
-        writeHealth(directory,{control:store.getControl()});
         if (store.getControl() === 'running') {
           if (dirty || Date.now() - lastScan >= 60000) {
             const summary = await inventory(store, discovery); lastScan = Date.now(); dirty = summary.unstable > 0;
@@ -93,7 +93,7 @@ export async function main(args = process.argv.slice(2)) {
         }
         try { await delay(1000, null, {signal: controller.signal}); } catch { break; }
       }
-    } finally { controller.abort(); watcher?.close();writeHealth(directory,{control:'stopped'}); process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt); }
+    } finally { controller.abort(); watcher?.close();stopHeartbeat?.();writeHealth(directory,{control:'stopped'}); process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt); }
   } finally { store.close(); }
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });

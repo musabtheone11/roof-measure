@@ -161,6 +161,8 @@ export async function requestOrganizationRole(task, {
     const cost = response?.usage?.cost_tokens ?? response?.cost_tokens;
     const reportedUsd = Number.isSafeInteger(cost) && cost >= 0 ? cost / 1e6 : null;
     const execution = {
+      promptVersion: 'organization-v1',
+      settings: {maxOutputTokens:task.constraints?.maxOutputTokens ?? 2000,responseFormat:'json_object',stream:false},
       requestedModel: model,
       returnedModel: typeof response?.model === 'string' ? response.model.slice(0, 200) : null,
       requestId: typeof response?.id === 'string' ? response.id.slice(0, 200) : null,
@@ -180,7 +182,14 @@ export async function requestOrganizationRole(task, {
     try { result = JSON.parse(choice.message.content); }
     catch { fail('INVALID_AGENT_OUTPUT', 'The model did not return one JSON object'); }
     result = validateResult(result, task);
-    return { result, execution };
+    const handoff = {taskId:task.id, hypothesis:result.payload.hypothesis || null,
+      inputHashes:[...task.inputHashes], sourceRevision:task.sourceRevision, candidateHash:task.candidateHash,
+      proposedChangeRef:result.payload.patchArtifact || null,
+      testsAndMeasuredResults:result.role==='verification' ? {evidenceIds:result.payload.evidenceIds, independentlyExecuted:false} : null,
+      knownWeaknesses:result.findings.filter(f=>f.severity!=='info').map(f=>({code:f.code,message:f.message,evidence:f.evidence})),
+      questions:result.decision==='needs-human' ? ['Which missing source evidence or independently executed checks resolve the recorded findings?'] : [],
+      verificationStatus:'Model proposal only; resolve evidence IDs through trusted harness before relying on results'};
+    return { result, execution, handoff };
   } catch (error) {
     if (dispatched && !usageNotified) {
       usageNotified = true;

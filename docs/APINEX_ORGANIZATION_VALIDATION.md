@@ -7,7 +7,7 @@ team ownership, transitions, continuous operation and staged implementation.
 An independent Codex reviewer required six revisions before implementation:
 role/bundle schemas, trusted evidence issuance, holdout isolation, honest encryption
 prerequisites, transaction/recovery protocol, and explicit capability disclosure.
-All were incorporated. Later independent review reproduced and corrected task
+All were incorporated. Later independent review also caught a heartbeat that could expire during long tasks; a separate5-second process timer and regression now protect active work. Later independent review reproduced and corrected task
 integration, release binding, CEO decision consistency, concurrency, literal-unit
 parsing and recommendation-history gaps. Codex implementers are not runtime agents.
 
@@ -31,7 +31,7 @@ parsing and recommendation-history gaps. Codex implementers are not runtime agen
   Private internal geometry remains available. Strict standalone customer JSON/PDF
   projection also rejects imagery/geometry keys and preserves unknown quantities.
 
-Latest combined Node tests: **70 passed**, including **50 organization tests**.
+Latest combined Node tests: **71 passed**, including **51 organization tests**.
 Organization coverage includes 10,000 deterministic property-identity normalization
 checks, which are not 10,000 roof reports or field accuracy tests.
 The actual CLI process test creates a report, observes extraction/reference handoff,
@@ -51,6 +51,18 @@ Two Letter pages; parent and report implementer visually inspected the first pag
 Independent PDF checks verify values, no source-image/roof-vector output, and no
 clipped text. Synthetic quantities 960.00 ft² projected and 1,073.31 ft² sloped are
 functional examples, not actual property measurements or accuracy certification.
+
+## Actual public-report intake
+
+The existing public Roofr sample and its text rendition were inventoried locally:
+2 relevant files (one PDF, one TXT), 0 unsupported/inaccessible, 0 byte-identical
+copies. The actual PDF parser retained7 pages and74 literal candidates; the text
+rendition retained76 candidates. Both completed extraction and blocked at reference
+review, with zero inference. Different encodings of the same report are not
+independent properties or independent truth; unique-property count remains unknown
+until curated grouping. Candidate counts are not extraction-accuracy scores.
+These files are public handoff examples, not the user's actual Downloads collection.
+State is stopped in `.devcache/org-public-report`; originals were not modified.
 
 ## Actual API NEX pilot, not simulated agents
 

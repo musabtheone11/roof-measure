@@ -133,3 +133,11 @@ test('safe pre-dispatch transient failures schedule bounded retry without new pa
   assert.equal(outcome.status,'pending');assert.equal(store.ledger().requests,0); assert.equal(store.getTask(task.id).attempts,1);
   assert.equal(await workOnce(store),null);
 });
+
+test('process health heartbeat remains fresh independently of a long active task',async t=>{
+  const {root}=fixture(t); const {startProcessHeartbeat,readHealth}=await import('./health.mjs');
+  let now=1000,tick,cleared=false;
+  const stop=startProcessHeartbeat(root,()=> 'running',{now:()=>now,schedule:fn=>{tick=fn;return 1;},unschedule:()=>{cleared=true;}});
+  for(let i=0;i<12;i++){now+=5000;tick();assert.equal(readHealth(root,{now}).processHealthy,true);}
+  stop();assert.equal(cleared,true);now+=16000;assert.equal(readHealth(root,{now}).processHealthy,false);
+});

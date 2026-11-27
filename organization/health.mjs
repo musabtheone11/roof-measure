@@ -12,3 +12,8 @@ export function readHealth(directory,{now=Date.now()}={}) {
       releaseReady:false,readinessReason:'Reference/isolated verification/deployment adapters and local installation still require verification'};
   } catch { return {processHealthy:false,releaseReady:false,readinessReason:'No fresh worker heartbeat'}; }
 }
+export function startProcessHeartbeat(directory,getControl,{now=Date.now,schedule=setInterval,unschedule=clearInterval}={}) {
+  const tick=()=>writeHealth(directory,{control:getControl(),updatedAt:now()});
+  tick();const timer=schedule(tick,5000);
+  return ()=>unschedule(timer);
+}
