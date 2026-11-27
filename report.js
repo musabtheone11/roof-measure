@@ -362,12 +362,34 @@ function pdfTextRuns(pg) {
   }
   return runs.map((r) => ({ text: r.text, bold: r.bold, x: (r.left - pr.left) * k, w: (r.right - r.left) * k, base: (r.top - pr.top + r.h * 0.79) * k, pt: r.fontPx * k * 72 }));
 }
-function pdfTextLayer(doc, runs, u) {
-  for (const r of runs) {
-    doc.setFont('helvetica', r.bold ? 'bold' : 'normal'); doc.setFontSize(r.pt);
-    const nat = doc.getTextWidth(r.text), hs = nat > 0 ? (r.w * u) / nat : 1;
-    doc.text(r.text, r.x * u, r.base * u, { renderingMode: 'invisible', horizontalScale: hs > 0.2 && hs < 5 ? hs : 1 });
+// The layer uses the built-in Helvetica, which only encodes the Windows-1252 characters; one character outside it makes
+// jsPDF write the whole line as two-byte codes that extract as junk. Accented letters lose the accent (Nguyễn -> Nguyen,
+// still findable), a few symbols get plain equivalents, and anything else is left out of the layer (the picture keeps it).
+const PDF_CP1252 = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+const PDF_PLAIN = { 'Đ': 'D', 'đ': 'd', 'Ł': 'L', 'ł': 'l', 'ı': 'i', 'Ħ': 'H', 'ħ': 'h', '→': '->', '←': '<-', '↔': '<->', '≈': '~', '≤': '<=', '≥': '>=', '≠': '!=', '−': '-', '‐': '-', '‑': '-', '′': "'", '″': '"', '✓': 'v', '✔': 'v', '✗': 'x', '✘': 'x' };
+function pdfLayerText(t) {
+  let o = '';
+  for (const ch of t) {
+    const c = ch.codePointAt(0);
+    if (c < 0x80 || (c >= 0xA0 && c <= 0xFF) || PDF_CP1252.has(ch)) { o += ch; continue; }
+    if (PDF_PLAIN[ch]) { o += PDF_PLAIN[ch]; continue; }
+    const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (base && [...base].every((b) => b.codePointAt(0) < 0x100)) o += base;
   }
+  return o.replace(/\s+/g, ' ').trim();
+}
+// Drawn last on its page and inside a saved graphics state: the width scaling (Tz) it sets stays inside the layer, so
+// text drawn afterwards (the vector sketch labels) keeps its normal width.
+function pdfTextLayer(doc, runs, u) {
+  doc.saveGraphicsState();
+  try {
+    for (const r of runs) {
+      const text = pdfLayerText(r.text); if (!text) continue;
+      doc.setFont('helvetica', r.bold ? 'bold' : 'normal'); doc.setFontSize(r.pt);
+      const nat = doc.getTextWidth(text), hs = nat > 0 ? (r.w * u) / nat : 1;
+      doc.text(text, r.x * u, r.base * u, { renderingMode: 'invisible', horizontalScale: hs > 0.2 && hs < 5 ? hs : 1 });
+    }
+  } finally { doc.restoreGraphicsState(); }
 }
 async function pagesToPDF(pages) {
   const pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait', compress: true });
@@ -384,7 +406,6 @@ async function pagesToPDF(pages) {
     if (i) pdf.addPage('letter', 'portrait');
     const photo = !!pg.querySelector('img.cover-img');
     pdf.addImage(c.toDataURL(photo ? 'image/jpeg' : 'image/png', 0.95), photo ? 'JPEG' : 'PNG', 0, 0, 8.5, 11, undefined, photo ? 'FAST' : 'MEDIUM');
-    pdfTextLayer(pdf, runs, 1);
     for (let j = 0; j < svgs.length; j++) {
       const b = boxes[j];
       try { await pdf.svg(svgForPDF(svgs[j]), { x: b.x, y: b.y, width: b.w, height: b.h }); }
@@ -394,6 +415,7 @@ async function pagesToPDF(pages) {
         pdf.addImage(dc.toDataURL('image/png'), 'PNG', b.x, b.y, b.w, b.h);
       }
     }
+    pdfTextLayer(pdf, runs, 1);
   }
   return pdf;
 }

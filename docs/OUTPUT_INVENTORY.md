@@ -29,6 +29,9 @@ Verified 2026-11-27 on main `53b6816` with a real traced job (36 facets), driven
 No page errors occurred during the run.
 
 ## Findings
-1. Fixed: estimate pages were raster images, so a recipient couldn't search or copy line items. Every page now has a text layer at the printed positions; the page images are unchanged.
+1. Fixed: estimate pages were raster images, so a recipient couldn't search or copy line items. Every page now has a text layer at the printed positions; the page images are unchanged. A review of the first version found two defects, both fixed:
+   - The layer's width setting carried over into the sketch labels drawn after it, which printed about 13% narrower and off-centre in the estimate-only PDF. The layer is now drawn last on each page and keeps its settings to itself.
+   - A name with a character outside the PDF's built-in font (for example Nguyễn) turned its whole line into junk text. Accented letters now keep their base letter in the layer, and the estimate name keeps it too: DUC-NGUYEN instead of C-NGUYN, GARCIA-JOSE instead of GARCA-JOS.
+   - The test now checks four more things. Every page must render pixel for pixel the same with and without the layer. The searchable words must sit on the printed ink. The Report + estimate PDF is checked too. A name the user typed must be kept.
 2. Fixed: the business name. The built-in default is now Diversity Contracting, and a browser that saved the old default is switched once; a name someone typed is kept. The cash-estimate builder (`cash/`, kept exactly as built) still says Diversity Roofing, pending an owner decision. The website domain diversity-roofing.com is unchanged.
 3. Open: commercial, leads and permits outputs still need a verification run.

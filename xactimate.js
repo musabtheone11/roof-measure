@@ -198,7 +198,8 @@ const dIn = (s) => { if (!s) return null; const m = /^(\d{4})-(\d{2})-(\d{2})/.e
 function xmEstName() {
   if (xm.estName) return xm.estName.toUpperCase();
   const nm = (xm.insured || state.jobName || '').trim();
-  if (nm) { const p = nm.replace(/[^A-Za-z\s-]/g, '').split(/\s+/).filter(Boolean); if (p.length >= 2) return (p[p.length - 1] + '-' + p[0]).toUpperCase(); return p[0].toUpperCase(); }
+  // accented letters keep their base letter (José García -> GARCIA-JOSE), other characters are dropped
+  if (nm) { const p = nm.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[Đđ]/g, 'D').replace(/[^A-Za-z\s-]/g, '').split(/\s+/).filter(Boolean); if (p.length >= 2) return (p[p.length - 1] + '-' + p[0]).toUpperCase(); return p[0].toUpperCase(); }
   return ((state.address || 'ESTIMATE').split(',')[0]).toUpperCase().replace(/\s+/g, '-');
 }
 function xmAddrLines() {
