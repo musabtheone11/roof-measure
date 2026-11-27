@@ -1,0 +1,207 @@
+{
+ "app": "roof-measure",
+ "version": 3,
+ "savedAt": "2026-11-25T03:38:43.730Z",
+ "jobName": "Residential study",
+ "address": "Gable control (illustrative)",
+ "location": {
+  "lat": 30.25002749496351,
+  "lng": -81.54995249550308
+ },
+ "defaultPitch": 6,
+ "waste": 10,
+ "facets": [
+  {
+   "name": "F1",
+   "pitch": 6,
+   "path": [
+    {
+     "lat": 30.25,
+     "lng": -81.55
+    },
+    {
+     "lat": 30.25,
+     "lng": -81.54990499100616
+    },
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.54990499100616
+    },
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.55
+    }
+   ],
+   "status": "measured",
+   "structure": 1,
+   "azimuth": 180
+  },
+  {
+   "name": "F2",
+   "pitch": 6,
+   "path": [
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.55
+    },
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.54990499100616
+    },
+    {
+     "lat": 30.25005498992702,
+     "lng": -81.54990499100616
+    },
+    {
+     "lat": 30.25005498992702,
+     "lng": -81.55
+    }
+   ],
+   "status": "measured",
+   "structure": 1,
+   "azimuth": 0
+  }
+ ],
+ "edges": [
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 30.25,
+     "lng": -81.55
+    },
+    {
+     "lat": 30.25,
+     "lng": -81.54990499100616
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "eave",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 30.25005498992702,
+     "lng": -81.55
+    },
+    {
+     "lat": 30.25005498992702,
+     "lng": -81.54990499100616
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "ridge",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.55
+    },
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.54990499100616
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 30.25,
+     "lng": -81.55
+    },
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.55
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.55
+    },
+    {
+     "lat": 30.25005498992702,
+     "lng": -81.55
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 30.25,
+     "lng": -81.54990499100616
+    },
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.54990499100616
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  },
+  {
+   "type": "rake",
+   "pitch": null,
+   "path": [
+    {
+     "lat": 30.25002749496351,
+     "lng": -81.54990499100616
+    },
+    {
+     "lat": 30.25005498992702,
+     "lng": -81.54990499100616
+    }
+   ],
+   "status": "measured",
+   "structure": 1
+  }
+ ],
+ "trace": null,
+ "acceptedHidden": [],
+ "evidence": [],
+ "altFusion": null,
+ "altViews": [],
+ "solar": null,
+ "otherSolar": [],
+ "source": {
+  "kind": "illustrative",
+  "title": "Residential hip roof",
+  "shortName": "Residential study",
+  "addressLine1": "Gable control",
+  "addressLine2": "20 x 30 ft, 6:12, illustrative",
+  "imageryLabel": "Model only",
+  "ref": {
+   "lat": 0,
+   "lng": 0,
+   "kx": 111319.458,
+   "ky": 110574.307
+  },
+  "buildingNames": {
+   "1": "Main house",
+   "2": "Detached garage"
+  },
+  "notes": [
+   "All coordinates, elevation profiles and quantities are illustrative. The order assumes three equal-coverage bundles per square and rounds up once across both buildings."
+  ]
+ }
+}

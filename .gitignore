@@ -21,3 +21,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# local deliverables handed to the owner (customer property reports): never committed
+deliverables/

@@ -68,6 +68,8 @@ jobs:
           node map-label-test.mjs
           node trace-evidence-test.mjs
           node bump-regression-test.mjs
+          node straight-edge-test.mjs
+          node gable-control-test.mjs
         working-directory: bench
       - name: Server-side AI geometry and orchestration contracts
         run: |

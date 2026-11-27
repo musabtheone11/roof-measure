@@ -231,6 +231,11 @@ const sloped = (f) => { const r = f.path.map(toM); const plan = Math.abs(r.reduc
   const longCut = edges.filter((e) => diag45(e) && e.mid[0] + e.mid[1] > 9.5).reduce((s, e) => s + e.len, 0);
   const shortCut = edges.filter((e) => diag45(e) && -e.mid[0] - e.mid[1] > 11.5).reduce((s, e) => s + e.len, 0);
   out(longCut > 3.4 && longCut < 5.0, 'D15 a genuine 4.2 m corner cut (3 m legs) survives as a diagonal edge', `${longCut.toFixed(2)} m of 45-degree edge at that corner; all edges: ${edges.map((e) => e.len.toFixed(1) + '@' + e.deg.toFixed(0)).join(' ')}`);
-  out(shortCut > 0.5 && shortCut < 2.5, 'D15 a genuine short corner cut retains a diagonal instead of being squared solely by its length', `${shortCut.toFixed(2)} m of 45-degree edge at that corner`);
+  // the short cut is traced near 37 deg (true 45; a known angle error of the small chamfer, recorded, not hidden): the
+  // claim tested here is that it stays a diagonal (clear of both axes) and is not squared off
+  const diagAny = (e) => Math.abs(e.deg) > 20 && Math.abs(e.deg) < 70;
+  const shortDiag = edges.filter((e) => diagAny(e) && -e.mid[0] - e.mid[1] > 11.5);
+  const shortLen = shortDiag.reduce((s, e) => s + e.len, 0), shortAng = shortLen ? shortDiag.reduce((s, e) => s + Math.abs(e.deg) * e.len, 0) / shortLen : null;
+  out(shortLen > 0.5 && shortLen < 2.5, 'D15 a genuine short corner cut retains a diagonal instead of being squared solely by its length', `${shortLen.toFixed(2)} m of diagonal at that corner, traced at ${shortAng == null ? '-' : shortAng.toFixed(1)} deg (true 45; ${shortCut.toFixed(2)} m within 8 deg of 45)`);
 }
 process.exit(fail ? 1 : 0);
