@@ -4,9 +4,14 @@ Read this first in every work cycle: resume at **Next unfinished check**.
 
 ## Active milestone: A. Uneven roof edges
 
-**Last verified result (2026-11-26):** shallow kinks in straight eave and rake runs are fixed in the tracer (`autotrace2.js`: `straightenOutline`, run merging). The fix reached the downloaded PDF. Regression check: `bench/straight-edge-test.mjs`, which fails on the previous engine.
+**Last verified result (2026-11-27):**
+- Shallow kinks in straight eave and rake runs are fixed in the tracer (PR #11, merged).
+- The entry zig-zag is fixed. Two small blurred drop-off regions fitted at about 22/12 had been keeping each other as "roof planes at that pitch", so both survived as facets with a ring of short rake, step and wall lines. Regions steeper than 20/12 no longer vouch for each other (`autotrace2.js`, band absorption).
+- Regression checks: `bench/straight-edge-test.mjs` and `bench/steep-drop-test.mjs`, both of which fail on the previous engine.
 
-**Next unfinished check:** the entry cluster on the reproduction property (facets F23/F27/F33/F34). Its rake and step lines still zig-zag through tiny facets (sharp turns, not shallow kinks). Next action: decide from the height model whether those small facets are real (a porch gable) or segmentation noise. If noise, absorb them; if real, simplify their boundaries. Owner: integration lead.
+**Next unfinished check:** Milestone A closing evidence on a second real roof, showing that both fixes generalize and keep an intentional irregularity, followed by the start of Milestone B (output inventory). Owner: integration lead.
+
+Entry fix, reproduction property: facets 38 → 36, lines 185 → 174. Sloped area 5,588.90 → 5,483.29 ft² (−1.9%) because the steep pixels are no longer counted at 22/12. Plan area 4,720.3 → 4,722.4 ft². Rakes −50.3 ft, step flashing −28.6 ft, wall flashing −5.6 ft, hips −1.7 ft, valleys −2.9 ft. Synthetic benchmark: area MAPE 1.35% → 1.30%; ridge+hip within 10% unchanged at 66.2%; eave+rake within 10% 74.6% → 73.2% (one house).
 
 ### Evidence
 
