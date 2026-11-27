@@ -16,7 +16,9 @@ Read this first in every work cycle: resume at **Next unfinished check**.
 
 **Milestone A status:** closing evidence is complete (failing case, regression checks, before/after including downloaded reports, root cause, measurement deltas, second roof). Waiting on owner approval to merge PR #12.
 
-**Next unfinished check:** Milestone B step 1, the output inventory: every existing function and output, where it appears today, and the check proving it still works. Owner: integration lead.
+**Milestone A: closed** (PRs #11 and #12 merged, live).
+
+**Milestone B step 1 done:** `docs/OUTPUT_INVENTORY.md`. **Next unfinished check:** verify the commercial, leads and permits outputs, then fix the two inventory findings (searchable estimate pages, brand name mismatch). Owner: integration lead.
 
 Entry fix, reproduction property: facets 38 → 36, lines 185 → 174. Sloped area 5,588.90 → 5,483.29 ft² (−1.9%) because the steep pixels are no longer counted at 22/12. Plan area 4,720.3 → 4,722.4 ft². Rakes −50.3 ft, step flashing −28.6 ft, wall flashing −5.6 ft, hips −1.7 ft, valleys −2.9 ft. Synthetic benchmark: area MAPE 1.35% → 1.30%; ridge+hip within 10% unchanged at 66.2%; eave+rake within 10% 74.6% → 73.2% (one house).
 

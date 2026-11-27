@@ -99,7 +99,7 @@ for (const [opt, label, expect] of [['chkPdfMaterials', 'Report with material or
 await freshPage();
 // ---- the estimate
 await attempt('Estimate PDF', 'panel 7, Download estimate PDF', async () => {
-  const f = await download('btnXmPDF', 300000, /estimate.*\.pdf$/i); const t = pdfText(f); const money = (t.match(/\$\s?[\d,]+\.\d{2}/g) || []).length;
+  await page.waitForTimeout(1000); const f = await download('btnXmPDF', 300000, /estimate.*\.pdf$/i); const t = pdfText(f); const money = (t.match(/\$\s?[\d,]+\.\d{2}/g) || []).length;
   row('Estimate PDF', 'panel 7, Download estimate PDF', money > 3 ? 'ok' : 'FAIL', `${pdfPages(f)} pages, ${money} priced amounts`, path.basename(f));
 });
 await freshPage();
