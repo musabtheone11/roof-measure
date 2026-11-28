@@ -2,19 +2,19 @@
   "schemaVersion": 1,
   "repository": "musabtheone11/roof-measure",
   "workflow": "roof-cloud.yml",
-  "generatedAt": "2026-11-28T01:52:46.333Z",
-  "sourceRevision": "f9faad8ea5324c532ccce921c9b35ddadd8ed4f4",
+  "generatedAt": "2026-11-28T02:00:06.934Z",
+  "sourceRevision": "2176b631caf8ea2d2b81b3e6df3d7072a69b8bd4",
   "run": {
-    "id": "46095216921",
+    "id": "46095776809",
     "attempt": 1,
-    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46095216921",
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46095776809",
     "pipelineResult": "success",
-    "startedAt": "2026-11-28T01:51:45.000Z"
+    "startedAt": "2026-11-28T01:58:58.000Z"
   },
   "reportArtifact": {
-    "name": "roof-cloud-reports-46095216921-1",
+    "name": "roof-cloud-reports-46095776809-1",
     "available": true,
-    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46095216921#artifacts"
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46095776809#artifacts"
   },
   "evaluation": {
     "status": "review-required",
@@ -885,7 +885,7 @@
     "conceptOnly": true,
     "measurementUse": false,
     "productionApproved": false,
-    "artifactURL": "https://github.com/musabtheone11/roof-measure/actions/runs/46095216921#artifacts"
+    "artifactURL": "https://github.com/musabtheone11/roof-measure/actions/runs/46095776809#artifacts"
   },
   "baseline": {
     "runId": "46089368732",
