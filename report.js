@@ -8,11 +8,14 @@
 
 // ------------------------------------------------------------------ company details
 const COMPANY_DEFAULT = {
-  name: 'Diversity Roofing', phone: '(904) 979-0556',
+  name: 'Diversity Contracting', phone: '(904) 979-0556',
   address: '6620 Southpoint Dr. S., Suite 600, Jacksonville, FL 32216',
   license: 'CCC1337520', email: '', website: 'diversity-roofing.com', rep: '',
 };
 const company = Object.assign({}, COMPANY_DEFAULT, JSON.parse(localStorage.getItem('rm.company') || '{}'));
+// the business name is Diversity Contracting: a browser that saved the old built-in default gets the new one; a name
+// someone typed themselves is kept
+if (company.name === 'Diversity Roofing') { company.name = COMPANY_DEFAULT.name; try { const sv = JSON.parse(localStorage.getItem('rm.company') || '{}'); sv.name = company.name; localStorage.setItem('rm.company', JSON.stringify(sv)); } catch (_) { /* storage unavailable */ } }
 const BLUE = '#2d9cdb';
 
 // ------------------------------------------------------------------ material catalog (Roofr product list; coverage per unit)
@@ -285,7 +288,7 @@ async function buildReportPDF(opts = {}) {
   if (wantEst && typeof xmBuildHTML === 'function') {
     // jsPDF cannot merge documents: render the estimate pages into this one the same way htmlToPDF does
     const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in;background:#fff;z-index:-1'; host.innerHTML = `<style>${REPORT_CSS} .rp-page, .xm-page { margin: 0 !important; box-shadow: none !important; }</style><div class="rp">${xmBuildHTML().html}</div>`; document.body.appendChild(host);
-    try { for (const pg of host.querySelectorAll('.rp-page, .xm-page')) { const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false }); doc.addPage('letter', 'portrait'); doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, 612, 792, undefined, 'MEDIUM'); extraPages++; } } finally { host.remove(); }
+    try { for (const pg of host.querySelectorAll('.rp-page, .xm-page')) { const runs = pdfTextRuns(pg); const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false }); doc.addPage('letter', 'portrait'); doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, 612, 792, undefined, 'MEDIUM'); pdfTextLayer(doc, runs, 72); extraPages++; } } finally { host.remove(); }
   }
   assertReportCurrent(sig, opts);
   const blob = doc.output('blob'); const name = fileBase() + (extraPages ? '_Roof_Report_and_Estimate.pdf' : '_Roof_Report.pdf');
@@ -337,6 +340,57 @@ function svgForPDF(svg) {
   });
   return c;
 }
+// Searchable text over a page image. The page is drawn as a picture (html2canvas), so on its own the PDF has no text a
+// reader can find, select or copy. This lays every visible word of the HTML page, invisibly, at the same position and
+// width as it is drawn (the technique of a scanned document's text layer); the look of the page does not change.
+// u = PDF units per inch (1 for an 'in' document, 72 for 'pt'). Text drawn as vectors (svg diagrams) is skipped.
+function pdfTextRuns(pg) {
+  const pr = pg.getBoundingClientRect(), k = 8.5 / pr.width, runs = [], range = document.createRange();
+  const walker = document.createTreeWalker(pg, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (!n.nodeValue.trim() || !n.parentElement || n.parentElement.closest('svg, style, script')) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const cs = getComputedStyle(n.parentElement); if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
+    const fontPx = parseFloat(cs.fontSize) || 12, bold = (parseInt(cs.fontWeight, 10) || 400) >= 600, tt = cs.textTransform;
+    const shown = (t) => (tt === 'uppercase' ? t.toUpperCase() : tt === 'lowercase' ? t.toLowerCase() : t);
+    let cur = null; const re = /\S+/g; let m;
+    while ((m = re.exec(n.nodeValue))) {
+      range.setStart(n, m.index); range.setEnd(n, m.index + m[0].length); const r = range.getBoundingClientRect(); if (!r.width || !r.height) continue;
+      // words on one visual line continue the run; a wrap starts a new one
+      if (cur && Math.abs(r.top - cur.top) < fontPx * 0.5 && r.left >= cur.right - 1) { cur.text += ' ' + shown(m[0]); cur.right = r.right; }
+      else { if (cur) runs.push(cur); cur = { text: shown(m[0]), left: r.left, right: r.right, top: r.top, h: r.height, fontPx, bold }; }
+    }
+    if (cur) runs.push(cur);
+  }
+  return runs.map((r) => ({ text: r.text, bold: r.bold, x: (r.left - pr.left) * k, w: (r.right - r.left) * k, base: (r.top - pr.top + r.h * 0.79) * k, pt: r.fontPx * k * 72 }));
+}
+// The layer uses the built-in Helvetica, which only encodes the Windows-1252 characters; one character outside it makes
+// jsPDF write the whole line as two-byte codes that extract as junk. Accented letters lose the accent (Nguyễn -> Nguyen,
+// still findable), a few symbols get plain equivalents, and anything else is left out of the layer (the picture keeps it).
+const PDF_CP1252 = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+const PDF_PLAIN = { 'Đ': 'D', 'đ': 'd', 'Ł': 'L', 'ł': 'l', 'ı': 'i', 'Ħ': 'H', 'ħ': 'h', '→': '->', '←': '<-', '↔': '<->', '≈': '~', '≤': '<=', '≥': '>=', '≠': '!=', '−': '-', '‐': '-', '‑': '-', '′': "'", '″': '"', '✓': 'v', '✔': 'v', '✗': 'x', '✘': 'x' };
+function pdfLayerText(t) {
+  let o = '';
+  for (const ch of t) {
+    const c = ch.codePointAt(0);
+    if (c < 0x80 || (c >= 0xA0 && c <= 0xFF) || PDF_CP1252.has(ch)) { o += ch; continue; }
+    if (PDF_PLAIN[ch]) { o += PDF_PLAIN[ch]; continue; }
+    const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (base && [...base].every((b) => b.codePointAt(0) < 0x100)) o += base;
+  }
+  return o.replace(/\s+/g, ' ').trim();
+}
+// Drawn last on its page and inside a saved graphics state: the width scaling (Tz) it sets stays inside the layer, so
+// text drawn afterwards (the vector sketch labels) keeps its normal width.
+function pdfTextLayer(doc, runs, u) {
+  doc.saveGraphicsState();
+  try {
+    for (const r of runs) {
+      const text = pdfLayerText(r.text); if (!text) continue;
+      doc.setFont('helvetica', r.bold ? 'bold' : 'normal'); doc.setFontSize(r.pt);
+      const nat = doc.getTextWidth(text), hs = nat > 0 ? (r.w * u) / nat : 1;
+      doc.text(text, r.x * u, r.base * u, { renderingMode: 'invisible', horizontalScale: hs > 0.2 && hs < 5 ? hs : 1 });
+    }
+  } finally { doc.restoreGraphicsState(); }
+}
 async function pagesToPDF(pages) {
   const pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait', compress: true });
   const vector = typeof pdf.svg === 'function';
@@ -346,6 +400,7 @@ async function pagesToPDF(pages) {
     const svgs = vector ? [...pg.querySelectorAll('.diagram svg, .sketch svg')] : [];
     const boxes = svgs.map((s) => { const r = s.getBoundingClientRect(); return { x: (r.left - pr.left) * k, y: (r.top - pr.top) * k, w: r.width * k, h: r.height * k }; });
     svgs.forEach((s) => { s.style.visibility = 'hidden'; });
+    const runs = pdfTextRuns(pg);
     const c = await window.html2canvas(pg, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false });
     svgs.forEach((s) => { s.style.visibility = ''; });
     if (i) pdf.addPage('letter', 'portrait');
@@ -360,6 +415,7 @@ async function pagesToPDF(pages) {
         pdf.addImage(dc.toDataURL('image/png'), 'PNG', b.x, b.y, b.w, b.h);
       }
     }
+    pdfTextLayer(pdf, runs, 1);
   }
   return pdf;
 }

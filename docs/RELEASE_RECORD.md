@@ -2,7 +2,19 @@
 
 Read this first in every work cycle: resume at **Next unfinished check**.
 
-## Active milestone: A. Uneven roof edges
+## Active milestone: B. Simplify and professionalize the report
+
+**Milestone B step 1 done:** `docs/OUTPUT_INVENTORY.md`.
+
+**Milestone B step 2 (2026-11-27):** both inventory findings are fixed, and an independent review was applied to the fixes.
+- Estimate pages are now searchable.
+- One business name (Diversity Contracting) is used throughout.
+- `tools/dev/estimate-text-test.mjs` checks the estimate-only PDF and the Report + estimate PDF. Every page must render identically with and without the text layer, and the searchable words must sit on the printed ink. It also covers accented names, the replaced old default, and a name the user typed, which must be kept.
+- The test fails on each defect the review found, and on a layer shifted by 0.06 in.
+
+**Next unfinished check:** verify the commercial, leads and permits outputs. Open owner question: should the cash-estimate builder (`cash/`) also say Diversity Contracting? Owner: integration lead.
+
+## Milestone A. Uneven roof edges (closed)
 
 **Last verified result (2026-11-27):**
 - Shallow kinks in straight eave and rake runs are fixed in the tracer (PR #11, merged).
@@ -14,11 +26,9 @@ Read this first in every work cycle: resume at **Next unfinished check**.
 - The real irregularities survive: the stepped south side around the entry walk and the south-east gable bump.
 - The steep drop-off fix does not change this roof (no regions above 20/12).
 
-**Milestone A status:** closing evidence is complete (failing case, regression checks, before/after including downloaded reports, root cause, measurement deltas, second roof). Waiting on owner approval to merge PR #12.
+**Milestone A status:** closing evidence is complete (failing case, regression checks, before/after including downloaded reports, root cause, measurement deltas, second roof).
 
 **Milestone A: closed** (PRs #11 and #12 merged, live).
-
-**Milestone B step 1 done:** `docs/OUTPUT_INVENTORY.md`. **Next unfinished check:** verify the commercial, leads and permits outputs, then fix the two inventory findings (searchable estimate pages, brand name mismatch). Owner: integration lead.
 
 Entry fix, reproduction property: facets 38 → 36, lines 185 → 174. Sloped area 5,588.90 → 5,483.29 ft² (−1.9%) because the steep pixels are no longer counted at 22/12. Plan area 4,720.3 → 4,722.4 ft². Rakes −50.3 ft, step flashing −28.6 ft, wall flashing −5.6 ft, hips −1.7 ft, valleys −2.9 ft. Synthetic benchmark: area MAPE 1.35% → 1.30%; ridge+hip within 10% unchanged at 66.2%; eave+rake within 10% 74.6% → 73.2% (one house).
 
@@ -39,7 +49,7 @@ Known and recorded: D15's short corner cut is traced at about 37° (true 45°); 
 
 ## Backlog (not the active milestone)
 
-- Milestone B: output inventory, report design department and competitor research, two report candidates, reader-task timing with real readers.
+- Milestone B (remaining): report design department and competitor research, two report candidates, reader-task timing with real readers.
 - Milestone C: fresh-user journey, scorecard, cost per report, disputed-measurement trace, sales sample, release verdict.
 - Agent operations: catalogue all accessible models with a capability trial each, a durable queue with claim expiry and idempotent results, a 1,000-assignment simulation, and a persistent scheduler. The scheduler needs an authorized persistent host or CI schedule plus a spending authorization.
 - Ridge/hip accuracy trade-off in the handoff tracer; step-flashing overestimate (ratio about 1.9).
