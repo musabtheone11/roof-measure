@@ -3,8 +3,9 @@ import {inflateSync} from 'node:zlib';
 import {validateTask} from './contracts.mjs';
 import {DESIGN_CATALOG} from './design-catalog.mjs';
 import {readProviderErrorDetails} from './provider-error.mjs';
+import {verifySubscriptionAllowance,buildAllowanceReservation,allowanceUsage,AllowanceError} from './allowance.mjs';
 
-const ENDPOINT='https://api.apinex.bond/v1/images/generations',SUBSCRIPTION='https://api.apinex.bond/v1/subscription';
+const ENDPOINT='https://api.apinex.bond/v1/images/generations';
 const MAX_RESPONSE=16*1024*1024,MAX_IMAGE=4*1024*1024,MAX_ENCODED=4*Math.ceil(MAX_IMAGE/3);
 export class DesignProviderError extends Error {
   constructor(code,message,details={}){super(message);this.name='DesignProviderError';this.code=code;Object.assign(this,details);}
@@ -94,7 +95,7 @@ export async function requestDesignConcept(task,{apiKey=process.env.APINEX_API_K
   if(![reserve,onDispatch,onUsage].every(callback=>typeof callback==='function'))fail('BUDGET_DISABLED','Durable reservation, dispatch and usage callbacks are required');
   if(signal?.aborted)fail('CANCELLED','Design task cancelled');
   const combined=AbortSignal.any([AbortSignal.timeout(timeoutMs),...(signal?[signal]:[])]);
-  let reservation,dispatched=false,usageRecorded=false;
+  let reservation,dispatched=false,usageRecorded=false,allowance=null;
   const safeText=value=>typeof value==='string'&&value.length<=200&&!value.includes(apiKey)&&!/[\x00-\x1f]/.test(value)?value:null;
   async function request(url,body,maxBytes) {
     const response=await fetchImpl(url,{method:body?'POST':'GET',redirect:'error',signal:combined,
@@ -111,12 +112,12 @@ export async function requestDesignConcept(task,{apiKey=process.env.APINEX_API_K
     if(known.billingTier==='free-allowance') {
       const allowanceTokens=Math.max(known.allowanceTokens||0,entry.allowanceTokens||0);
       if(!Number.isSafeInteger(allowanceTokens)||allowanceTokens<1)fail('ALLOWANCE_UNVERIFIED','Free image allowance is unverified');
-      const access=await request(SUBSCRIPTION,null,2*1024*1024);
-      if(access.allowed!==true||(entry.subscriptionRequired&&access.mode!=='subscription'))fail('SUBSCRIPTION_REQUIRED','Image subscription/allowance access is unavailable');
-      if(access.expires_at_utc&&(!Number.isFinite(Date.parse(access.expires_at_utc))||Date.parse(access.expires_at_utc)<=Date.now()))fail('SUBSCRIPTION_REQUIRED','Image subscription access has expired');
-      if(access.unlimited!==true&&(!Number.isSafeInteger(access.tokens_remaining)||access.tokens_remaining<allowanceTokens))fail('ALLOWANCE_EXHAUSTED','Insufficient verified free allowance for one image');
+      let snapshot;
+      try{snapshot=await verifySubscriptionAllowance({apiKey,fetchImpl,signal:combined,timeoutMs:Math.min(20000,timeoutMs)});}
+      catch(error){if(onResponse&&error.errorDetails)await onResponse({errorDetails:error.errorDetails});throw error;}
+      allowance=buildAllowanceReservation(snapshot,{reservedUnits:allowanceTokens,subscriptionRequired:entry.subscriptionRequired===true});
     }
-    reservation=await reserve({usd:priceUsd,model,billingTier:known.billingTier,allowanceTokens:known.allowanceTokens||null});
+    reservation=await reserve({usd:priceUsd,model,billingTier:known.billingTier,allowanceTokens:known.allowanceTokens||null,...(allowance?{allowance}:{})});
     if(reservation===null||reservation===undefined||reservation===false)fail('BUDGET_DISABLED','No durable image reservation was granted');
     if(combined.aborted)throw new Error('aborted');await onDispatch(reservation);dispatched=true;if(combined.aborted)throw new Error('aborted');
     const response=await request(ENDPOINT,{model,prompt:'Non-measurement visual design concept only. Use abstract placeholders, never customer imagery, numerical roof plans, roof segmentation or measurement certification. '+prompt,
@@ -128,7 +129,7 @@ export async function requestDesignConcept(task,{apiKey=process.env.APINEX_API_K
       requestId:safeText(response.id),reportedUsd,billingStatus:reportedUsd===null?'unknown':'provider-reported',
       promptVersion:'design-concept-v1',settings:{size:'1024x1024',aspectRatio:'1:1',responseFormat:'b64_json',images:1},
       pricing:{reservedUsd:priceUsd,billingTier:known.billingTier,quotedAllowanceTokens:known.allowanceTokens||null,actualDebitStatus:'Only provider-reported cost is actual billing evidence'}};
-    usageRecorded=true;await onUsage(reservation,{...execution});
+    usageRecorded=true;await onUsage(reservation,{...execution,...(allowance?allowanceUsage(response.usage,{flatUnits:allowance.reservedUnits}):{})});
     const metadata={execution,dataCount:Array.isArray(response.data)?response.data.length:null,
       hasBase64:typeof response.data?.[0]?.b64_json==='string',hasImageURL:typeof response.data?.[0]?.url==='string'};
     if(onResponse)await onResponse(metadata);
@@ -145,11 +146,12 @@ export async function requestDesignConcept(task,{apiKey=process.env.APINEX_API_K
         width:inspected.width,height:inspected.height,formatValidation:inspected.formatValidation,sourceRevision:task.sourceRevision,
         customerImagerySubmitted:false,measurementEvidence:false,requiresVisualReview:true,productionReady:false}};
   }catch(error) {
-    if(dispatched&&!usageRecorded){usageRecorded=true;await onUsage(reservation,{requestedModel:model,returnedModel:null,identityStatus:'unknown',reportedUsd:null,billingStatus:'unknown'});}
+    if(dispatched&&!usageRecorded){usageRecorded=true;await onUsage(reservation,{requestedModel:model,returnedModel:null,identityStatus:'unknown',reportedUsd:null,billingStatus:'unknown',...(allowance?allowanceUsage(null):{})});}
     if(signal?.aborted)fail('CANCELLED','Design task cancelled');
     if(combined.aborted)fail('TIMEOUT','Image request exceeded its bounded deadline');
-    if(error instanceof DesignProviderError)throw error;
-    if(['BUDGET_LIMIT','BUDGET_INCIDENT','STALE_LEASE','PAUSED','INVALID_LIMIT','UNKNOWN_BILLING','ATTEMPT_LIMIT'].includes(error.code))throw error;
+    if(error instanceof DesignProviderError||error instanceof AllowanceError)throw error;
+    if(['BUDGET_LIMIT','BUDGET_INCIDENT','STALE_LEASE','PAUSED','INVALID_LIMIT','UNKNOWN_BILLING','ATTEMPT_LIMIT','ALLOWANCE_EXHAUSTED','ALLOWANCE_UNVERIFIED','ALLOWANCE_STALE','ALLOWANCE_RECONCILIATION_REQUIRED',
+      'ALLOWANCE_LIMIT','ALLOWANCE_INCIDENT','ALLOWANCE_SNAPSHOT_STALE','INVALID_ALLOWANCE','ALLOWANCE_RESERVATION_MISSING'].includes(error.code))throw error;
     fail('NETWORK_ERROR','Image service or durable image callback could not complete; ambiguous generations are never replayed automatically');
   }
 }

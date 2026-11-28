@@ -25,7 +25,9 @@ function options(t,catalog=DESIGN_CATALOG,extra={}){
     catalogAudit:{ok:true,readyIds:catalog.map(m=>m.id),blocked:[],hash:'verified-design-catalog',checkedAt:new Date().toISOString(),unknownIds:[]},
     archiveRef:{repository:'owner/repo',runId:'123',runAttempt:'1',reportArtifactName:'roof-cloud-reports-123-1'},
     requestDesign:async(task,opts)=>{
-      calls++;const entry=catalog.find(m=>m.id===opts.model),id=await opts.reserve({usd:entry.reserveUsd,model:entry.id});
+      calls++;const entry=catalog.find(m=>m.id===opts.model),observedAt=Date.now(),expiresAt=observedAt+3600000,
+        allowance=entry.billingTier==='free-allowance'?{reservedUnits:entry.allowanceTokens,remainingUnits:10000000,observedAt,expiresAt,periodKey:`apinex-allowance-v1:subscription:${expiresAt}`,unlimited:false}:null,
+        id=await opts.reserve({usd:entry.reserveUsd,model:entry.id,...(allowance?{allowance}:{})});
       await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:entry.priceUsd});
       return {contributionKind:'design-concept',imageBytes:IMAGE,extension:'png',width:512,height:512,sha256:SHA,
         execution:{requestedModel:opts.model,returnedModel:null,identityStatus:'not-reported',reportedUsd:entry.priceUsd},
@@ -120,4 +122,41 @@ test('actual HTTP adapter diagnostics survive rows, durable tasks, metadata arti
   assert.equal(one.store.ledger().unknownBillingRequests,1);assert.equal(one.store.ledger().reservedUsd,.03);
   const reused=await runDesignFleet({...one.base,requestDesign});assert.equal(httpCalls,1);assert.deepEqual(reused.agents[0].errorDetails,row.errorDetails);
   assert.equal(one.store.ledger().reservedUsd,.03);assert.equal(one.store.ledger().unknownBillingRequests,1);
+});
+test('free image passes private allowance admission into the durable store and wallet-zero cannot release its hold',async t=>{
+  const one=options(t,DESIGN_CATALOG.filter(m=>m.id==='free/nano-banana-2'));
+  const requestDesign=(task,opts)=>requestDesignConcept(task,{...opts,fetchImpl:async url=>url.endsWith('/subscription')?
+    new Response(JSON.stringify({allowed:true,mode:'subscription',unlimited:false,tokens_remaining:10000000,expires_at_utc:new Date(Date.now()+3600000).toISOString()})):
+    new Response(JSON.stringify({data:[{b64_json:IMAGE.toString('base64')}],usage:{cost_tokens:0,allowance_tokens:1}}))});
+  const result=await runDesignFleet({...one.base,requestDesign});assert.equal(result.coverage.generated,1);assert.equal(one.store.ledger().reportedUsd,0);
+  const allowance=one.store.allowanceLedger();assert.equal(allowance.attempts.length,1);
+  const row=allowance.attempts[0];assert.equal(row.reserved_units,5000000);assert.equal(row.charged_units,5000000);assert.equal(row.reported_units,null);assert.equal(row.estimated_units,5000000);
+  assert.doesNotMatch(JSON.stringify(result),/remainingUnits|observedAt|expiresAt|periodKey/);
+});
+test('free image adapter cannot omit its unit reservation even when wallet reservation is zero',async t=>{
+  const one=options(t,DESIGN_CATALOG.filter(m=>m.id==='free/nano-banana-2'));
+  const result=await runDesignFleet({...one.base,requestDesign:async(task,opts)=>{await opts.reserve({usd:0});throw new Error('must not dispatch');}});
+  assert.equal(result.agents[0].code,'ALLOWANCE_UNVERIFIED');assert.equal(result.coverage.attempted,0);assert.equal(one.store.ledger().requests,0);
+});
+function legacyZeroDispatch(store,{model}={}){
+  const id='historic-zero',actorId=model?'design-'+createHash('sha256').update(model).digest('hex').slice(0,24):'unattributed-worker';
+  store.setControl('running');store.enqueue({id,actorId,maxAttempts:1});const lease=store.claim('historic-worker');
+  const attempt=store.reserve(id,'historic-worker',lease.fence,{usd:0,requestLimit:1,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80});
+  store.dispatch(attempt,'historic-worker',lease.fence);
+  if(model)store.event(id,'design-dispatched',{model});
+  store.settle(attempt,'historic-worker',lease.fence,{reportedUsd:0});store.finish(id,'historic-worker',lease.fence,{status:'complete'});
+  return store.ledger().attempts.find(row=>row.id===attempt);
+}
+test('standalone image fleet blocks free admission for an unattributed historic zero-dollar dispatch while paid work continues',async t=>{
+  const one=options(t,DESIGN_CATALOG.filter(m=>['free/nano-banana-2','nano-banana-2'].includes(m.id))),original=legacyZeroDispatch(one.store);
+  const result=await runDesignFleet(one.base),free=result.agents.find(a=>a.model==='free/nano-banana-2'),paid=result.agents.find(a=>a.model==='nano-banana-2');
+  assert.equal(free.code,'ALLOWANCE_LEGACY_MAPPING_REQUIRED');assert.equal(free.attempted,false);assert.equal(paid.status,'complete');assert.equal(one.calls(),1);
+  assert.deepEqual(one.store.ledger().attempts.find(row=>row.id===original.id),original);assert.equal(one.store.allowanceLedger().requests,0);
+});
+test('standalone image fleet imports a mapped legacy free hold before reserving new free work without replaying old tasks',async t=>{
+  const one=options(t,DESIGN_CATALOG.filter(m=>m.id==='free/nano-banana-2')),original=legacyZeroDispatch(one.store,{model:'free/nano-banana-2'});
+  const result=await runDesignFleet(one.base);assert.equal(result.agents[0].status,'complete');assert.equal(one.calls(),1);
+  const ledger=one.store.allowanceLedger();assert.equal(ledger.requests,2);assert.equal(ledger.reservedUnits,10000000);assert.equal(ledger.attempts.filter(a=>a.legacy).length,1);
+  assert.deepEqual(one.store.ledger().attempts.find(row=>row.id===original.id),original);
+  await runDesignFleet(one.base);assert.equal(one.calls(),1);assert.equal(one.store.allowanceLedger().requests,2);
 });

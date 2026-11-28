@@ -50,7 +50,7 @@ test('free image checks subscription and five-million allowance separately from 
   const r=await requestDesignConcept(task,f.options);assert.equal(f.calls[0].url,'https://api.apinex.bond/v1/subscription');assert.equal(f.calls[1].init.method,'POST');
   assert.equal(f.events[0].value.usd,0);assert.equal(f.events[0].value.allowanceTokens,5000000);assert.equal(r.execution.reportedUsd,0);
   for(const access of [{allowed:false},{allowed:true,mode:'free',unlimited:true},{allowed:true,mode:'subscription',unlimited:false,tokens_remaining:4999999}]) {
-    const blocked=fixture({model:'free/nano-banana-2',access});await assert.rejects(requestDesignConcept(task,blocked.options),e=>['SUBSCRIPTION_REQUIRED','ALLOWANCE_EXHAUSTED'].includes(e.code));
+    const blocked=fixture({model:'free/nano-banana-2',access:{tokens_remaining:null,expires_at_utc:new Date(Date.now()+3600000).toISOString(),resets_at_utc:new Date(Date.now()+3600000).toISOString(),...access}});await assert.rejects(requestDesignConcept(task,blocked.options),e=>['SUBSCRIPTION_REQUIRED','ALLOWANCE_EXHAUSTED'].includes(e.code));
     assert.equal(blocked.calls.filter(c=>c.init.method==='POST').length,0);assert.equal(blocked.events.length,0);
   }
 });
@@ -103,4 +103,29 @@ test('subscription HTTP denials retain status before any paid dispatch and do no
   const f=fixture({model:'free/nano-banana-2',fetchImpl:async()=>new Response('{"error":{"code":"subscription_required","message":"Subscription required"}}',{status:403})});
   await assert.rejects(requestDesignConcept(task,f.options),error=>error.code==='UPSTREAM_HTTP'&&error.status===403&&error.errorDetails.code==='subscription_required');
   assert.equal(f.calls.length,1);assert.deepEqual(f.events.map(e=>e.kind),['response']);
+});
+test('free image privately reserves five-million allowance units before dispatch and keeps exact debit unknown',async()=>{
+  const f=fixture({model:'free/nano-banana-2',response:()=>json({data:[{b64_json:image.toString('base64')}],usage:{cost_tokens:0,allowance_tokens:1}})});
+  const result=await requestDesignConcept(task,f.options),r=f.events.find(e=>e.kind==='reserve').value;
+  assert.equal(r.usd,0);assert.equal(r.allowance.reservedUnits,5000000);assert.equal(r.allowance.remainingUnits,10000000);assert.equal(r.allowance.unlimited,false);
+  assert.deepEqual(Object.keys(r.allowance).sort(),['reservedUnits','remainingUnits','observedAt','expiresAt','periodKey','unlimited'].sort());
+  const usage=f.events.find(e=>e.kind==='usage').value;assert.equal(usage.reportedAllowanceUnits,null);assert.equal(usage.estimatedAllowanceUnits,5000000);
+  assert.equal(result.execution.reportedUsd,0);assert.equal(result.execution.remainingUnits,undefined);assert.equal(result.execution.periodKey,undefined);
+  assert.doesNotMatch(JSON.stringify(f.events.find(e=>e.kind==='response')),/remainingUnits|observedAt|expiresAt|periodKey/);
+});
+test('free image insufficient or malformed allowance blocks without paid fallback; ambiguous dispatch retains unknown units',async()=>{
+  const malformed=fixture({model:'free/nano-banana-2',access:{allowed:true,mode:'subscription',unlimited:false,tokens_remaining:10000000}});
+  await assert.rejects(requestDesignConcept(task,malformed.options),{code:'ALLOWANCE_UNVERIFIED'});assert.equal(malformed.calls.length,1);assert.equal(malformed.events.length,0);
+  const ambiguous=fixture({model:'free/nano-banana-2',fetchImpl:async(url)=>{
+    if(url.endsWith('/subscription'))return json({allowed:true,mode:'subscription',unlimited:false,tokens_remaining:10000000,expires_at_utc:new Date(Date.now()+3600000).toISOString()});
+    throw new Error('upstream ambiguous');
+  }});
+  await assert.rejects(requestDesignConcept(task,ambiguous.options),{code:'NETWORK_ERROR'});const usage=ambiguous.events.find(e=>e.kind==='usage').value;
+  assert.equal(usage.reportedAllowanceUnits,null);assert.equal(usage.estimatedAllowanceUnits,null);assert.equal(usage.reportedUsd,null);assert.equal(ambiguous.calls.length,2);
+});
+test('durable allowance cap, incident and stale-snapshot failures stay actionable and never dispatch an image',async()=>{
+  for(const code of ['ALLOWANCE_LIMIT','ALLOWANCE_INCIDENT','ALLOWANCE_SNAPSHOT_STALE','INVALID_ALLOWANCE','ALLOWANCE_RESERVATION_MISSING']){
+    const f=fixture({model:'free/nano-banana-2',reserve:()=>{throw Object.assign(new Error('Local allowance admission blocked'),{code});}});
+    await assert.rejects(requestDesignConcept(task,f.options),{code});assert.equal(f.calls.length,1);assert.ok(f.calls[0].url.endsWith('/subscription'));assert.equal(f.events.length,0);
+  }
 });

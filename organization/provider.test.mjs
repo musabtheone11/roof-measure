@@ -30,13 +30,14 @@ test('design visual review binds bounded image bytes to task hashes and refuses 
   await assert.rejects(requestOrganizationRole(t,{...f.options,images:[{mimeType:'image/png',data:Buffer.alloc(4*1024*1024+1)}]}),{code:'INVALID_DESIGN_IMAGES'});
   assert.equal(f.calls.length,before,'Invalid images must fail before network or reservation.');
 });
-function fixture({ chat, roster, reserve, onUsage, onDispatch } = {}) {
+function fixture({ chat, roster, subscription, reserve, onUsage, onDispatch } = {}) {
   const calls = [], events = [];
   const options = {
     apiKey: 'test-secret-not-real',
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
       if (url.endsWith('/models')) return roster ? roster(url, init) : json({ data: [{ id: 'gpt-6.2-astra' }] });
+      if (url.endsWith('/subscription')) return subscription ? subscription(url,init) : json({allowed:true,mode:'subscription',unlimited:false,tokens_remaining:100000000,expires_at_utc:new Date(Date.now()+3600000).toISOString()});
       events.push('post');
       return chat ? chat(url, init) : json({ id: 'request1', model: 'gpt-6.2-astra', usage: { cost_tokens: 123 }, choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(output()) } }] });
     },
@@ -178,8 +179,27 @@ test('all45 verified models reserve their own rate and use the documented respon
     const response=await requestOrganizationRole(task,{...f.options,model:model.id,verifiedRoster,context:{metrics:{attempted:12,diagnosticPasses:4},pdfReview:{checked:12,failed:0}}});
     const price=getVerifiedModelPrice(model.id);assert.equal(f.events[0][1].usd,price.contextTokens*price.maxRate/1e6);
     assert.equal(response.execution.returnedModel,model.id);assert.equal(response.execution.billingTier,model.billingTier);
-    assert.equal(f.calls.length,1);assert.equal(f.calls[0].url.endsWith(typed?'/decisions':'/chat/completions'),true);
+    assert.equal(f.calls.length,model.billingTier==='free-allowance'?2:1);assert.equal(f.calls.at(-1).url.endsWith(typed?'/decisions':'/chat/completions'),true);
     if(typed){assert.equal(response.contributionKind,'typed-decision');assert.equal(Object.hasOwn(response,'result'),false);}
+  }
+});
+
+test('free text reserves weighted subscription units independently of zero wallet cost',async()=>{
+  const model='free/gpt-6-luna',f=fixture({chat:async()=>json({model,usage:{cost_tokens:0,total_tokens:120,allowance_tokens:0},choices:[{finish_reason:'stop',message:{content:JSON.stringify(output())}}]})});
+  const r=await requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()}});
+  const reserve=f.events.find(e=>e[0]==='reserve')[1],usage=f.events.find(e=>e[0]==='usage')[2];
+  assert.equal(reserve.usd,0);assert.equal(reserve.allowance.reservedUnits,2*1048576*3);
+  assert.equal(usage.reportedAllowanceUnits,null,'An undocumented allowance field cannot release a hold.');
+  assert.equal(usage.estimatedAllowanceUnits,360);assert.equal(r.execution.allowanceReservedUnits,reserve.allowance.reservedUnits);
+  const body=JSON.parse(f.calls.at(-1).init.body);assert.ok(!JSON.stringify(body).includes('tokens_remaining'));
+});
+test('exhausted or expired subscription blocks free text before reservation and inference',async()=>{
+  const model='free/gpt-6-luna';
+  for(const subscription of [{allowed:false,mode:'subscription'},{allowed:true,mode:'subscription',unlimited:false,tokens_remaining:1,expires_at_utc:new Date(Date.now()+3600000).toISOString()},
+    {allowed:true,mode:'subscription',unlimited:false,tokens_remaining:100000000,expires_at_utc:new Date(Date.now()-1000).toISOString()}]) {
+    const f=fixture({subscription:async()=>json(subscription)});
+    await assert.rejects(requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()}}));
+    assert.equal(f.events.length,0);assert.equal(f.calls.length,1);assert.ok(f.calls[0].url.endsWith('/subscription'));
   }
 });
 

@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {OrgStore} from './store.mjs';
-import {MODEL_CATALOG} from './model-catalog.mjs';
+import {MODEL_CATALOG,textAllowanceReservationUnits} from './model-catalog.mjs';
 import {runModelFleet,buildFleetAssignments,buildMetricFacts,validateMetricClaims} from './model-fleet.mjs';
 
 const contexts={developmentContext:{metrics:{attempted:6,diagnosticPasses:2,misclassifiedEdges:0},pdfReview:{checked:6,failed:0}},
@@ -25,10 +25,11 @@ function response(task,options){
   if(task.constraints.reviewTaskId)result.peerReview={taskId:task.constraints.reviewTaskId,decision:'pass',findings:['Compared the supplied deterministic counts and source scope for this exact task.']};
   return {result,execution:{requestedModel:options.model,returnedModel:options.model,reportedUsd:.0001}};
 }
+function freeHold(model){return {reservedUnits:textAllowanceReservationUnits(model),remainingUnits:1000000000,observedAt:Date.now(),expiresAt:Date.now()+3600000,periodKey:'test-subscription-period',unlimited:false};}
 function options(store,catalog=THREE,extra={}){return {store,catalog,evaluationHash:'a'.repeat(64),sourceRevision:'test-source',inputHash:'b'.repeat(64),...contexts,
   paidAllowed:true,apiKey:'not-real-test-key',minimumDispatchIntervalMs:0,
   verifyModels:async()=>({ids:catalog.map(m=>m.id),checkedAt:new Date().toISOString()}),
-  requestRole:async(task,opts)=>{const id=await opts.reserve({usd:.01});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:.0001});return response(task,opts);},...extra};}
+  requestRole:async(task,opts)=>{const free=opts.model.startsWith('free/');const id=await opts.reserve({usd:free?0:.01,...(free?{allowance:freeHold(opts.model)}:{})});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:free?0:.0001,...(free?{reportedAllowanceUnits:0}:{})});return response(task,opts);},...extra};}
 test('all catalog IDs receive distinct concrete assignments, one CEO last and alias reviewers excluded',()=>{
   const assignments=buildFleetAssignments();assert.equal(assignments.length,MODEL_CATALOG.length);
   assert.equal(new Set(assignments.map(a=>a.model)).size,MODEL_CATALOG.length);
@@ -87,6 +88,28 @@ test('unknown billing survives crash recovery and same-model dispatch is not rep
   const base=options(store,THREE,{requestRole:async(task,opts)=>{sent++;const id=await opts.reserve({usd:.01});await opts.onDispatch(id);throw Object.assign(new Error('Unknown network outcome'),{code:'NETWORK_ERROR'});}});
   await runModelFleet(base);const count=sent;assert.ok(store.ledger().unknownBillingRequests>0);
   await runModelFleet(base);assert.equal(sent,count);
+});
+test('a new free evaluation can use separately held allowance after a timeout without replaying the old request',async t=>{
+  const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id==='free/gpt-6-luna');let calls=0;
+  const first=options(store,catalog,{requestRole:async(task,opts)=>{calls++;const id=await opts.reserve({usd:0,allowance:freeHold(opts.model)});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:null});throw Object.assign(new Error('Ambiguous free response'),{code:'TIMEOUT'});}});
+  await runModelFleet(first);const old=JSON.stringify(store.ledger().attempts);await runModelFleet(first);assert.equal(calls,1);
+  const fresh=await runModelFleet({...options(store,catalog),evaluationHash:'c'.repeat(64)});
+  assert.equal(fresh.coverage.attempted,1);assert.equal(fresh.coverage.validContributions,1);
+  assert.equal(JSON.stringify(store.ledger().attempts.slice(0,1)),old);assert.ok(store.allowanceLedger().unknownUnits>0);
+});
+test('free allowance cannot bypass permanent model errors or omit its weighted hold',async t=>{
+  const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id==='free/gpt-6-luna');
+  const noHold=await runModelFleet(options(store,catalog,{requestRole:async(task,opts)=>{await opts.reserve({usd:0});}}));
+  assert.equal(noHold.coverage.attempted,0);assert.equal(noHold.agents[0].code,'ALLOWANCE_RESERVATION_MISSING');
+  const denied=options(store,catalog,{evaluationHash:'d'.repeat(64),requestRole:async(task,opts)=>{const id=await opts.reserve({usd:0,allowance:freeHold(opts.model)});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:0});throw Object.assign(new Error('Denied'),{code:'UPSTREAM_HTTP',status:403});}});
+  await runModelFleet(denied);const again=await runModelFleet({...options(store,catalog),evaluationHash:'e'.repeat(64)});
+  assert.equal(again.coverage.attempted,0);assert.equal(again.agents[0].code,'MODEL_RECONCILIATION_REQUIRED');
+});
+test('allowance qualification rejects paid or malformed selections before roster or inference',async t=>{
+  const store=fixture(t);let calls=0;
+  for(const selectedModelIds of [['gpt-6.2-astra'],[],['free/gpt-6-luna','free/gpt-6-luna'],[123]])
+    await assert.rejects(runModelFleet(options(store,MODEL_CATALOG,{selectedModelIds,verifyModels:async()=>{calls++;}})),{code:'INVALID_ALLOWANCE_SELECTION'});
+  assert.equal(calls,0);
 });
 test('all45 models can contribute, typed routes and fallback alias do not perform peer review',async t=>{
   const store=fixture(t),base=options(store,MODEL_CATALOG);const primary=[];

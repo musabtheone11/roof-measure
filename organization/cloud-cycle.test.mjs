@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import{mkdtempSync,rmSync,writeFileSync,readFileSync}from'node:fs';import{tmpdir}from'node:os';import{join}from'node:path';
-import{runCloudCycle,monitoringDecision}from'./cloud-cycle.mjs';import{renderCustomerPDF}from'./customer-report.mjs';
+import{runCloudCycle,monitoringDecision,cloudModelProfile,ALLOWANCE_QUALIFICATION_MODELS}from'./cloud-cycle.mjs';import{renderCustomerPDF}from'./customer-report.mjs';
 function setup(t){const dir=mkdtempSync(join(tmpdir(),'roof-cloud-cycle-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return{stateDir:join(dir,'state'),outputDir:join(dir,'output'),seed:123,count:3,sourceRevision:'fixture-source',browserStatus:'passed'};}
 async function casesRunner({outputDir}){const cases=[];for(const [i,split]of['development','validation','holdout'].entries()){
  const report={schemaVersion:1,jobId:'Synthetic'+i,revision:'v1',date:'2026',buildingScope:'Synthetic',status:'REVIEW REQUIRED',quantities:[{name:'Sloped area',value:100,unit:'ft²',status:'inferred',source:'Actual test-output fixture'}],notes:['Not field validation.']};
@@ -64,4 +64,31 @@ test('image studio and visual critique share the text workflow and produce51 uni
  assert.equal(r.fleet.budget.totalRequests,r.budget.totalRequests);assert.equal(r.fleet.budget.reportedUsd,r.budget.reportedUsd);
  assert.ok(r.reviews.filter(row=>row.contributionKind==='design-concept').every(row=>row.reviewerModel==='gpt-6.1-terra'&&row.reviewStatus==='complete'));
  assert.equal(r.decision.productionReleaseApproved,false);
+});
+test('allowance qualification forces the selected three-model zero-USD fleet and omits images and paid-role paths',async t=>{
+ const opts=setup(t);let received,designCalls=0,roleCalls=0;
+ const r=await runCloudCycle({...opts,casesRunner,apiKey:'test',paidAllowed:true,allowanceQualification:true,fleetMode:false,designMode:true,
+   requestRole:async()=>{roleCalls++;throw new Error('Paid role path must remain disabled');},
+   designRunner:async()=>{designCalls++;throw new Error('Image generation must remain disabled');},
+   designReviewer:async()=>{designCalls++;throw new Error('Image review must remain disabled');},
+   catalogAuditor:async()=>({status:'verified',hash:'c'.repeat(64),issuesByModel:{}}),
+   fleetRunner:async input=>{
+     received=input;const leaseTask={id:'qualification-fixture',workflowId:'qualification-fixture'};input.store.enqueue(leaseTask);const lease=input.store.claim('qualification-worker');
+     const stamp=Date.now(),attempt=input.store.reserve(lease.id,'qualification-worker',lease.fence,{usd:0,requestLimit:6,maxUsd:0,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80,
+       allowance:{reservedUnits:100,remainingUnits:123456789,observedAt:stamp,expiresAt:stamp+60000,periodKey:'private-test-period',unlimited:false}});
+     input.store.dispatch(attempt,'qualification-worker',lease.fence);input.store.settle(attempt,'qualification-worker',lease.fence,{reportedUsd:0,reportedAllowanceUnits:null,estimatedAllowanceUnits:3});
+     input.store.finish(lease.id,'qualification-worker',lease.fence,{status:'complete'});
+     return{planHash:'d'.repeat(64),catalog:{rosterCount:45},coverage:{selectedCount:3},budget:{requestLimit:6,maxUsd:0},agents:input.selectedModelIds.map(model=>({model,role:'critique',status:'complete',primaryValidated:true,attempted:true,reviewStatus:'complete',decision:'revise'}))};
+   }});
+ assert.deepEqual(received.selectedModelIds,[...ALLOWANCE_QUALIFICATION_MODELS]);assert.deepEqual(received.limits,{requestLimit:6,maxUsd:0});
+ assert.equal(designCalls,0);assert.equal(roleCalls,0);assert.equal(r.executionProfile,'allowance-qualification');assert.equal(r.fleet.agents.length,3);assert.equal(r.fleet.design,undefined);
+ assert.equal(r.budget.maxUsd,0);assert.equal(r.budget.requestLimit,6);assert.equal(r.budget.reportedUsd,0);assert.equal(r.budget.committedUsd,0);assert.equal(r.budget.weekUsd,20);
+ assert.equal(r.allowance.reservedUnits,100);assert.equal(r.allowance.estimatedUnits,3);assert.equal(r.allowance.unknownAllowanceRequests,1);assert.equal(r.allowance.attempts,undefined);
+ assert.doesNotMatch(JSON.stringify(r.allowance),/remaining|observed|expires|period/i);assert.equal(JSON.parse(readFileSync(join(opts.outputDir,'cycle.json'))).executionProfile,'allowance-qualification');
+ assert.equal(r.decision.productionReleaseApproved,false);assert.match(r.scope,/Three selected free models only/);
+});
+test('CLI model-mode mapping isolates allowance qualification without changing the all-model profile',()=>{
+ assert.deepEqual(cloudModelProfile('allowance-qualification'),{allowanceQualification:true,fleetMode:true,designMode:false});
+ assert.deepEqual(cloudModelProfile('all-models'),{allowanceQualification:false,fleetMode:true,designMode:true});
+ assert.deepEqual(cloudModelProfile(undefined),{allowanceQualification:false,fleetMode:false,designMode:false});
 });

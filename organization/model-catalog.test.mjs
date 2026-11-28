@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MODEL_CATALOG,MODEL_BY_ID,CATALOG_METADATA,getModelCatalogEntry,getVerifiedModelPrice} from './model-catalog.mjs';
+import {MODEL_CATALOG,MODEL_BY_ID,CATALOG_METADATA,getModelCatalogEntry,getVerifiedModelPrice,textAllowanceReservationUnits} from './model-catalog.mjs';
 test('catalog represents every exact verified active model with conservative published pricing',()=>{
   assert.equal(MODEL_CATALOG.length,45);assert.equal(new Set(MODEL_CATALOG.map(m=>m.id)).size,45);
   assert.equal(MODEL_CATALOG.filter(m=>m.billingTier==='paid').length,22);
@@ -24,4 +24,10 @@ test('free allowance, subscription flags, alias and modality limitations remain 
   assert.equal(getVerifiedModelPrice('gpt-6.2-astra').maxRate,.5); // discount does not reduce conservative hold
   assert.equal(getModelCatalogEntry('drex-v2.0').routeClaim,'decisions');
   assert.equal(getModelCatalogEntry('free/drex-v2.0').routeClaim,'chat-completions');
+});
+test('weighted reservation covers complete input and output windows when providers exceed requested output',()=>{
+  assert.equal(textAllowanceReservationUnits('free/gpt-6-luna',2000),2*1048576*3);
+  assert.equal(textAllowanceReservationUnits('free/gpt-6-luna',4096),textAllowanceReservationUnits('free/gpt-6-luna',2000));
+  assert.equal(textAllowanceReservationUnits('free/gpt-6-luna',2*1048576),3*1048576*3);
+  for(const id of ['gpt-6.2-astra','unknown'])assert.throws(()=>textAllowanceReservationUnits(id),{code:'ALLOWANCE_MODEL_UNVERIFIED'});
 });
