@@ -305,7 +305,7 @@ main {
 }
 .coverage {
   display:grid;
-  grid-template-columns:repeat(5,1fr);
+  grid-template-columns:repeat(6,minmax(0,1fr));
   gap:12px;
   margin-top:22px
 }
@@ -633,6 +633,100 @@ main {
 }
 @media(max-width:680px) {
   .unavailable ul {
+    grid-template-columns:1fr;
+  }
+}
+.coverage-item[data-kind=valid] strong {
+  color:var(--ok);
+}
+.coverage-item[data-kind=review] strong,.coverage-item[data-kind=blocked] strong {
+  color:var(--warning);
+}
+.coverage-item[data-kind=failed] strong {
+  color:var(--danger);
+}
+.badge[data-kind=valid] {
+  background:#1e3329;
+  border-color:#3d6a50;
+  color:var(--ok);
+}
+.badge[data-kind=review],.badge[data-kind=blocked] {
+  background:#342f22;
+  border-color:#645738;
+  color:var(--warning);
+}
+.badge[data-kind=failed] {
+  background:#352827;
+  border-color:#6b4941;
+  color:var(--danger);
+}
+.card-statuses {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:6px;
+  flex-shrink:0;
+  max-width:58%;
+}
+.source-link {
+  font-family:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  font-size:11px;
+  overflow-wrap:anywhere;
+}
+.subscription {
+  margin-top:18px;
+  padding:20px 24px;
+}
+.subscription-links {
+  margin-top:16px;
+  font-size:13px;
+}
+.subscription-links time {
+  display:block;
+  margin-top:5px;
+  color:var(--muted);
+}
+.subscription-counts {
+  margin:14px 0 8px;
+  font-size:13px;
+}
+#qualification-notice[data-kind=warning] {
+  color:var(--warning);
+}
+.subscription-models {
+  margin-top:14px;
+  color:var(--muted);
+  font-size:12px;
+}
+.subscription-models summary {
+  cursor:pointer;
+  color:var(--text);
+}
+.subscription-models ul {
+  padding-left:18px;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px 24px;
+}
+.subscription-models li {
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.subscription-models code {
+  display:block;
+  color:var(--text);
+  margin-bottom:4px;
+}
+@media(max-width:1000px) and (min-width:681px) {
+  .coverage {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+}
+@media(max-width:680px) {
+  .subscription {
+    padding:18px;
+  }
+  .subscription-models ul {
     grid-template-columns:1fr;
   }
 }
