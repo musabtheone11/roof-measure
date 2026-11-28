@@ -26,3 +26,15 @@ export function getVerifiedModelPrice(id) {
     maxRate:Math.max(model.inputPerMillion,model.outputPerMillion),billingTier:model.billingTier,allowanceWeight:model.allowanceWeight,
     checkedAt:CATALOG_METADATA.checkedAt,sources:model.sources});
 }
+
+// Historic providers exceeded max_tokens in completion telemetry. Reserve a
+// complete input window and output window rather than trusting that request cap.
+export function textAllowanceReservationUnits(id,requestedOutput=2000) {
+  const entry=getModelCatalogEntry(id);
+  if(!entry||!id.startsWith('free/')||entry.billingTier!=='free-allowance'||entry.inputPerMillion!==0||entry.outputPerMillion!==0||
+    !Number.isSafeInteger(entry.allowanceWeight)||entry.allowanceWeight<1||!Number.isSafeInteger(requestedOutput)||requestedOutput<1)
+    throw Object.assign(new Error('Exact free model pricing and bounded output are required'),{code:'ALLOWANCE_MODEL_UNVERIFIED'});
+  const result=(entry.contextTokens+Math.max(entry.contextTokens,requestedOutput))*entry.allowanceWeight;
+  if(!Number.isSafeInteger(result)||result<1)throw Object.assign(new Error('Weighted allowance reservation exceeds its bound'),{code:'ALLOWANCE_MODEL_UNVERIFIED'});
+  return result;
+}

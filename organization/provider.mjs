@@ -1,9 +1,10 @@
 import { validateTask, validateResult, MODEL_BY_ROLE, ROLE_PAYLOAD_CONTRACTS } from './contracts.mjs';
 import {normalizeAgentJSON} from '../server/contracts.mjs';
-import {getVerifiedModelPrice,getModelCatalogEntry,CATALOG_METADATA} from './model-catalog.mjs';
+import {getVerifiedModelPrice,getModelCatalogEntry,CATALOG_METADATA,textAllowanceReservationUnits} from './model-catalog.mjs';
 import {isDecisionModel,buildDecisionRequest,validateDecisionResponse} from './decision-provider.mjs';
 import {createHash} from 'node:crypto';
 import {readProviderErrorDetails} from './provider-error.mjs';
+import {verifySubscriptionAllowance,buildAllowanceReservation,allowanceUsage} from './allowance.mjs';
 
 const API_ROOT = 'https://api.apinex.bond/v1';
 const MAX_BODY = 2 * 1024 * 1024;
@@ -172,7 +173,15 @@ export async function requestOrganizationRole(task, {
     { role: 'user', content: imageParts.length?[{type:'text',text:userText},...imageParts]:userText },
   ], max_tokens: task.constraints?.maxOutputTokens ?? 2000, stream: false, response_format: { type: 'json_object' } });
   const combined = timeoutSignal(signal, timeoutMs);
-  const reservation = await reserve({ usd: price.contextTokens * price.maxRate / 1e6, model });
+  let allowance;
+  if(price.billingTier==='free-allowance') {
+    if(!model.startsWith('free/')||price.inputPerMillion!==0||price.outputPerMillion!==0||!Number.isSafeInteger(price.allowanceWeight)||price.allowanceWeight<1)
+      fail('ALLOWANCE_MODEL_UNVERIFIED','Subscription routing requires exact verified zero-dollar pricing and weight');
+    const snapshot=await verifySubscriptionAllowance({apiKey,fetchImpl,signal:combined,timeoutMs:Math.min(timeoutMs,20000)});
+    allowance=buildAllowanceReservation(snapshot,{reservedUnits:textAllowanceReservationUnits(model,task.constraints?.maxOutputTokens??2000),
+      subscriptionRequired:getModelCatalogEntry(model)?.requiresSubscription===true});
+  }
+  const reservation = await reserve({ usd: price.contextTokens * price.maxRate / 1e6, model, ...(allowance?{allowance}:{}) });
   if (reservation == null || reservation === false) fail('BUDGET_DISABLED', 'No durable request reservation was granted');
   let dispatched = false;
   let usageNotified = false;
@@ -203,6 +212,7 @@ export async function requestOrganizationRole(task, {
         outputTokens:Number.isSafeInteger(response?.usage?.output_tokens)&&response.usage.output_tokens>=0?response.usage.output_tokens:null,
         totalTokens:Number.isSafeInteger(response?.usage?.total_tokens)&&response.usage.total_tokens>=0?response.usage.total_tokens:null},
       allowanceWeight:price.allowanceWeight,
+      ...(allowance?{allowanceReservedUnits:allowance.reservedUnits,...allowanceUsage(response?.usage,{weight:price.allowanceWeight})}:{}),
     };
     usageNotified = true;
     await onUsage(reservation, { ...execution });

@@ -1,7 +1,8 @@
-import {MODEL_CATALOG,CATALOG_METADATA,getVerifiedModelPrice} from './model-catalog.mjs';
+import {MODEL_CATALOG,CATALOG_METADATA,getVerifiedModelPrice,textAllowanceReservationUnits} from './model-catalog.mjs';
 import {verifyRoster,requestOrganizationRole} from './provider.mjs';
 import {validateResult} from './contracts.mjs';
 import {createHash} from 'node:crypto';
+import {reconcileLegacyFreeAllowance} from './allowance-legacy.mjs';
 import {setTimeout as wait} from 'node:timers/promises';
 
 export const FLEET_PROTOCOL='apinex-model-fleet-v1';
@@ -118,20 +119,26 @@ function minimalAgent(row){return {model:row.model,team:row.team,role:row.role,s
 export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,sourceRevision,inputHash,
   developmentContext={},aggregateContext={},paidAllowed=false,apiKey=process.env.APINEX_API_KEY,
   requestRole=requestOrganizationRole,verifyModels=verifyRoster,checkpoint=async()=>{},limits={},now=Date.now,signal,
-  minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=40*60000,catalogAudit}={}) {
+  minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=40*60000,catalogAudit,selectedModelIds=null}={}) {
   if(!text(evaluationHash,200)||!text(sourceRevision,200)||!/^([a-f0-9]{64})$/.test(inputHash||''))fail('INVALID_FLEET_INPUT','Frozen evaluation/source/input bindings are required');
   if(!Number.isInteger(runtimeMs)||runtimeMs<0||runtimeMs>40*60000)fail('INVALID_FLEET_LIMIT','Fleet runtime must be 0..40minutes');
   const deadline=now()+runtimeMs,timeout=AbortSignal.timeout(Math.max(1,runtimeMs));
   const fleetSignal=signal?AbortSignal.any([signal,timeout]):timeout;
   validateDevelopmentContext(developmentContext);const devFacts=buildMetricFacts(developmentContext),aggregateFacts=buildMetricFacts(aggregateContext);
   const catalogData=metadata(catalog),entries=new Map(catalogData.models.map(m=>[m.id,m]));
+  if(selectedModelIds!==null&&(!Array.isArray(selectedModelIds)||selectedModelIds.length<1||selectedModelIds.length>64||
+    new Set(selectedModelIds).size!==selectedModelIds.length||selectedModelIds.some(id=>{
+      const entry=entries.get(id);return typeof id!=='string'||!id.startsWith('free/')||entry?.billingTier!=='free-allowance'||entry.inputPerMillion!==0||entry.outputPerMillion!==0;
+    })))fail('INVALID_ALLOWANCE_SELECTION','Qualification selection is restricted to verified zero-dollar subscription routes');
   let roster=null,rosterFailure=null;
   if(runtimeMs>=45000&&paidAllowed&&apiKey&&store)try{roster=await verifyModels({apiKey,signal:fleetSignal});}catch(error){rosterFailure=error;}
   const runtimeIds=new Set(roster?.ids||catalogData.models.map(m=>m.id));
-  const completeEntries=[...catalogData.models,...[...runtimeIds].filter(id=>!entries.has(id)).map(id=>({id,family:'unqualified',pricingStatus:'unknown',routeClaim:'unverified'}))];
+  const completeEntries=selectedModelIds?selectedModelIds.map(id=>entries.get(id)):
+    [...catalogData.models,...[...runtimeIds].filter(id=>!entries.has(id)).map(id=>({id,family:'unqualified',pricingStatus:'unknown',routeClaim:'unverified'}))];
   if(!Number.isFinite(minimumDispatchIntervalMs)||minimumDispatchIntervalMs<0||minimumDispatchIntervalMs>10000)fail('INVALID_FLEET_LIMIT','Dispatch pacing must be 0..10000ms');
   let all=buildFleetAssignments(completeEntries,{events:store?.events()||[]});
   const actualLimits=limitsOf(limits,all.length),planBinding={protocol:FLEET_PROTOCOL,evaluationHash,sourceRevision,inputHash,
+    selectedModelIds,
     catalogHash:catalogData.catalogHash,catalogAuditHash:catalogAudit?.hash||null,developmentContextHash:hash(developmentContext),aggregateContextHash:hash(aggregateContext),
     assignmentHash:hash([...all].sort((a,b)=>a.model.localeCompare(b.model)).map(({lastDispatched,...a})=>a))};
   const planHash=hash(planBinding),workflowId='fleet-'+planHash.slice(0,32),pending=[],responses=new Map(),agents=[],closingReviews=[];
@@ -141,13 +148,16 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   for(const event of existingEvents)if(event.kind==='fleet-quota-cooldown'&&event.detail?.notBefore>now()){
     if(event.detail.scope==='free-allowance')freeCooldown=true;else providerCooldown=true;
   }
+  let allowanceLegacyFailure=null;
   if(store){
     store.recover();store.setControl('running');
+    try{reconcileLegacyFreeAllowance(store);}catch(error){allowanceLegacyFailure=error.code||'ALLOWANCE_LEGACY_MAPPING_REQUIRED';}
     const priorPlan=existingEvents.find(e=>e.kind==='fleet-plan'&&e.detail?.planHash===planHash);
     if(priorPlan)all=JSON.parse(store.readArtifact(priorPlan.detail.artifactHash)).assignments;
     else{const artifact=store.putArtifact(Buffer.from(JSON.stringify({planBinding,assignments:all})));store.event(null,'fleet-plan',{planHash,artifactHash:artifact.hash,assigned:all.length});}
   }
-  const circuitFor=model=>existingEvents.some(e=>['fleet-model-circuit-open','fleet-model-ambiguous-billing'].includes(e.kind)&&e.detail?.model===model);
+  const circuitFor=model=>existingEvents.some(e=>e.detail?.model===model&&
+    (e.kind==='fleet-model-circuit-open'||e.kind==='fleet-model-ambiguous-billing'&&entries.get(model)?.billingTier!=='free-allowance'));
   function taskId(assignment,suffix='primary'){return 'fleet-'+planHash.slice(0,24)+'-'+hash(assignment.model).slice(0,20)+'-'+suffix;}
   function baseRow(assignment){return {...assignment,proposedReviewerModel:assignment.reviewerModel,reviewerModel:null,taskId:taskId(assignment),status:'blocked',code:null,attempted:false,decision:null,reportedUsd:0,
     execution:null,resultHash:null,reviewStatus:'pending',primaryValidated:false};}
@@ -203,6 +213,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
     if(catalogAudit&&catalogAudit.status!=='verified'){row.code='PUBLIC_CATALOG_UNVERIFIED';return;}
     if(catalogAudit?.issuesByModel?.[assignment.model]){row.code=String(catalogAudit.issuesByModel[assignment.model]).slice(0,100);return;}
     if(!entry||!price){row.code='PRICING_UNKNOWN';return;}
+    if(entry.billingTier==='free-allowance'&&allowanceLegacyFailure){row.code=allowanceLegacyFailure;return;}
     if(providerBlocked){row.code=providerBlocked;return;}
     if(circuitFor(assignment.model)){row.code='MODEL_RECONCILIATION_REQUIRED';return;}
     if(providerCooldown||(freeCooldown&&entry.billingTier==='free-allowance')){row.code='RATE_LIMIT_COOLDOWN';return;}
@@ -221,7 +232,11 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       const delay=last==null||minimumDispatchIntervalMs===0?0:Math.max(0,last+minimumDispatchIntervalMs-now());
       if(delay)await waitImpl(delay,{signal:fleetSignal});
       const responseValue=await requestRole(task,{apiKey,model:assignment.model,context,signal:fleetSignal,verifiedRoster:roster,
-        reserve:async({usd})=>{const id=store.reserve(task.id,'fleet-worker',lease.fence,{usd,...actualLimits});await checkpoint({phase:'reserved',taskId:task.id,model:assignment.model});return id;},
+        reserve:async({usd,allowance})=>{
+          if(entry.billingTier==='free-allowance'&&(usd!==0||allowance?.reservedUnits!==textAllowanceReservationUnits(assignment.model,task.constraints.maxOutputTokens)))
+            fail('ALLOWANCE_RESERVATION_MISSING','Free text requires its complete verified weighted allowance hold');
+          const id=store.reserve(task.id,'fleet-worker',lease.fence,{usd,...actualLimits,...(allowance?{allowance}:{})});await checkpoint({phase:'reserved',taskId:task.id,model:assignment.model});return id;
+        },
         onDispatch:async id=>{if(timeout.aborted||now()+45000>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient remaining runtime before model dispatch');store.dispatch(id,'fleet-worker',lease.fence);dispatched=true;row.attempted=true;store.event(task.id,'fleet-dispatched',{model:assignment.model,planHash});await checkpoint({phase:'dispatched',taskId:task.id,model:assignment.model});},
         onUsage:async(id,usage)=>{store.settle(id,'fleet-worker',lease.fence,usage);await checkpoint({phase:'settled',taskId:task.id,model:assignment.model});},
         onResponse:record=>{rawArtifact=store.putArtifact(Buffer.from(JSON.stringify(record)));}});

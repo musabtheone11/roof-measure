@@ -16,6 +16,11 @@ import {reviewDesignConcepts,DESIGN_REVIEW_MODEL} from './design-review.mjs';
 import {pruneDesignImageCache} from './design-cache.mjs';
 
 export const CLOUD_PROTOCOL='cloud-evaluation-v1';
+export const ALLOWANCE_QUALIFICATION_MODELS=Object.freeze(['free/gpt-6-luna','free/qwen-3.8-max','free/minimax-m3.1-flash']);
+export function cloudModelProfile(mode){
+  const allowanceQualification=mode==='allowance-qualification';
+  return {allowanceQualification,fleetMode:allowanceQualification||mode==='all-models',designMode:mode==='all-models'};
+}
 export function monitoringDecision(metrics,reviews,pdfReview,browserStatus='not-run',fleet=null) {
   const reasons=[];
   if(!metrics || !Number.isInteger(metrics.attempted) || metrics.attempted<1)reasons.push('NO_CASES');
@@ -50,8 +55,10 @@ function directoryZip(directory) {
 export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevision,apiKey=process.env.APINEX_API_KEY,paidAllowed=false,browserStatus='not-run',
   casesRunner=runCloudCases,requestRole=requestOrganizationRole,checkpoint=async()=>{},now=Date.now,
   fleetMode=false,fleetRunner=runModelFleet,catalogAuditor=auditModelCatalog,
-  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts}={}) {
+  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts,allowanceQualification=false}={}) {
   if(!stateDir||!outputDir||!sourceRevision||!Number.isSafeInteger(seed))throw new Error('Explicit cloud state/output/seed/revision required');
+  if(allowanceQualification){fleetMode=true;designMode=false;}
+  const executionProfile=allowanceQualification?'allowance-qualification':fleetMode?(designMode?'all-models':'text-fleet'):'two-role';
   outputDir=resolve(outputDir);stateDir=resolve(stateDir);mkdirSync(outputDir,{recursive:true,mode:0o700});
   const generated=await casesRunner({outputDir,seed,count,sourceRevision});
   // Build split pass counts from independently verified case records, never
@@ -107,7 +114,8 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       fleet=await fleetRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
         developmentContext:{...contextBase,metrics:developmentMetrics,pdfReview:{checked:developmentPDFs.length,failed:developmentPDFs.filter(p=>!p.ok).length},developmentCases:development},
         aggregateContext:contextBase,paidAllowed,apiKey,requestRole,checkpoint,now,catalogAudit,
-        limits:{requestLimit:designMode?57:64}});
+        ...(allowanceQualification?{selectedModelIds:[...ALLOWANCE_QUALIFICATION_MODELS]}:{}),
+        limits:allowanceQualification?{requestLimit:6,maxUsd:0}:{requestLimit:designMode?57:64}});
       if(designMode) {
         const workflowId='fleet-'+fleet.planHash.slice(0,32);
         const design=await designRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
@@ -184,6 +192,9 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       }finally {if(!settled)store.recover();}
     }
     const ledger=store?store.ledger():{requests:null,reportedUsd:null,reservedUsd:null,unknownBillingRequests:null};
+    const allowanceLedger=store?.allowanceLedger();
+    // This private aggregate omits attempt-level provider balances/snapshots.
+    const allowance=allowanceLedger?Object.fromEntries(['requests','reservedUnits','reportedUnits','estimatedUnits','unknownAllowanceRequests','unknownUnits','pendingUnits','incident','limits'].map(key=>[key,allowanceLedger[key]])):null;
     if(fleet) {
       fleet.coverage={...fleet.coverage,assigned:fleet.agents.length,attempted:fleet.agents.filter(a=>a.attempted).length,
         validContributions:fleet.agents.filter(a=>a.primaryValidated).length,
@@ -195,13 +206,14 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       fleet.budget={...fleet.budget,totalRequests:ledger.requests,reportedUsd:ledger.reportedUsd,
         committedUsd:ledger.reservedUsd,unknownBillingRequests:ledger.unknownBillingRequests};
     }
-    const report={schemaVersion:1,protocol:CLOUD_PROTOCOL,sourceRevision,seed,count,evaluationHash,
+    const report={schemaVersion:1,protocol:CLOUD_PROTOCOL,sourceRevision,seed,count,evaluationHash,executionProfile,
       generatedAt:new Date(now()).toISOString(),metrics:generated.metrics,reviews,stateWarning,
       browserStatus,pdfReview:{checked:pdfReview.checked,failed:pdfReview.failed},fleet,
       decision:monitoringDecision(generated.metrics,reviews,pdfReview,browserStatus,fleet),
-      budget:{requestLimit:fleet?.budget?.requestLimit??2,maxUsd:fleet?.budget?.maxUsd??AUTHORIZED_BUDGET.maxUsd,dayUsd:AUTHORIZED_BUDGET.dayUsd,weekUsd:20,monthUsd:80,
+      allowance,
+      budget:{requestLimit:allowanceQualification?6:fleet?.budget?.requestLimit??2,maxUsd:allowanceQualification?0:fleet?.budget?.maxUsd??AUTHORIZED_BUDGET.maxUsd,dayUsd:AUTHORIZED_BUDGET.dayUsd,weekUsd:20,monthUsd:80,
         totalRequests:ledger.requests,reportedUsd:ledger.reportedUsd,committedUsd:ledger.reservedUsd,unknownBillingRequests:ledger.unknownBillingRequests},
-      windowsDownloadsRequired:false,scope:'Cloud-generated monitoring; synthetic cases are not real-property accuracy evidence'};
+      windowsDownloadsRequired:false,scope:allowanceQualification?'Three selected free models only: bounded allowance qualification; no image generation, paid-model review or all-catalog coverage claim. Synthetic cases are not real-property accuracy evidence.':'Cloud-generated monitoring; synthetic cases are not real-property accuracy evidence'};
     writeFileSync(join(outputDir,'cycle.json'),JSON.stringify(report,null,2));
     const escaped=x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
     const pdfs=(generated.cases||[]).map(c=>c.artifacts?.customerPDF?.path).filter(Boolean);
@@ -217,7 +229,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const seed=Number(arg('--seed',new Date().toISOString().slice(0,10).replaceAll('-','')));
   runCloudCycle({stateDir:arg('--state','.devcache/cloud-state'),outputDir:arg('--output','.devcache/cloud-output'),
     count:Number(arg('--count','12')),seed,sourceRevision,browserStatus:process.env.ROOF_CLOUD_BROWSER_STATUS==='success'?'passed':'not-run',paidAllowed:process.env.ROOF_CLOUD_PAID_ALLOWED==='true',apiKey:process.env.ROOF_CLOUD_PAID_ALLOWED==='true'?process.env.APINEX_API_KEY:null,
-    fleetMode:process.env.ROOF_CLOUD_MODEL_MODE==='all-models',designMode:process.env.ROOF_CLOUD_MODEL_MODE==='all-models',
+    ...cloudModelProfile(process.env.ROOF_CLOUD_MODEL_MODE),
     checkpoint:async event=>{if(event.model&&event.phase)console.log(JSON.stringify({event:'model-task',phase:event.phase,model:event.model}));}}).then(r=>{
       console.log(JSON.stringify({status:r.decision.status,metrics:r.metrics,reviews:r.reviews.map(x=>({role:x.role,status:x.status})),budget:r.budget}));
       if(process.env.GITHUB_STEP_SUMMARY)writeFileSync(process.env.GITHUB_STEP_SUMMARY,

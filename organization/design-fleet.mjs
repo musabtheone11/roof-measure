@@ -5,6 +5,7 @@ import {setTimeout as wait} from 'node:timers/promises';
 import {DESIGN_CATALOG,DESIGN_CATALOG_METADATA,auditDesignCatalog} from './design-catalog.mjs';
 import {requestDesignConcept,inspectDesignImage} from './design-provider.mjs';
 import {sanitizeProviderErrorDetails} from './provider-error.mjs';
+import {reconcileLegacyFreeAllowance} from './allowance-legacy.mjs';
 
 export const DESIGN_PROTOCOL='roof-design-concepts-v1';
 export const DESIGN_LIMITS=Object.freeze({requestLimit:6,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80});
@@ -147,6 +148,10 @@ export async function runDesignFleet({store,evaluationHash,sourceRevision,inputH
     if(existingEvents.some(e=>e.kind==='design-model-circuit-open'&&e.detail?.model===entry.id)){row.code='DESIGN_MODEL_RECONCILIATION_REQUIRED';continue;}
     if(!audit||!Array.isArray(audit.readyIds)){row.code=auditError||'DESIGN_CATALOG_UNVERIFIED';continue;}
     if(!audit.readyIds.includes(entry.id)){row.code=audit.blocked?.find(m=>m.id===entry.id)?.code||'DESIGN_MODEL_NOT_READY';continue;}
+    if(entry.billingTier==='free-allowance'){
+      try{reconcileLegacyFreeAllowance(store);}
+      catch{row.code='ALLOWANCE_LEGACY_MAPPING_REQUIRED';continue;}
+    }
     const blocked=budgetBlock(store,workflowId,entry.reserveUsd,actualLimits,now(),requestCap);
     if(blocked){row.code=blocked;continue;}
     const priorDispatch=store.events().filter(e=>['fleet-dispatched','design-dispatched'].includes(e.kind)).at(-1)?.created;
@@ -165,7 +170,9 @@ export async function runDesignFleet({store,evaluationHash,sourceRevision,inputH
       heartbeat=setInterval(()=>{try{if(store.getControl()==='stopped')localAbort.abort();else store.heartbeat(task.id,'design-worker',lease.fence,120000);}catch{localAbort.abort();}},15000);
       if(delay)await waitImpl(delay,{signal:callSignal});
       response=await requestDesign(task,{model:entry.id,prompt,apiKey,signal:callSignal,timeoutMs:120000,
-        reserve:async({usd})=>{if(usd!==entry.reserveUsd)fail('DESIGN_RESERVATION_MISMATCH','Image reservation differs from verified flat-price hold');const id=store.reserve(task.id,'design-worker',lease.fence,{usd,...actualLimits,requestLimit:requestCap});await checkpoint({phase:'design-reserved',taskId:task.id,model:entry.id});return id;},
+        reserve:async({usd,allowance})=>{if(usd!==entry.reserveUsd)fail('DESIGN_RESERVATION_MISMATCH','Image reservation differs from verified flat-price hold');
+          if(entry.billingTier==='free-allowance'&&(!allowance||allowance.reservedUnits!==entry.allowanceTokens))fail('ALLOWANCE_UNVERIFIED','Free image requires a durable verified allowance reservation');
+          const id=store.reserve(task.id,'design-worker',lease.fence,{usd,...actualLimits,requestLimit:requestCap,...(allowance?{allowance}:{})});await checkpoint({phase:'design-reserved',taskId:task.id,model:entry.id});return id;},
         onDispatch:async id=>{if(timeout.aborted||now()+120000>deadline)fail('DESIGN_RUNTIME_LIMIT','Insufficient design runtime before image dispatch');store.dispatch(id,'design-worker',lease.fence);dispatchedNow=true;row.attempted=true;phaseDispatches++;store.event(task.id,'design-dispatched',{model:entry.id});await checkpoint({phase:'design-dispatched',taskId:task.id,model:entry.id});},
         onUsage:async(id,usage)=>{store.settle(id,'design-worker',lease.fence,usage);await checkpoint({phase:'design-settled',taskId:task.id,model:entry.id});},
         onResponse:record=>{rawMetadata=store.putArtifact(Buffer.from(JSON.stringify(record)));}});

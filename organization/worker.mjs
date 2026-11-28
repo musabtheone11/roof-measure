@@ -59,8 +59,8 @@ export async function workOnce(store, {workerId = 'local-worker', signal, provid
       const resolved = await adapters.resolveContext(task, context);
       const {fence: runtimeFence, ...providerTask} = task;
       const response = await provider(providerTask, {signal: controller.signal, context: resolved,
-        reserve: ({usd}) => store.reserve(task.id, workerId, task.fence, {
-          usd, requestLimit: budget.requestLimit ?? 0, maxUsd: budget.maxUsd ?? 0,
+        reserve: ({usd,allowance}) => store.reserve(task.id, workerId, task.fence, {
+          usd,...(allowance?{allowance}:{}), requestLimit: budget.requestLimit ?? 0, maxUsd: budget.maxUsd ?? 0,
           hourUsd: budget.hourUsd ?? 0, dayUsd: budget.dayUsd ?? 0, monthUsd: budget.monthUsd ?? 0, weekUsd: budget.weekUsd ?? 0}),
         onDispatch: id => store.dispatch(id, workerId, task.fence),
         onResponse: record => { responseArtifact = store.putArtifact(Buffer.from(JSON.stringify(record))); },
