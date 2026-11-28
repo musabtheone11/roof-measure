@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Generate a cycle, review retained results, evaluate subscription models, or run productive subscription work
+        description: Generate a cycle, review retained results, evaluate subscription models, run productive work, or check three recovery routes
         type: choice
-        options: [cycle, review-existing, allowance-qualification, allowance-roster, allowance-work]
+        options: [cycle, review-existing, allowance-qualification, allowance-roster, allowance-work, allowance-recovery]
         default: cycle
       review_run_id:
         description: Completed laboratory run to review (review-existing only)
@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 052a370812b966f3f44113a98c1ac08395fc5ff1
+          ref: 3eff070d1b7ab8230e8bc0ecb941499caf199b14
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -65,7 +65,7 @@ jobs:
           SELECTED_OPERATION: ${{ inputs.operation || (github.event_name == 'schedule' && (github.event.schedule == '17 4 * * 0' && 'allowance-roster' || 'allowance-work')) || 'cycle' }}
         run: |
           case "$SELECTED_OPERATION" in
-            cycle|review-existing|allowance-qualification|allowance-roster|allowance-work) ;;
+            cycle|review-existing|allowance-qualification|allowance-roster|allowance-work|allowance-recovery) ;;
             *) echo "Unsupported cloud operation" >&2; exit 1 ;;
           esac
           echo "operation=$SELECTED_OPERATION" >> "$GITHUB_OUTPUT"
@@ -106,7 +106,7 @@ jobs:
           APINEX_API_KEY: ${{ secrets.ROOF_ORG_APINEX_API_KEY || secrets.APINEX_API_KEY }}
           ROOF_CLOUD_PAID_ALLOWED: ${{ steps.bootstrap.outputs.paid_allowed }}
           ROOF_CLOUD_BROWSER_STATUS: ${{ steps.browser.outcome }}
-          ROOF_CLOUD_MODEL_MODE: ${{ steps.operation.outputs.operation == 'allowance-work' && 'allowance-work' || steps.operation.outputs.operation == 'allowance-roster' && 'allowance-roster' || steps.operation.outputs.operation == 'allowance-qualification' && 'allowance-qualification' || 'all-models' }}
+          ROOF_CLOUD_MODEL_MODE: ${{ steps.operation.outputs.operation == 'allowance-recovery' && 'allowance-recovery' || steps.operation.outputs.operation == 'allowance-work' && 'allowance-work' || steps.operation.outputs.operation == 'allowance-roster' && 'allowance-roster' || steps.operation.outputs.operation == 'allowance-qualification' && 'allowance-qualification' || 'all-models' }}
           ROOF_CLOUD_OPERATION: ${{ steps.operation.outputs.operation }}
           ROOF_REVIEW_RUN_ID: ${{ inputs.review_run_id }}
           ROOF_GENERATE_MISSING_DESIGNS: ${{ inputs.generate_missing_designs }}

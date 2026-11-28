@@ -3,10 +3,12 @@
   const STATUS_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-status.json';
   const QUALIFICATION_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-qualification.json';
   const WORK_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-work.json';
+  const RECOVERY_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-recovery.json';
+  const RECOVERY_MODELS=['free/drex-v2.0','free/gemini-4-hydrogen','free/hy4-flash'];
   const WORKFLOW_URL='https://github.com/musabtheone11/roof-measure/actions/workflows/roof-cloud.yml';
   const POLL_MS=60_000, STALE_MS=36*60*60*1000;
   const $=id=>document.getElementById(id);
-  let snapshot=null, qualification=null, work=null, inFlight=false, timer=null, lastAttempt=0;
+  let snapshot=null, qualification=null, work=null, recovery=null, inFlight=false, timer=null, lastAttempt=0;
   const text=(value,max=400)=>typeof value==='string'?value.slice(0,max):'';
   const count=value=>Number.isSafeInteger(value)&&value>=0?value:null;
   const usd=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null;
@@ -37,6 +39,13 @@
     if(fields.some(key=>count(data.summary?.[key])===null||data.summary[key]>1000000)||data.summary.completedFixes!==0||data.summary.uniqueModels!==data.models.length||new Set(data.models.map(row=>row.model)).size!==data.models.length)throw new Error('Invalid productive work counts');
     if(data.models.some(row=>count(row.taskCount)===null||row.taskCount<1||count(row.validatedTaskCount)===null||row.validatedTaskCount>row.taskCount))throw new Error('Invalid work model counts');
     if(data.models.reduce((sum,row)=>sum+row.taskCount,0)!==data.summary.dispatchedTasks||data.models.reduce((sum,row)=>sum+row.validatedTaskCount,0)!==data.summary.validatedTasks||data.summary.dispatchedTasks>data.summary.authorTasks+data.summary.reviewTasks||data.summary.validatedTasks>data.summary.dispatchedTasks)throw new Error('Inconsistent work task totals');
+    return data;
+  }
+  function checkedRecovery(data) {
+    checkedStatus(data);
+    if(data.executionProfile!=='allowance-recovery'||!/^([a-f0-9]{40})$/.test(data.sourceRevision||'')||!Number.isFinite(timestamp(data)))throw new Error('Invalid recovery journal provenance');
+    if(data.models.length>3||data.models.some(row=>!RECOVERY_MODELS.includes(row.model))||new Set(data.models.map(row=>row.model)).size!==data.models.length||(data.run?.pipelineResult==='success'&&data.models.length!==3))throw new Error('Invalid recovery route selection');
+    if(count(data.summary?.selectedCount)!==data.models.length||['attemptedCount','validCount','reviewedCount'].some(key=>count(data.summary?.[key])===null||data.summary[key]>data.models.length))throw new Error('Invalid recovery coverage counts');
     return data;
   }
   function isValid(row) {return row.contributionValidated===true;}
@@ -199,6 +208,24 @@
     $('work-models-heading').textContent=`Model task counts (${data.models.length} unique models)`;
     $('work-models').replaceChildren(...data.models.map(row=>{const item=make('li');item.append(make('code','',text(row.model,200)),make('span','',`${row.taskCount} recorded tasks · ${row.validatedTaskCount} validated outputs`));return item;}));
   }
+  function renderRecovery(error=null) {
+    $('qualification').hidden=false;$('recovery').hidden=false;$('recovery-content').hidden=!recovery;
+    if(!recovery){$('recovery-notice').textContent=error?.status===404?'No targeted recovery journal has been published. The subscription, full-roster and work journals are unchanged.':'Recovery status could not be loaded. The other journals remain available.';return;}
+    const data=recovery,time=timestamp(data),summary=data.summary;
+    $('recovery-notice').textContent=error?'Could not refresh this recovery run. Its last loaded record remains below; the other journals are unchanged.':'A separate check of three selected routes. It does not replace the broader subscription run, full-roster journal or productive work records.';
+    if(summary.selectedCount===0)$('recovery-notice').textContent+=' No recovery model results were published for this run.';
+    if(!error&&Date.now()-time>STALE_MS)$('recovery-notice').textContent+=' This recovery record is older than 36 hours.';
+    $('recovery-notice').dataset.kind=error||summary.selectedCount===0?'warning':'';
+    $('recovery-run').href=safeProjectURL(data.run?.url)||WORKFLOW_URL;$('recovery-run').textContent=`Run #${text(String(data.run?.id||'not reported'),30)} · attempt ${count(data.run?.attempt)??'?'} · pipeline ${title(data.run?.pipelineResult||'not reported')}`;
+    $('recovery-time').textContent=formatTime(time);$('recovery-time').dateTime=new Date(time).toISOString();$('recovery-age').textContent=ageLabel(time);
+    $('recovery-source').href=`https://github.com/musabtheone11/roof-measure/commit/${data.sourceRevision}`;$('recovery-source').textContent=`Source ${data.sourceRevision}`;
+    $('recovery-counts').textContent=`Published route records: ${summary.selectedCount} / 3 · Inference attempted: ${summary.attemptedCount} · Valid contributions: ${summary.validCount} · Reviews completed: ${summary.reviewedCount}`;
+    $('recovery-scope').textContent=text(data.scope,600)||'Three selected recovery routes only; no whole-catalog, implemented-fix or roofing-accuracy approval is implied.';
+    $('recovery-models-heading').textContent=`Recovery route records (${data.models.length} of 3 targets)`;
+    $('recovery-models').replaceChildren(...data.models.map(row=>{const item=make('li');item.append(make('code','',text(row.model,200)),make('span','',`${isValid(row)?'Valid contribution':labels[row.status]||'Not reported'}${needsReview(row)?' · review needed':''} · review ${title(row.reviewStatus||'not reported')}`));if(row.code)item.append(make('span','secondary',`Recorded reason: ${text(row.code,100)}`));return item;}));
+    const artifact=safeProjectURL(data.reportArtifact?.url),available=data.reportArtifact?.available===true&&artifact;$('recovery-evidence').textContent=available?'Open targeted recovery evidence':'Recovery evidence not published';$('recovery-evidence').setAttribute('aria-disabled',available?'false':'true');
+    if(available){$('recovery-evidence').href=artifact;$('recovery-evidence').target='_blank';$('recovery-evidence').rel='noopener noreferrer';}else $('recovery-evidence').removeAttribute('href');
+  }
   function schedule() {
     clearTimeout(timer);if(document.visibilityState!=='visible')return;
     timer=setTimeout(refresh,Math.max(0,POLL_MS-(Date.now()-lastAttempt)));
@@ -219,7 +246,8 @@
           notice(`Could not refresh public status${/^HTTP \d{3}$/.test(error.message)?` (${error.message})`:''}. ${snapshot?'The last successfully loaded record remains below; current activity is unverified.':'No model activity has been loaded. Open the cloud workflow or try Refresh status.'}`,'error');
         }),
         read(QUALIFICATION_URL,checkedQualification).then(data=>{qualification=data;renderQualification();}).catch(renderQualification),
-        read(WORK_URL,checkedWork).then(data=>{work=data;renderWork();}).catch(renderWork)
+        read(WORK_URL,checkedWork).then(data=>{work=data;renderWork();}).catch(renderWork),
+        read(RECOVERY_URL,checkedRecovery).then(data=>{recovery=data;renderRecovery();}).catch(renderRecovery)
       ]);
     }finally {inFlight=false;$('refresh').disabled=false;$('refresh').textContent='Refresh status';schedule();}
   }
