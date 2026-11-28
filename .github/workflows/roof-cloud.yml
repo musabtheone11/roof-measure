@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Generate a new cycle or review retained results without regenerating them
+        description: Generate a cycle, review retained results, or qualify three subscription models
         type: choice
-        options: [cycle, review-existing]
+        options: [cycle, review-existing, allowance-qualification]
         default: cycle
       review_run_id:
         description: Completed laboratory run to review (review-existing only)
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 2176b631caf8ea2d2b81b3e6df3d7072a69b8bd4
+          ref: 6c0d63072997888017d786970fb9eb938170f68b
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -94,7 +94,7 @@ jobs:
           APINEX_API_KEY: ${{ secrets.ROOF_ORG_APINEX_API_KEY || secrets.APINEX_API_KEY }}
           ROOF_CLOUD_PAID_ALLOWED: ${{ steps.bootstrap.outputs.paid_allowed }}
           ROOF_CLOUD_BROWSER_STATUS: ${{ steps.browser.outcome }}
-          ROOF_CLOUD_MODEL_MODE: all-models
+          ROOF_CLOUD_MODEL_MODE: ${{ inputs.operation == 'allowance-qualification' && 'allowance-qualification' || 'all-models' }}
           ROOF_CLOUD_OPERATION: ${{ inputs.operation || 'cycle' }}
           ROOF_REVIEW_RUN_ID: ${{ inputs.review_run_id }}
           ROOF_GENERATE_MISSING_DESIGNS: ${{ inputs.generate_missing_designs }}
@@ -139,7 +139,9 @@ jobs:
         run: exit 1
   publish-status:
     needs: generate-review-and-retain
-    if: always() && needs.generate-review-and-retain.outputs.source_revision != ''
+    # A three-model qualification is retained as a separate experiment; it must
+    # not replace the public journal's complete 51-model roster.
+    if: always() && needs.generate-review-and-retain.outputs.source_revision != '' && inputs.operation != 'allowance-qualification'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
