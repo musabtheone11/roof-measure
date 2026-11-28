@@ -20,10 +20,11 @@ import {buildCloudCaseWorkPackets} from './case-work-packets.mjs';
 
 export const CLOUD_PROTOCOL='cloud-evaluation-v1';
 export const ALLOWANCE_QUALIFICATION_MODELS=Object.freeze(['free/gpt-6-luna','free/qwen-3.8-max','free/minimax-m3.1-flash']);
+export const ALLOWANCE_RECOVERY_MODELS=Object.freeze(['free/drex-v2.0','free/gemini-4-hydrogen','free/hy4-flash']);
 export const ALLOWANCE_ROSTER_MODELS=Object.freeze(MODEL_CATALOG.filter(model=>model.billingTier==='free-allowance').map(model=>model.id));
 export function cloudModelProfile(mode){
-  const allowanceQualification=mode==='allowance-qualification',allowanceRoster=mode==='allowance-roster',allowanceWork=mode==='allowance-work';
-  return {allowanceQualification,allowanceRoster,allowanceWork,fleetMode:allowanceQualification||allowanceRoster||mode==='all-models',designMode:mode==='all-models'};
+  const allowanceQualification=mode==='allowance-qualification',allowanceRoster=mode==='allowance-roster',allowanceWork=mode==='allowance-work',allowanceRecovery=mode==='allowance-recovery';
+  return {allowanceQualification,allowanceRoster,allowanceWork,allowanceRecovery,fleetMode:allowanceQualification||allowanceRoster||allowanceRecovery||mode==='all-models',designMode:mode==='all-models'};
 }
 export function monitoringDecision(metrics,reviews,pdfReview,browserStatus='not-run',fleet=null) {
   const reasons=[];
@@ -59,11 +60,11 @@ function directoryZip(directory) {
 export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevision,apiKey=process.env.APINEX_API_KEY,paidAllowed=false,browserStatus='not-run',
   casesRunner=runCloudCases,requestRole=requestOrganizationRole,checkpoint=async()=>{},now=Date.now,
   fleetMode=false,fleetRunner=runModelFleet,catalogAuditor=auditModelCatalog,
-  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts,allowanceQualification=false,allowanceRoster=false,allowanceWork=false,caseWorkRunner=runCaseWorkQueue,casePacketBuilder=buildCloudCaseWorkPackets,casePlanBuilder=buildCaseWorkPlan}={}) {
+  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts,allowanceQualification=false,allowanceRoster=false,allowanceWork=false,allowanceRecovery=false,caseWorkRunner=runCaseWorkQueue,casePacketBuilder=buildCloudCaseWorkPackets,casePlanBuilder=buildCaseWorkPlan}={}) {
   if(!stateDir||!outputDir||!sourceRevision||!Number.isSafeInteger(seed))throw new Error('Explicit cloud state/output/seed/revision required');
-  const allowanceOnly=allowanceQualification||allowanceRoster||allowanceWork,allowanceRequestLimit=allowanceRoster||allowanceWork?48:6;
+  const allowanceOnly=allowanceQualification||allowanceRoster||allowanceWork||allowanceRecovery,allowanceRequestLimit=allowanceRoster||allowanceWork?48:6;
   if(allowanceOnly){fleetMode=!allowanceWork;designMode=false;}
-  const executionProfile=allowanceWork?'allowance-work':allowanceRoster?'allowance-roster':allowanceQualification?'allowance-qualification':fleetMode?(designMode?'all-models':'text-fleet'):'two-role';
+  const executionProfile=allowanceRecovery?'allowance-recovery':allowanceWork?'allowance-work':allowanceRoster?'allowance-roster':allowanceQualification?'allowance-qualification':fleetMode?(designMode?'all-models':'text-fleet'):'two-role';
   outputDir=resolve(outputDir);stateDir=resolve(stateDir);mkdirSync(outputDir,{recursive:true,mode:0o700});
   const generated=await casesRunner({outputDir,seed,count,sourceRevision});
   // Build split pass counts from independently verified case records, never
@@ -92,7 +93,8 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
     store?.recover();store?.setControl('running');
     // Development detail only. CEO sees aggregate evaluation and critique, never held-out oracle rows.
     const allDevelopment=(generated.cases||[]).filter(c=>c.split==='development');
-    const development=allDevelopment.slice(0,6).map(c=>{
+    const scopedDevelopment=allowanceRecovery?[allDevelopment.find(c=>!c.verification?.diagnosticPass)||allDevelopment[0]].filter(Boolean):allDevelopment;
+    const development=scopedDevelopment.slice(0,allowanceRecovery?1:6).map(c=>{
       let reportObservation=null;
       try {
         const bytes=readFileSync(join(outputDir,c.artifacts.customerData.path));
@@ -104,10 +106,10 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       } catch { /* Missing report evidence remains explicit; never synthesize source observations. */ }
       return {id:c.id,verification:c.verification,actual:c.actual,propertyGroup:c.propertyGroup,reportObservation};
     });
-    const developmentIds=new Set(allDevelopment.map(c=>c.id)),developmentPDFs=pdfResults.filter(r=>developmentIds.has(r.id));
-    const developmentMetrics={scope:'development-only',attempted:allDevelopment.length,
-      diagnosticPasses:allDevelopment.filter(c=>c.verification?.diagnosticPass).length,
-      reviewRequired:allDevelopment.filter(c=>!c.verification?.diagnosticPass).length,traceFailures:allDevelopment.filter(c=>c.error).length};
+    const developmentIds=new Set(scopedDevelopment.map(c=>c.id)),developmentPDFs=pdfResults.filter(r=>developmentIds.has(r.id));
+    const developmentMetrics={scope:'development-only',attempted:scopedDevelopment.length,
+      diagnosticPasses:scopedDevelopment.filter(c=>c.verification?.diagnosticPass).length,
+      reviewRequired:scopedDevelopment.filter(c=>!c.verification?.diagnosticPass).length,traceFailures:scopedDevelopment.filter(c=>c.error).length};
     const contextBase={protocol:CLOUD_PROTOCOL,sourceRevision,seed,metrics:generated.metrics,policy:generated.policy,
       oracleMethod:generated.oracle,execution:generated.execution,fixtureHash:generated.fixtureHash,engineSourceHashes:generated.engineSourceHashes,
       pdfReview:{checked:pdfReview.checked,failed:pdfReview.failed,method:'Independent PDF.js readback: quantity rows, metadata, Letter, text bounds/contrast, no images or vector paths'},scope:generated.scope,
@@ -131,11 +133,12 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
     } else if(fleetMode) {
       const catalogAudit=paidAllowed&&apiKey?await catalogAuditor():null;
       fleet=await fleetRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
-        developmentContext:{...contextBase,metrics:developmentMetrics,pdfReview:{checked:developmentPDFs.length,failed:developmentPDFs.filter(p=>!p.ok).length},developmentCases:development},
+        developmentContext:{...contextBase,metrics:developmentMetrics,pdfReview:{checked:developmentPDFs.length,failed:developmentPDFs.filter(p=>!p.ok).length},developmentCases:development,...(allowanceRecovery?{qualificationQuestion:'Review only the single supplied development counterexample. Verify one diagnostic finding or draft one concise provisional-report note using your assigned role. Return the shortest complete contract, at most one finding and a short summary. Do not invent UI controls, create artifacts, or analyze absent cases.'}:{})},
         aggregateContext:contextBase,paidAllowed,apiKey,requestRole,checkpoint,now,catalogAudit,
         allowanceReserveUnits:designMode?5000000:0,
-        ...(allowanceOnly?{selectedModelIds:[...(allowanceRoster?ALLOWANCE_ROSTER_MODELS:ALLOWANCE_QUALIFICATION_MODELS)]}:{}),
+        ...(allowanceOnly?{selectedModelIds:[...(allowanceRecovery?ALLOWANCE_RECOVERY_MODELS:allowanceRoster?ALLOWANCE_ROSTER_MODELS:ALLOWANCE_QUALIFICATION_MODELS)]}:{}),
         ...(allowanceRoster?{runtimeMs:60*60000}:{}),
+        ...(allowanceRecovery?{preserveCatalogRoles:true,deferPrimaryPeerReview:true,runtimeMs:15*60000}:{}),
         limits:allowanceOnly?{requestLimit:allowanceRequestLimit,maxUsd:0}:{requestLimit:designMode?57:64}});
       if(designMode) {
         const workflowId='fleet-'+fleet.planHash.slice(0,32);
@@ -234,7 +237,7 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       allowance,
       budget:{requestLimit:allowanceOnly?allowanceRequestLimit:fleet?.budget?.requestLimit??2,maxUsd:allowanceOnly?0:fleet?.budget?.maxUsd??AUTHORIZED_BUDGET.maxUsd,dayUsd:AUTHORIZED_BUDGET.dayUsd,weekUsd:20,monthUsd:80,
         totalRequests:ledger.requests,reportedUsd:ledger.reportedUsd,committedUsd:ledger.reservedUsd,unknownBillingRequests:ledger.unknownBillingRequests},
-      windowsDownloadsRequired:false,scope:allowanceWork?'Distinct development-case investigations by previously qualified subscription models; answers remain proposals pending independent review and tested code changes. No image generation, paid inference, field accuracy evidence or production approval.':allowanceRoster?`All ${ALLOWANCE_ROSTER_MODELS.length} verified free-allowance text models selected; bounded allowance roster run with no image generation, paid-model review or full-service catalog coverage claim. Synthetic cases are not real-property accuracy evidence.`:allowanceQualification?'Three selected free models only: bounded allowance qualification; no image generation, paid-model review or all-catalog coverage claim. Synthetic cases are not real-property accuracy evidence.':'Cloud-generated monitoring; synthetic cases are not real-property accuracy evidence'};
+      windowsDownloadsRequired:false,scope:allowanceRecovery?'Three targeted subscription recovery candidates using one existing development counterexample; retained 23-model qualification, full-service and case-work journals remain separate. No fabricated role output, field accuracy or production approval.':allowanceWork?'Distinct development-case investigations by previously qualified subscription models; answers remain proposals pending independent review and tested code changes. No image generation, paid inference, field accuracy evidence or production approval.':allowanceRoster?`All ${ALLOWANCE_ROSTER_MODELS.length} verified free-allowance text models selected; bounded allowance roster run with no image generation, paid-model review or full-service catalog coverage claim. Synthetic cases are not real-property accuracy evidence.`:allowanceQualification?'Three selected free models only: bounded allowance qualification; no image generation, paid-model review or all-catalog coverage claim. Synthetic cases are not real-property accuracy evidence.':'Cloud-generated monitoring; synthetic cases are not real-property accuracy evidence'};
     if(caseWork)report.decision={...report.decision,status:'review-required',reasons:[...new Set([...report.decision.reasons,'CASE_WORK_IS_ADVISORY_NO_IMPLEMENTED_FIX'])]};
     writeFileSync(join(outputDir,'cycle.json'),JSON.stringify(report,null,2));
     const escaped=x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');

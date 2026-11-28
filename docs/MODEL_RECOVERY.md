@@ -83,3 +83,25 @@ reference (at most 200 characters) or null, keeps draft wording in summary and
 findings, and forbids inventing UI control names. This clarifies the observed
 HY4 failure without weakening validation. It is not a successful HY4 recovery
 claim; a later distinct qualification must demonstrate compliance.
+
+## Targeted route and output recovery
+
+The manual `allowance-recovery` operation selects exactly free Drex, Gemini
+Hydrogen and HY4 Flash. It uses one existing development counterexample, preserves
+the catalog's operations/verification/reporting roles, and defers primary peer
+review so a compact capability test is not expanded by an earlier answer.
+Closing reviews remain independent and bounded. Limits are six calls, fifteen
+minutes, zero wallet reservation, and the same restored global allowance ledger.
+
+The free Drex Decisions candidate requires a content-addressed proof derived from
+the actual failed, dispatched HTTP 400 task directing that exact ID to
+`/v1/decisions`. Its new typed protocol has one atomic migration probe; old chat
+circuits and holds remain. Authentication, entitlement, identity or new-protocol
+failures cannot use that exception. A completed host-grounded typed routing
+response is a routing contribution, never engineering JSON, a peer review or
+release approval. Timeout, cancellation or failed fencing cannot qualify it.
+
+The targeted results use `latest-recovery.json`, separate from the 23-model
+qualification, full-roster and productive-work journals. The exact run/source
+and original artifacts are required before any candidate can be described as
+recovered. This protocol description alone does not claim successful recovery.

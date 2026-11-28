@@ -4,6 +4,8 @@ import {validateResult} from './contracts.mjs';
 import {createHash} from 'node:crypto';
 import {reconcileLegacyFreeAllowance} from './allowance-legacy.mjs';
 import {isPlainClassifier,PLAIN_CLASSIFIER_PROTOCOL} from './plain-classifier.mjs';
+import {isDecisionModel,FREE_DREX_DECISION_MODEL,FREE_DREX_DECISION_PROTOCOL} from './decision-provider.mjs';
+import {findFreeDrexRoutingEvidence,freeDrexDecisionAdmission,consumeFreeDrexDecisionDispatch,authorizeFreeDrexDecisionDispatch,recordFreeDrexDecisionQualification,validateFreeDrexDecisionOutput} from './route-evidence.mjs';
 import {setTimeout as wait} from 'node:timers/promises';
 
 export const FLEET_PROTOCOL='apinex-model-fleet-v1';
@@ -16,7 +18,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const text=(value,max=200)=>typeof value==='string'&&value.length>0&&value.length<=max;
 const roleByTeam={'roof engineering':'engineering','real-case testing':'verification',extraction:'extraction','reference data':'reference','independent critique':'critique',reporting:'reporting',operations:'operations'};
 const familyOf=(entry,assignment)=>assignment?.canonicalFamily||String(entry.family||entry.provider||entry.id).toLowerCase().replace(/^free\//,'').replace(/[^a-z0-9]+/g,'-');
-function routeOf(entry){return isPlainClassifier(entry.id)?'plain-classification':entry.routeClaim==='decisions'||['drex-v2.0','jev-1.13'].includes(entry.id)?'decisions':'chat-completions';}
+function routeOf(entry){return isDecisionModel(entry.id)?'decisions':isPlainClassifier(entry.id)?'plain-classification':entry.routeClaim==='decisions'?'decisions':'chat-completions';}
 
 /** Numeric claims bind only supplied deterministic facts; prose remains advisory. */
 export function buildMetricFacts(context={}) {
@@ -121,10 +123,11 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   developmentContext={},aggregateContext={},paidAllowed=false,apiKey=process.env.APINEX_API_KEY,
   requestRole=requestOrganizationRole,verifyModels=verifyRoster,checkpoint=async()=>{},limits={},now=Date.now,signal,
   minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=60*60000,catalogAudit,selectedModelIds=null,allowanceReserveUnits=0,
-  scheduleHeartbeat=(callback,ms)=>setInterval(callback,ms),cancelHeartbeat=clearInterval}={}) {
+  scheduleHeartbeat=(callback,ms)=>setInterval(callback,ms),cancelHeartbeat=clearInterval,preserveCatalogRoles=false,deferPrimaryPeerReview=false}={}) {
   if(!text(evaluationHash,200)||!text(sourceRevision,200)||!/^([a-f0-9]{64})$/.test(inputHash||''))fail('INVALID_FLEET_INPUT','Frozen evaluation/source/input bindings are required');
   if(!Number.isInteger(runtimeMs)||runtimeMs<0||runtimeMs>60*60000)fail('INVALID_FLEET_LIMIT','Fleet runtime must be 0..60minutes');
   if(!Number.isSafeInteger(allowanceReserveUnits)||allowanceReserveUnits<0||allowanceReserveUnits>500000000)fail('INVALID_FLEET_LIMIT','Allowance design headroom must be a bounded host policy');
+  if(typeof preserveCatalogRoles!=='boolean'||typeof deferPrimaryPeerReview!=='boolean'||(preserveCatalogRoles&&selectedModelIds===null))fail('INVALID_FLEET_INPUT','Scoped role/review controls require explicit booleans and selected IDs for preserved catalog roles');
   const deadline=now()+runtimeMs,timeout=AbortSignal.timeout(Math.max(1,runtimeMs));
   const fleetSignal=signal?AbortSignal.any([signal,timeout]):timeout;
   validateDevelopmentContext(developmentContext);const devFacts=buildMetricFacts(developmentContext),aggregateFacts=buildMetricFacts(aggregateContext);
@@ -139,9 +142,14 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   const completeEntries=selectedModelIds?selectedModelIds.map(id=>entries.get(id)):
     [...catalogData.models,...[...runtimeIds].filter(id=>!entries.has(id)).map(id=>({id,family:'unqualified',pricingStatus:'unknown',routeClaim:'unverified'}))];
   if(!Number.isFinite(minimumDispatchIntervalMs)||minimumDispatchIntervalMs<0||minimumDispatchIntervalMs>10000)fail('INVALID_FLEET_LIMIT','Dispatch pacing must be 0..10000ms');
-  let all=buildFleetAssignments(completeEntries,{events:store?.events()||[]});
+  const roleEntries=preserveCatalogRoles?[...MODEL_CATALOG,...catalogData.models.filter(m=>!MODEL_CATALOG.some(p=>p.id===m.id))]:completeEntries;
+  let all=buildFleetAssignments(roleEntries,{events:store?.events()||[]});
+  if(preserveCatalogRoles)all=all.filter(row=>selectedModelIds.includes(row.model));
+  const migrationEvidence=all.some(row=>row.model===FREE_DREX_DECISION_MODEL)&&store?findFreeDrexRoutingEvidence(store):null;
   const actualLimits=limitsOf(limits,all.length),planBinding={protocol:FLEET_PROTOCOL,evaluationHash,sourceRevision,inputHash,
     selectedModelIds,
+    ...(preserveCatalogRoles?{preserveCatalogRoles:true}:{}),...(deferPrimaryPeerReview?{deferPrimaryPeerReview:true}:{}),
+    ...(all.some(row=>row.model===FREE_DREX_DECISION_MODEL)?{freeDrexRoute:{protocol:FREE_DREX_DECISION_PROTOCOL,evidenceHash:migrationEvidence?.evidenceHash||null}}:{}),
     ...(allowanceReserveUnits?{allowanceReserveUnits}:{}),
     catalogHash:catalogData.catalogHash,catalogAuditHash:catalogAudit?.hash||null,developmentContextHash:hash(developmentContext),aggregateContextHash:hash(aggregateContext),
     assignmentHash:hash([...all].sort((a,b)=>a.model.localeCompare(b.model)).map(({lastDispatched,...a})=>a))};
@@ -161,6 +169,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
     else{const artifact=store.putArtifact(Buffer.from(JSON.stringify({planBinding,assignments:all})));store.event(null,'fleet-plan',{planHash,artifactHash:artifact.hash,assigned:all.length});}
   }
   function circuitReason(model) {
+    if(model===FREE_DREX_DECISION_MODEL){const admission=freeDrexDecisionAdmission(store);return admission.ready?null:admission.code;}
     const events=store?.events()||existingEvents,plain=isPlainClassifier(model);
     for(const event of events.filter(e=>e.detail?.model===model)) {
       if(event.kind==='fleet-model-ambiguous-billing'&&entries.get(model)?.billingTier!=='free-allowance')return 'MODEL_RECONCILIATION_REQUIRED';
@@ -190,7 +199,8 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   }
   async function invoke(assignment,row,{target=null,closing=false}={}) {
     const entry=entries.get(assignment.model),price=entry?priceOf(entry):null;
-    let response=null,rawArtifact=null,lease=null,dispatched=false,heartbeat=null;
+    let response=null,rawArtifact=null,lease=null,dispatched=false,heartbeat=null,migrationAttemptId=null;
+    const freeDecision=assignment.model===FREE_DREX_DECISION_MODEL;
     const requestRuntimeMs=entry?.billingTier==='free-allowance'?120000:45000;
     const requestOutputTokens=entry?.billingTier==='free-allowance'?8000:2000;
     const localAbort=new AbortController(),callSignal=AbortSignal.any([fleetSignal,localAbort.signal]);
@@ -202,10 +212,11 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         contribution:responses.get(target.taskId),trustedMetricFacts:target.role==='ceo'?aggregateFacts:devFacts,
         scope:target.role==='ceo'?'aggregate-only governance':'development-only',instruction:'Independently challenge this exact earlier contribution; do not approve because another model agreed.'}}:{})};
     const contextArtifact=store?store.putArtifact(Buffer.from(JSON.stringify(context))):{hash:hash(context)};
+    if(freeDecision&&migrationEvidence)store.putArtifact(migrationEvidence.bytes);
     const task={schemaVersion:1,id:row.taskId,workflowId,maxAttempts:2,role:assignment.role,
       actorId:closing?'fleet-review-'+hash(assignment.model).slice(0,16)+'-'+hash(target.taskId).slice(0,8):'fleet-'+hash(assignment.model).slice(0,24),
-      sourceRevision,datasetRevision:FLEET_PROTOCOL,candidateHash:hash(planBinding),policyVersion:FLEET_PROTOCOL,
-      inputHashes:[...new Set([inputHash,contextArtifact.hash])],stage:closing?'fleet-closing-review':'fleet-primary',artifacts:[contextArtifact.hash],
+      sourceRevision,datasetRevision:FLEET_PROTOCOL,candidateHash:hash(planBinding),policyVersion:freeDecision?FREE_DREX_DECISION_PROTOCOL:FLEET_PROTOCOL,
+      inputHashes:[...new Set([inputHash,contextArtifact.hash,...(freeDecision&&migrationEvidence?[migrationEvidence.evidenceHash]:[])])],stage:freeDecision?'fleet-decision-route-primary':closing?'fleet-closing-review':'fleet-primary',artifacts:[contextArtifact.hash,...(freeDecision&&migrationEvidence?[migrationEvidence.evidenceHash]:[])],
       constraints:{maxAttempts:2,maxRuntimeMs:requestRuntimeMs,maxOutputTokens:requestOutputTokens,sourceHashes:[inputHash],
         ...(['typed-decision','plain-classification'].includes(assignment.contributionKind)?{}:{requireMetricClaims:true,...(target?{reviewTaskId:target.taskId}:{})})}};
     const old=store?.getTask(row.taskId);
@@ -217,7 +228,12 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         row.resultHash=old.result.resultHash;row.rawResponseHash=old.result.rawResponseHash||null;row.execution=response.execution||null;row.decision=old.result.decision;
         row.status=old.status;row.code=old.result.code||null;row.primaryValidated=old.result.primaryValidated===true;row.reused=true;row.summary=response.result?.summary||null;
         if(row.primaryValidated){
-          if(isPlainClassifier(assignment.model)&&old.status==='complete'&&response.contributionKind==='plain-classification'&&response.protocol===PLAIN_CLASSIFIER_PROTOCOL&&
+          if(freeDecision){
+            const admission=freeDrexDecisionAdmission(store);
+            if(!admission.ready||!admission.qualified||response.contributionKind!=='typed-decision'||response.protocol!==FREE_DREX_DECISION_PROTOCOL){row.primaryValidated=false;row.code=admission.code||'ROUTE_QUALIFICATION_INVALID';row.status='blocked';return;}
+            recordFreeDrexDecisionQualification(store,admission.proof.taskId);
+          }
+          if(!freeDecision&&isPlainClassifier(assignment.model)&&old.status==='complete'&&response.contributionKind==='plain-classification'&&response.protocol===PLAIN_CLASSIFIER_PROTOCOL&&
             response.validation?.agreesWithExpected===true&&response.execution?.requestedModel===assignment.model&&response.execution?.returnedModel===assignment.model&&
             !store.events().some(e=>e.kind==='plain-protocol-qualified'&&e.detail?.model===assignment.model&&e.detail?.protocol===PLAIN_CLASSIFIER_PROTOCOL))
             store.event(task.id,'plain-protocol-qualified',{model:assignment.model,protocol:PLAIN_CLASSIFIER_PROTOCOL,resultHash:row.resultHash,recoveredFromCompletedTask:true});
@@ -258,6 +274,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       const delay=last==null||minimumDispatchIntervalMs===0?0:Math.max(0,last+minimumDispatchIntervalMs-now());
       if(delay)await waitImpl(delay,{signal:callSignal});
       const responseValue=await requestRole(task,{apiKey,model:assignment.model,context,signal:callSignal,verifiedRoster:roster,timeoutMs:requestRuntimeMs,
+        ...(freeDecision?{authorizeDecisionRoute:()=>authorizeFreeDrexDecisionDispatch(store,{taskId:task.id,attemptId:migrationAttemptId})}:{}),
         reserve:async({usd,allowance})=>{
           if(entry.billingTier==='free-allowance'&&(usd!==0||allowance?.reservedUnits!==textAllowanceReservationUnits(assignment.model,task.constraints.maxOutputTokens)))
             fail('ALLOWANCE_RESERVATION_MISSING','Free text requires its complete verified weighted allowance hold');
@@ -266,13 +283,15 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         onDispatch:async id=>{
           if(timeout.aborted||now()+requestRuntimeMs>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient remaining runtime before model dispatch');
           store.dispatch(id,'fleet-worker',lease.fence,{beforeDispatch:()=>{
-            if(isPlainClassifier(assignment.model)) {
+            if(freeDecision)consumeFreeDrexDecisionDispatch(store,{taskId:task.id,attemptId:id,workerId:'fleet-worker',fence:lease.fence});
+            else if(isPlainClassifier(assignment.model)) {
               const reason=circuitReason(assignment.model);if(reason)fail(reason,'The minimal protocol candidate cannot be dispatched again');
               const qualified=store.events().some(e=>e.kind==='plain-protocol-qualified'&&e.detail?.model===assignment.model&&e.detail?.protocol===PLAIN_CLASSIFIER_PROTOCOL);
               if(!qualified)store.event(task.id,'plain-protocol-probe-dispatched',{attemptId:id,model:assignment.model,protocol:PLAIN_CLASSIFIER_PROTOCOL,planHash});
             }
           }});
-          dispatched=true;row.attempted=true;store.event(task.id,'fleet-dispatched',{model:assignment.model,planHash,requestProtocol:isPlainClassifier(assignment.model)?PLAIN_CLASSIFIER_PROTOCOL:null});await checkpoint({phase:'dispatched',taskId:task.id,model:assignment.model});
+          migrationAttemptId=freeDecision?id:null;
+          dispatched=true;row.attempted=true;store.event(task.id,'fleet-dispatched',{model:assignment.model,planHash,requestProtocol:freeDecision?FREE_DREX_DECISION_PROTOCOL:isPlainClassifier(assignment.model)?PLAIN_CLASSIFIER_PROTOCOL:null});await checkpoint({phase:'dispatched',taskId:task.id,model:assignment.model});
         },
         onUsage:async(id,usage)=>{store.settle(id,'fleet-worker',lease.fence,usage);await checkpoint({phase:'settled',taskId:task.id,model:assignment.model});},
         onResponse:record=>{rawArtifact=store.putArtifact(Buffer.from(JSON.stringify(record)));}});
@@ -287,6 +306,8 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         row.decision='pass';row.decisionBasis='Host comparison of the original literal routing response; no invented role JSON or peer review';
       }else if(assignment.contributionKind==='typed-decision'){
         if(response.contributionKind!=='typed-decision'||response.validation?.valid!==true||!response.typedDecision)fail('INVALID_TYPED_CONTRIBUTION','Typed route did not return a validated original classification');
+        if(freeDecision&&(response.protocol!==FREE_DREX_DECISION_PROTOCOL||response.result!==undefined||response.validation.agreesWithExpected!==true))fail('INVALID_TYPED_CONTRIBUTION','The exact free protocol requires an original host-grounded typed contribution');
+        if(freeDecision)validateFreeDrexDecisionOutput(response,rawArtifact?JSON.parse(store.readArtifact(rawArtifact.hash)):null,context,migrationEvidence?.evidenceHash);
         if(response.validation.agreesWithExpected===false)fail('DECISION_GROUNDING_MISMATCH','Original typed classification disagrees with trusted routing facts');
         row.decision=response.validation.agreesWithExpected===true?'pass':'needs-human';
         row.decisionBasis='Trusted comparison of original typed classification, not a fabricated model role response';
@@ -299,7 +320,8 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       applyReview(row,response,target);responses.set(row.taskId,response);
       row.rawResponseHash=rawArtifact?.hash||null;
       store.finish(task.id,'fleet-worker',lease.fence,{status:row.status,result:{resultHash:row.resultHash,rawResponseHash:row.rawResponseHash,decision:row.decision,primaryValidated:true,code:null}});
-      if(isPlainClassifier(assignment.model))store.event(task.id,'plain-protocol-qualified',{model:assignment.model,protocol:PLAIN_CLASSIFIER_PROTOCOL,resultHash:row.resultHash});
+      if(freeDecision){const admission=freeDrexDecisionAdmission(store);if(!admission.qualified)fail('ROUTE_QUALIFICATION_INVALID','Fenced original typed evidence did not qualify the migration');recordFreeDrexDecisionQualification(store,admission.proof.taskId);}
+      else if(isPlainClassifier(assignment.model))store.event(task.id,'plain-protocol-qualified',{model:assignment.model,protocol:PLAIN_CLASSIFIER_PROTOCOL,resultHash:row.resultHash});
       if(!closing)pending.push(row);
     }catch(error){
       row.code=error.code||'FLEET_REVIEW_FAILED';row.status='failed';row.primaryValidated=false;row.errorDetails=error.errorDetails||null;
@@ -309,7 +331,8 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         try{store.finish(task.id,'fleet-worker',lease.fence,{status:row.deferred?'needs-human':'failed',result:{resultHash:row.resultHash,rawResponseHash:rawArtifact?.hash||null,decision:row.decision,primaryValidated:false,code:row.code,errorDetails:row.errorDetails,deferred:row.deferred===true},error:row.code});}catch{row.code='LEASE_LOST_RECONCILIATION_REQUIRED';}
       }
       if(error.status===401){providerBlocked='PROVIDER_AUTH_RECONCILIATION_REQUIRED';store?.event(null,'fleet-provider-circuit-open',{code:row.code,status:401});}
-      else if([400,403].includes(error.status)||['MODEL_MISMATCH','MODEL_UNAVAILABLE','PRICING_UNKNOWN'].includes(row.code))store?.event(null,'fleet-model-circuit-open',{model:assignment.model,code:row.code,status:error.status||null,requestProtocol:isPlainClassifier(assignment.model)?PLAIN_CLASSIFIER_PROTOCOL:null});
+      else if([400,403].includes(error.status)||['MODEL_MISMATCH','MODEL_UNAVAILABLE','PRICING_UNKNOWN'].includes(row.code))store?.event(null,'fleet-model-circuit-open',{model:assignment.model,code:row.code,status:error.status||null,requestProtocol:freeDecision?FREE_DREX_DECISION_PROTOCOL:isPlainClassifier(assignment.model)?PLAIN_CLASSIFIER_PROTOCOL:null});
+      if(freeDecision&&dispatched)store?.event(task.id,'decision-route-failed',{model:assignment.model,protocol:FREE_DREX_DECISION_PROTOCOL,code:row.code,status:error.status||null});
       if(error.status===429){if(error.quotaScope==='free-allowance')freeCooldown=true;else providerCooldown=true;store?.event(null,'fleet-quota-cooldown',{scope:freeCooldown?'free-allowance':'provider',notBefore:now()+Math.max(60000,error.retryAfterMs||0)});}
       if(store&&store.ledger(task.id).unknownBillingRequests)store.event(null,'fleet-model-ambiguous-billing',{model:assignment.model,taskId:task.id});
     }finally{
@@ -318,7 +341,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       await checkpoint({phase:'fleet-task-finished',taskId:task.id,model:assignment.model});
     }
   }
-  for(const assignment of all){const row=baseRow(assignment);agents.push(row);await invoke(assignment,row,{target:reviewTarget(assignment)});}
+  for(const assignment of all){const row=baseRow(assignment);agents.push(row);await invoke(assignment,row,{target:deferPrimaryPeerReview?null:reviewTarget(assignment)});}
   for(const target of pending.filter(row=>row.reviewStatus==='pending')){
     const reviewer=agents.find(row=>row.primaryValidated&&row.mayReview&&row.model!==target.model&&row.family!==target.family&&!circuitFor(row.model));
     if(!reviewer){target.reviewStatus='blocked';target.reviewCode='NO_QUALIFIED_DISTINCT_REVIEWER';continue;}

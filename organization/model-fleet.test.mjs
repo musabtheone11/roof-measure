@@ -7,6 +7,8 @@ import {OrgStore,ALLOWANCE_LIMITS} from './store.mjs';
 import {MODEL_CATALOG,textAllowanceReservationUnits} from './model-catalog.mjs';
 import {runModelFleet,buildFleetAssignments,buildMetricFacts,validateMetricClaims} from './model-fleet.mjs';
 import {isPlainClassifier,PLAIN_CLASSIFIER_PROTOCOL,validatePlainClassificationResponse,expectedPlainClassificationLabel} from './plain-classifier.mjs';
+import {FREE_DREX_DECISION_MODEL,FREE_DREX_DECISION_PROTOCOL,validateDecisionResponse} from './decision-provider.mjs';
+import {FREE_DREX_ROUTING_MESSAGE,findFreeDrexRoutingEvidence,freeDrexDecisionAdmission} from './route-evidence.mjs';
 
 const contexts={developmentContext:{metrics:{attempted:6,diagnosticPasses:2,misclassifiedEdges:0},pdfReview:{checked:6,failed:0}},
   aggregateContext:{metrics:{attempted:12,diagnosticPasses:4,reviewRequired:8,misclassifiedEdges:0,
@@ -27,11 +29,24 @@ function response(task,options){
   return {result,execution:{requestedModel:options.model,returnedModel:options.model,reportedUsd:.0001}};
 }
 function freeHold(model){return {reservedUnits:textAllowanceReservationUnits(model),remainingUnits:1000000000,observedAt:Date.now(),expiresAt:Date.now()+3600000,periodKey:'test-subscription-period',unlimited:false};}
+function seedRoutingFailure(store,{status=400,message=FREE_DREX_ROUTING_MESSAGE,model=FREE_DREX_DECISION_MODEL}={}){
+ const task={schemaVersion:1,id:'retained-free-drex-chat',role:'operations',actorId:'retained-chat-worker',sourceRevision:'prior-source',datasetRevision:'prior-data',candidateHash:'9'.repeat(64),policyVersion:PLAIN_CLASSIFIER_PROTOCOL,inputHashes:['8'.repeat(64)],maxAttempts:1};
+ store.setControl('running');store.enqueue(task);const lease=store.claim('legacy-worker');
+ const id=store.reserve(task.id,'legacy-worker',lease.fence,{usd:0,requestLimit:2,maxUsd:0,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80,allowance:freeHold(FREE_DREX_DECISION_MODEL)});
+ store.dispatch(id,'legacy-worker',lease.fence);store.event(task.id,'fleet-dispatched',{model,requestProtocol:PLAIN_CLASSIFIER_PROTOCOL});
+ store.settle(id,'legacy-worker',lease.fence,{reportedUsd:null});store.finish(task.id,'legacy-worker',lease.fence,{status:'failed',error:'UPSTREAM_HTTP',result:{code:'UPSTREAM_HTTP',errorDetails:{httpStatus:status,type:'invalid_request_error',message,bodyStatus:'parsed'}}});
+ store.event(null,'fleet-model-circuit-open',{model,code:'UPSTREAM_HTTP',status,requestProtocol:PLAIN_CLASSIFIER_PROTOCOL});return {taskId:task.id,attemptId:id};
+}
 function options(store,catalog=THREE,extra={}){return {store,catalog,evaluationHash:'a'.repeat(64),sourceRevision:'test-source',inputHash:'b'.repeat(64),...contexts,
   paidAllowed:true,apiKey:'not-real-test-key',minimumDispatchIntervalMs:0,
   verifyModels:async()=>({ids:catalog.map(m=>m.id),checkedAt:new Date().toISOString()}),
-  requestRole:async(task,opts)=>{const free=opts.model.startsWith('free/');const id=await opts.reserve({usd:free?0:.01,...(free?{allowance:freeHold(opts.model)}:{})});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:free?0:.0001,...(free?{reportedAllowanceUnits:0}:{})});
-    if(isPlainClassifier(opts.model))return {...validatePlainClassificationResponse({model:opts.model,choices:[{finish_reason:'stop',message:{role:'assistant',content:expectedPlainClassificationLabel(opts.context)}}]},opts.context),execution:{requestedModel:opts.model,returnedModel:opts.model,reportedUsd:0}};
+  requestRole:async(task,opts)=>{const free=opts.model.startsWith('free/');const id=await opts.reserve({usd:free?0:.01,...(free?{allowance:freeHold(opts.model)}:{})});await opts.onDispatch(id);const receipt=opts.model===FREE_DREX_DECISION_MODEL?await opts.authorizeDecisionRoute():null;await opts.onUsage(id,{reportedUsd:free?0:.0001,...(free?{reportedAllowanceUnits:0}:{})});
+    if(opts.model===FREE_DREX_DECISION_MODEL){
+      const rawDecision={object:'decision',model:opts.model,answers:{review_queue:{type:'choice',choice:'geometry_review'}}};
+      const execution={requestedModel:opts.model,returnedModel:opts.model,reportedUsd:0,promptVersion:FREE_DREX_DECISION_PROTOCOL,settings:{route:'decisions',protocol:FREE_DREX_DECISION_PROTOCOL},routeMigration:receipt};
+      opts.onResponse?.({execution,content:JSON.stringify(rawDecision),contributionKind:'typed-decision'});
+      return {...validateDecisionResponse(rawDecision,opts.context,{model:opts.model}),execution};
+    }
     return response(task,opts);},...extra};}
 test('all catalog IDs receive distinct concrete assignments, one CEO last and alias reviewers excluded',()=>{
   const assignments=buildFleetAssignments();assert.equal(assignments.length,MODEL_CATALOG.length);
@@ -139,43 +154,65 @@ test('subscription requests receive longer bounded output and keep a fenced leas
  }}));
  assert.equal(result.coverage.validContributions,1);assert.equal(cancelled,1);assert.equal(store.ledger().requests,1);
 });
-test('minimal free Drex candidate preserves the old structured400 and qualifies only its literal protocol',async t=>{
- const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-model-circuit-open',{model:catalog[0].id,status:400,code:'UPSTREAM_HTTP'});
- const first=await runModelFleet(options(store,catalog));assert.equal(first.coverage.validContributions,1);assert.equal(first.agents[0].contributionKind,'plain-classification');assert.equal(first.agents[0].mayReview,false);
- assert.equal(store.events().filter(e=>e.kind==='plain-protocol-probe-dispatched').length,1);assert.equal(store.events().filter(e=>e.kind==='plain-protocol-qualified').length,1);
- const same=await runModelFleet(options(store,catalog));assert.equal(same.agents[0].reused,true);assert.equal(store.ledger().requests,1);
- await runModelFleet({...options(store,catalog),evaluationHash:'c'.repeat(64)});assert.equal(store.ledger().requests,2);
- assert.equal(store.events().filter(e=>e.kind==='plain-protocol-probe-dispatched').length,1);assert.ok(store.events().some(e=>e.kind==='fleet-model-circuit-open'&&e.detail.status===400&&!e.detail.requestProtocol));
+test('exact retained routing400 authorizes one typed probe and never erases old history',async t=>{
+ const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id===FREE_DREX_DECISION_MODEL),old=seedRoutingFailure(store);
+ const history=JSON.stringify(store.ledger(old.taskId)),first=await runModelFleet(options(store,catalog));
+ assert.equal(first.coverage.validContributions,1,JSON.stringify(first.agents));assert.equal(first.agents[0].contributionKind,'typed-decision');assert.equal(first.agents[0].mayReview,false);
+ assert.equal(store.events().filter(e=>e.kind==='decision-route-probe-dispatched').length,1);assert.equal(store.events().filter(e=>e.kind==='decision-route-qualified').length,1);
+ assert.equal(JSON.stringify(store.ledger(old.taskId)),history);assert.equal(store.events().some(e=>e.kind==='plain-protocol-qualified'),false);
+ const same=await runModelFleet(options(store,catalog));assert.equal(same.agents[0].reused,true);assert.equal(store.ledger().requests,2);
+ const next=await runModelFleet({...options(store,catalog),evaluationHash:'c'.repeat(64)});assert.equal(next.coverage.validContributions,1);assert.equal(store.ledger().requests,3);
+ assert.equal(store.events().filter(e=>e.kind==='decision-route-probe-dispatched').length,1);
 });
-test('a timed-out minimal protocol probe is not minted again for another evaluation',async t=>{
- const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-model-circuit-open',{model:catalog[0].id,status:400});
- const timed=options(store,catalog,{requestRole:async(task,opts)=>{const id=await opts.reserve({usd:0,allowance:freeHold(opts.model)});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:null});throw Object.assign(new Error('Unknown probe'),{code:'TIMEOUT'});}});
- await runModelFleet(timed);const before=JSON.stringify(store.ledger());const next=await runModelFleet({...options(store,catalog),evaluationHash:'d'.repeat(64)});
- assert.equal(next.agents[0].code,'MODEL_PROTOCOL_PROBE_ALREADY_USED');assert.equal(next.agents[0].attempted,false);assert.equal(JSON.stringify(store.ledger()),before);
-});
-test('a cancelled minimal response cannot qualify a protocol; completed cached evidence can repair a missing marker',async t=>{
- const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id)),base=options(store,catalog);
- const cancelled=await runModelFleet({...base,requestRole:async(task,opts)=>{const result=await base.requestRole(task,opts);store.cancel(task.id);return result;}});
- assert.equal(cancelled.coverage.validContributions,0);assert.equal(store.events().filter(e=>e.kind==='plain-protocol-qualified').length,0);
- const next=await runModelFleet({...base,evaluationHash:'e'.repeat(64)});assert.equal(next.agents[0].code,'MODEL_PROTOCOL_PROBE_ALREADY_USED');
- const other=fixture(t),success=await runModelFleet(options(other,catalog));assert.equal(success.coverage.validContributions,1);
- other.db.prepare("DELETE FROM events WHERE kind='plain-protocol-qualified'").run();const before=JSON.stringify(other.ledger());
- const replay=await runModelFleet({...options(other,catalog),requestRole:async()=>{throw new Error('Completed proof must not call the provider');}});
- assert.equal(replay.coverage.validContributions,1);assert.equal(JSON.stringify(other.ledger()),before);
- assert.equal(other.events().find(e=>e.kind==='plain-protocol-qualified').detail.recoveredFromCompletedTask,true);
-});
-test('minimal protocol never bypasses auth, entitlement, identity, or a new-protocol400 circuit',async t=>{
- for(const block of [{status:403},{status:null,code:'MODEL_MISMATCH'},{status:400,requestProtocol:PLAIN_CLASSIFIER_PROTOCOL}]) {
-   const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-model-circuit-open',{model:catalog[0].id,...block});let calls=0;
-   const result=await runModelFleet(options(store,catalog,{requestRole:async()=>{calls++;}}));assert.equal(calls,0);assert.equal(result.agents[0].code,'MODEL_RECONCILIATION_REQUIRED');
+test('missing or forged routing evidence cannot authorize a new route',async t=>{
+ for(const bad of [null,{message:FREE_DREX_ROUTING_MESSAGE+' changed'},{model:'free/other-model'}]){
+  const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id===FREE_DREX_DECISION_MODEL);if(bad)seedRoutingFailure(store,bad);
+  let calls=0;const result=await runModelFleet(options(store,catalog,{requestRole:async()=>{calls++;}}));
+  assert.equal(calls,0);assert.equal(result.agents[0].attempted,false);assert.equal(findFreeDrexRoutingEvidence(store),null);
  }
- const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-provider-circuit-open',{status:401});
- const result=await runModelFleet(options(store,catalog));assert.equal(result.agents[0].code,'PROVIDER_AUTH_RECONCILIATION_REQUIRED');
+});
+test('timeout and cancellation consume the migration across evaluations without qualifying or releasing holds',async t=>{
+ for(const code of ['TIMEOUT','CANCELLED']){
+  const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id===FREE_DREX_DECISION_MODEL);seedRoutingFailure(store);
+  const first=await runModelFleet(options(store,catalog,{requestRole:async(task,opts)=>{const id=await opts.reserve({usd:0,allowance:freeHold(opts.model)});await opts.onDispatch(id);if(code==='CANCELLED')store.cancel(task.id);else await opts.onUsage(id,{reportedUsd:null});throw Object.assign(new Error('Ambiguous new typed request'),{code});}}));
+  assert.equal(first.coverage.validContributions,0);assert.equal(store.events().filter(e=>e.kind==='decision-route-qualified').length,0);
+  const held=JSON.stringify(store.ledger()),units=store.allowanceLedger().unknownUnits;
+  const next=await runModelFleet({...options(store,catalog),evaluationHash:'d'.repeat(64)});
+  assert.equal(next.agents[0].attempted,false);assert.equal(JSON.stringify(store.ledger()),held);assert.equal(store.allowanceLedger().unknownUnits,units);
+  assert.equal(store.events().filter(e=>e.kind==='decision-route-probe-dispatched').length,1);
+ }
+});
+test('cached qualification requires fenced completion and original typed evidence',async t=>{
+ const catalog=MODEL_CATALOG.filter(m=>m.id===FREE_DREX_DECISION_MODEL),store=fixture(t);seedRoutingFailure(store);
+ const base=options(store,catalog),cancelled=await runModelFleet({...base,requestRole:async(task,opts)=>{const result=await base.requestRole(task,opts);store.cancel(task.id);return result;}});
+ assert.equal(cancelled.coverage.validContributions,0);assert.equal(store.events().some(e=>e.kind==='decision-route-qualified'),false);
+ const other=fixture(t);seedRoutingFailure(other);assert.equal((await runModelFleet(options(other,catalog))).coverage.validContributions,1);
+ other.db.prepare("DELETE FROM events WHERE kind='decision-route-qualified'").run();const before=JSON.stringify(other.ledger());
+ const replay=await runModelFleet({...options(other,catalog),requestRole:async()=>{throw Error('Cached success must not call provider');}});
+ assert.equal(replay.coverage.validContributions,1);assert.equal(JSON.stringify(other.ledger()),before);assert.equal(other.events().filter(e=>e.kind==='decision-route-qualified').length,1);
+});
+test('typed migration never bypasses401,403,mismatch or a new route failure',async t=>{
+ for(const block of [{status:403},{status:null,code:'MODEL_MISMATCH'},{status:400,code:'UPSTREAM_HTTP',requestProtocol:FREE_DREX_DECISION_PROTOCOL}]){
+  const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id===FREE_DREX_DECISION_MODEL);seedRoutingFailure(store);store.event(null,'fleet-model-circuit-open',{model:FREE_DREX_DECISION_MODEL,...block});let calls=0;
+  const result=await runModelFleet(options(store,catalog,{requestRole:async()=>{calls++;}}));assert.equal(calls,0);assert.equal(result.agents[0].code,'MODEL_RECONCILIATION_REQUIRED');
+ }
+ const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id===FREE_DREX_DECISION_MODEL);seedRoutingFailure(store);store.event(null,'fleet-provider-circuit-open',{status:401});
+ assert.equal((await runModelFleet(options(store,catalog))).agents[0].code,'PROVIDER_AUTH_RECONCILIATION_REQUIRED');
+});
+test('compact selected cohort keeps original roles and separates primary from closing peer review',async t=>{
+ const store=fixture(t);seedRoutingFailure(store);const selected=[FREE_DREX_DECISION_MODEL,'free/gemini-4-hydrogen','free/hy4-flash'];const seen=[];
+ const base=options(store,MODEL_CATALOG,{selectedModelIds:selected,preserveCatalogRoles:true,deferPrimaryPeerReview:true,limits:{requestLimit:6,maxUsd:0}});
+ const result=await runModelFleet({...base,requestRole:async(task,opts)=>{seen.push({task,opts});return base.requestRole(task,opts);}});
+ assert.deepEqual(Object.fromEntries(result.agents.map(a=>[a.model,a.role])),{[FREE_DREX_DECISION_MODEL]:'operations','free/gemini-4-hydrogen':'verification','free/hy4-flash':'reporting'});
+ assert.equal(result.agents.some(a=>a.role==='ceo'),false);assert.equal(result.coverage.validContributions,3,JSON.stringify(result.agents));
+ const primary=seen.filter(x=>x.task.stage!=='fleet-closing-review');assert.equal(primary.length,3);for(const {task,opts}of primary){assert.equal(task.constraints.reviewTaskId,undefined);assert.equal(opts.context.peerReviewTarget,undefined);}
+ assert.ok(result.closingReviews.length>0);assert.ok(seen.length<=6);assert.equal(seen.some(x=>x.task.stage==='fleet-closing-review'&&x.opts.model===FREE_DREX_DECISION_MODEL),false);
+ for(const invalid of [{preserveCatalogRoles:'true',selectedModelIds:selected},{preserveCatalogRoles:true},{deferPrimaryPeerReview:'true'}])await assert.rejects(runModelFleet({...options(fixture(t)),...invalid}),{code:'INVALID_FLEET_INPUT'});
 });
 test('all45 models can contribute, typed routes and fallback alias do not perform peer review',async t=>{
-  const store=fixture(t),base=options(store,MODEL_CATALOG);const primary=[];
+  const store=fixture(t);seedRoutingFailure(store);const base=options(store,MODEL_CATALOG);const primary=[];
   const result=await runModelFleet({...base,requestRole:async(task,opts)=>{
-    if(task.stage==='fleet-primary')primary.push(opts.model);
+    if(task.stage==='fleet-primary'||task.stage==='fleet-decision-route-primary')primary.push(opts.model);
     if(['drex-v2.0','jev-1.13'].includes(opts.model)){
       assert.equal(task.constraints.reviewTaskId,undefined);const id=await opts.reserve({usd:.01});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:.0001});
       return {contributionKind:'typed-decision',typedDecision:{question:'review_queue',choice:'geometry_review'},validation:{valid:true,expectedLabel:'geometry_review',agreesWithExpected:true},execution:{requestedModel:opts.model,returnedModel:opts.model,reportedUsd:.0001}};

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,readFile,rm,readdir,cp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {previousExecution,selectStateArtifact,bootstrapCloud,checkpointCloud,verifyCheckpoint,packReports,publicCloudStatus,publicQualificationStatus,publicWorkStatus,publishCloudStatus} from './cloud-operations.mjs';
+import {previousExecution,selectStateArtifact,bootstrapCloud,checkpointCloud,verifyCheckpoint,packReports,publicCloudStatus,publicQualificationStatus,publicRecoveryStatus,publicWorkStatus,publishCloudStatus} from './cloud-operations.mjs';
 
 const stamped=r=>({updated_at:new Date(Number(r.id)*10000).toISOString(),...r});
 const env=(id,attempt=1)=>({GITHUB_REPOSITORY:'owner/roof',GITHUB_RUN_ID:String(id),GITHUB_RUN_ATTEMPT:String(attempt),GITHUB_REF_NAME:'work',GITHUB_SHA:'a'.repeat(40)});
@@ -306,4 +306,105 @@ test('an older runID with a genuinely newer verified execution can publish its l
   assert.equal(result.commit,'c'.repeat(40));assert.equal(calls.filter(c=>c.init.method==='PUT').length,1);
   const body=JSON.parse(calls[2].init.body),published=JSON.parse(Buffer.from(body.content,'base64'));
   assert.equal(published.run.id,'10');assert.equal(published.run.attempt,2);assert.equal(published.run.startedAt,'2026-11-28T12:00:00.000Z');
+});
+
+const recoveryCycle=()=>({...cycle(),executionProfile:'allowance-recovery',
+ budget:{private:'PRIVATE_RECOVERY_BUDGET'},allowance:{remainingUnits:'PRIVATE_RECOVERY_ALLOWANCE',periodKey:'PRIVATE_RECOVERY_PERIOD'},
+ packet:{prompt:'PRIVATE_RECOVERY_PROMPT',taskId:'PRIVATE_RECOVERY_TASK'},reviews:[
+  {model:'free/drex-v2.0',role:'engineering',status:'needs-human',primaryValidated:true,attempted:true,reviewStatus:'complete',summary:'PRIVATE_RECOVERY_PROSE'},
+  {model:'free/gemini-4-hydrogen',role:'critique',status:'failed',primaryValidated:false,attempted:true,reviewStatus:'pending',code:'TIMEOUT',errorDetails:{rawBody:'PRIVATE_PROVIDER_BODY'}},
+  {model:'free/hy4-flash',role:'verification',status:'complete',primaryValidated:true,attempted:true,reviewStatus:'blocked',taskId:'PRIVATE_MODEL_TASK'}]});
+const recoveryEnv=(result='success')=>({...env(20),ROOF_CLOUD_PUBLIC_PROFILE:'allowance-recovery',ROOF_CLOUD_GENERATION_RESULT:result});
+test('route recovery summary exposes only the exact selected records and safe qualification fields',()=>{
+ const status=publicRecoveryStatus(recoveryCycle(),{env:recoveryEnv(),now:()=>0});
+ assert.equal(status.executionProfile,'allowance-recovery');assert.equal(status.sourceRevision,'a'.repeat(40));assert.equal(status.generatedAt,'1970-01-01T00:00:00.000Z');
+ assert.deepEqual(status.models.map(row=>row.model),['free/drex-v2.0','free/gemini-4-hydrogen','free/hy4-flash']);
+ assert.deepEqual(status.summary,{selectedCount:3,attemptedCount:3,validCount:2,reviewedCount:1});
+ assert.equal(status.models[0].status,'needs-human');assert.equal(status.models[0].contributionValidated,true);assert.equal(status.models[1].code,'TIMEOUT');
+ assert.deepEqual(Object.keys(status).sort(),['schemaVersion','repository','workflow','executionProfile','generatedAt','sourceRevision','run','reportArtifact','models','summary','scope'].sort());
+ assert.deepEqual(Object.keys(status.models[0]).sort(),['model','status','attempted','contributionValidated','reviewStatus','code'].sort());
+ for(const marker of ['PRIVATE_','DO_NOT_PUBLISH','RAW_SOURCE_CONTENT','remainingUnits','periodKey','taskId','budget','allowance":','packet'])assert.equal(JSON.stringify(status).includes(marker),false,marker);
+ assert.match(status.scope,/counts cover only the model records published/);assert.match(status.scope,/No field accuracy or production approval/);
+});
+test('successful route recovery requires all three exact IDs and rejects substitutions, duplicates and hidden extra rows',()=>{
+ for(const mutate of [
+  data=>{data.reviews=[];},data=>{data.reviews.pop();},
+  data=>{data.reviews[2].model='free/hy4';},data=>{data.reviews[0].model='drex-v2.0';},
+  data=>{data.reviews[0].model='free/qwen-3.8-max';},
+  data=>{data.reviews[2].model=data.reviews[0].model;},
+  data=>{data.reviews.push({...data.reviews[0]});},
+  data=>{data.reviews=Array.from({length:257},()=>({...data.reviews[0]}));},
+  data=>{data.reviews=[null];},data=>{data.reviews={};}
+ ]){const data=recoveryCycle();mutate(data);assert.throws(()=>publicRecoveryStatus(data,{env:recoveryEnv()}));}
+ const privateRoute=recoveryCycle();privateRoute.reviews[0].model='free/private-route-identifier';
+ assert.throws(()=>publicRecoveryStatus(privateRoute,{env:recoveryEnv('failure')}),error=>!error.message.includes('private-route-identifier'));
+ const wrongSource=recoveryCycle();wrongSource.sourceRevision='b'.repeat(40);assert.throws(()=>publicRecoveryStatus(wrongSource,{env:recoveryEnv()}),/source revision mismatch/);
+});
+test('failed route recovery publishes only its recorded subset and missing-cycle emptiness requires a declared failed or unknown profile',()=>{
+ for(const result of ['failure','unknown'])for(const length of [0,1,2,3]) {
+  const data=recoveryCycle();data.reviews=data.reviews.slice(0,length);const status=publicRecoveryStatus(data,{env:recoveryEnv(result)});
+  assert.equal(status.models.length,length);assert.equal(status.summary.selectedCount,length);assert.equal(status.summary.attemptedCount,length);assert.equal(status.run.pipelineResult,result);
+ }
+ for(const result of ['failure','unknown']) {
+  const status=publicRecoveryStatus(null,{env:recoveryEnv(result)});assert.deepEqual(status.models,[]);assert.deepEqual(status.summary,{selectedCount:0,attemptedCount:0,validCount:0,reviewedCount:0});
+  const missing=recoveryCycle();delete missing.reviews;assert.deepEqual(publicRecoveryStatus(missing,{env:recoveryEnv(result)}).models,[]);
+ }
+ for(const result of ['success','cancelled','skipped'])assert.throws(()=>publicRecoveryStatus(null,{env:recoveryEnv(result)}),/declared failed or unknown/);
+ const missing=recoveryCycle();delete missing.reviews;
+ assert.throws(()=>publicRecoveryStatus(missing,{env:{...env(20),ROOF_CLOUD_GENERATION_RESULT:'failure'}}),/declared failed or unknown/);
+ assert.throws(()=>publicRecoveryStatus({...cycle(),executionProfile:'allowance-roster'},{env:env(20)}),/known route recovery profile/);
+});
+test('all four public journal destinations remain isolated, including targeted route recovery',async()=>{
+ const qualification={...cycle(),executionProfile:'allowance-roster',reviews:[{model:'free/qwen-3.8-max',status:'needs-human',primaryValidated:true,attempted:true}]};
+ for(const [data,file]of [[cycle(),'latest-status.json'],[qualification,'latest-qualification.json'],[workCycle(),'latest-work.json'],[recoveryCycle(),'latest-recovery.json']]) {
+  const paths=[];let published;
+  const result=await publishCloudStatus(data,{env:{...env(20),GITHUB_TOKEN:'PRIVATE_TEST_TOKEN',ROOF_CLOUD_GENERATION_RESULT:'success'},fetchImpl:async(url,init)=>{
+   paths.push(url);if(url.includes('/attempts/'))return executionReply(url);if(url.includes('/git/ref/'))return reply({ref:'refs/heads/roof-cloud-status'});
+   if(init.method==='GET')return reply({},404);published=JSON.parse(Buffer.from(JSON.parse(init.body).content,'base64'));return reply({commit:{sha:'c'.repeat(40)}},201);
+  }});
+  assert.deepEqual([...new Set(paths.filter(path=>path.includes('/contents/')).map(path=>new URL(path).pathname.split('/').at(-1)))],[file]);
+  assert.equal(new URL(result.statusURL).pathname.split('/').at(-1),file);assert.equal(published.run.startedAt,'2026-11-28T12:00:00.000Z');
+  if(file==='latest-recovery.json'){assert.equal(published.models.length,3);assert.equal(published.summary.validCount,2);assert.equal(JSON.stringify(published).includes('PRIVATE_'),false);}
+ }
+});
+test('declared recovery failures retain their separate journal and mismatched profiles are rejected before networking',async()=>{
+ const paths=[];let published;
+ await publishCloudStatus(null,{env:{...recoveryEnv('failure'),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+  paths.push(url);if(url.includes('/attempts/'))return executionReply(url);if(url.includes('/git/ref/'))return reply({});
+  if(init.method==='GET')return reply({},404);published=JSON.parse(Buffer.from(JSON.parse(init.body).content,'base64'));return reply({commit:{sha:'c'.repeat(40)}},201);
+ }});
+ assert.ok(paths.some(path=>path.includes('/contents/latest-recovery.json')));assert.ok(paths.every(path=>!path.includes('latest-status.json')&&!path.includes('latest-qualification.json')&&!path.includes('latest-work.json')));
+ assert.deepEqual(published.models,[]);assert.equal(published.run.pipelineResult,'failure');
+ for(const [declared,actual]of [['allowance-recovery','allowance-roster'],['allowance-recovery','allowance-work'],['allowance-recovery','all-models'],['allowance-roster','allowance-recovery'],['allowance-qualification','allowance-recovery'],['allowance-work','allowance-recovery'],['cycle','allowance-recovery']]) {
+  let calls=0;await assert.rejects(publishCloudStatus({...recoveryCycle(),executionProfile:actual},{env:{...env(20),GITHUB_TOKEN:'token',ROOF_CLOUD_PUBLIC_PROFILE:declared},fetchImpl:async()=>{calls++;}}));assert.equal(calls,0);
+ }
+});
+test('recovery journal retains source/attempt chronology and CAS protections against foreign or newer records',async()=>{
+ for(const previous of [oldWorkContent('19',{profile:'allowance-roster'}),oldWorkContent('19',{profile:'allowance-work'}),oldWorkContent('19',{profile:null}),oldWorkContent('19',{profile:'allowance-recovery',repository:'another/roof'}),oldWorkContent('21',{profile:'allowance-recovery'})]) {
+  const methods=[];await assert.rejects(publishCloudStatus(recoveryCycle(),{env:{...recoveryEnv(),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+   if(url.includes('/attempts/'))return executionReply(url);methods.push(init.method);return methods.length===1?reply({}):reply(previous);
+  }}),/refusing/);assert.equal(methods.includes('PUT'),false);
+ }
+ for(const value of [{id:20,run_attempt:2,head_sha:'a'.repeat(40)},{id:20,run_attempt:1,head_sha:'b'.repeat(40)}]) {
+  const methods=[];await assert.rejects(publishCloudStatus(recoveryCycle(),{env:{...recoveryEnv(),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+   methods.push(init.method);return reply({...value,run_started_at:'2026-11-28T12:00:00Z'});
+  }}),/execution provenance/);assert.deepEqual(methods,['GET']);
+ }
+ let put;const paths=[];
+ const result=await publishCloudStatus(recoveryCycle(),{env:{...recoveryEnv(),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+  paths.push(url);if(url.includes('/attempts/'))return executionReply(url);if(url.includes('/git/ref/'))return reply({});
+  if(init.method==='GET')return reply(oldWorkContent('19',{profile:'allowance-recovery'}));put=JSON.parse(init.body);return reply({commit:{sha:'c'.repeat(40)}},201);
+ }});
+ assert.match(result.statusURL,/latest-recovery.json$/);assert.equal(put.sha,'b'.repeat(40));assert.equal(put.branch,'roof-cloud-status');assert.equal(Object.hasOwn(put,'force'),false);assert.ok(paths.some(path=>path.includes('/contents/latest-recovery.json')));
+ let puts=0;await assert.rejects(publishCloudStatus(recoveryCycle(),{env:{...recoveryEnv(),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+  if(url.includes('/attempts/'))return executionReply(url);if(url.includes('/git/ref/'))return reply({});if(init.method==='GET')return reply(oldWorkContent('19',{profile:'allowance-recovery'}));puts++;return reply({private:'PRIVATE_CONFLICT_BODY'},409);
+ }}),error=>/409/.test(error.message)&&!error.message.includes('PRIVATE_CONFLICT_BODY'));assert.equal(puts,1);
+});
+test('a recovery-profile artifact cannot replace any of the other three journal files',async()=>{
+ const qualification={...cycle(),executionProfile:'allowance-roster',reviews:[{model:'free/qwen-3.8-max',status:'complete'}]};
+ for(const data of [cycle(),qualification,workCycle()]) {
+  const methods=[];await assert.rejects(publishCloudStatus(data,{env:{...env(20),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+   if(url.includes('/attempts/'))return executionReply(url);methods.push(init.method);return methods.length===1?reply({}):reply(oldWorkContent('19',{profile:'allowance-recovery'}));
+  }}),/provenance mismatch/);assert.equal(methods.includes('PUT'),false);
+ }
 });

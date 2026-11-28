@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import { verifyRoster, requestOrganizationRole } from './provider.mjs';
+import {isDecisionModel,FREE_DREX_DECISION_MODEL,FREE_DREX_DECISION_PROTOCOL} from './decision-provider.mjs';
 
 const hash = 'a'.repeat(64);
 const task = { schemaVersion: 1, id: 'task1', role: 'engineering', actorId: 'engineer1', sourceRevision: 'commit1', datasetRevision: 'data1', candidateHash: hash, policyVersion: 'policy1', inputHashes: [hash] };
@@ -174,14 +175,15 @@ test('all45 verified models reserve their own rate and use the documented respon
   const {MODEL_CATALOG,getVerifiedModelPrice}=await import('./model-catalog.mjs');
   const verifiedRoster={ids:MODEL_CATALOG.map(m=>m.id),checkedAt:new Date().toISOString()};
   for(const model of MODEL_CATALOG) {
-    const typed=model.routeClaim==='decisions',plain=model.id==='free/drex-v2.0';
-    const f=fixture({chat:async()=>json(typed?{object:'decision',model:model.id,usage:{cost_tokens:0},answers:{review_queue:{type:'choice',choice:'geometry_review',confidence:.8}}}:{model:model.id,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content:plain?'geometry_review':JSON.stringify(output())}}]})});
-    const response=await requestOrganizationRole(task,{...f.options,model:model.id,verifiedRoster,context:{metrics:{attempted:12,diagnosticPasses:4},pdfReview:{checked:12,failed:0}}});
+    const typed=isDecisionModel(model.id),freeDecision=model.id===FREE_DREX_DECISION_MODEL;
+    const f=fixture({chat:async()=>json(typed?{object:'decision',model:model.id,usage:{cost_tokens:0},answers:{review_queue:{type:'choice',choice:'geometry_review',confidence:.8}}}:{model:model.id,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content:JSON.stringify(output())}}]})});
+    const active=freeDecision?{...task,policyVersion:FREE_DREX_DECISION_PROTOCOL,inputHashes:[hash,'e'.repeat(64)]}:task;
+    const response=await requestOrganizationRole(active,{...f.options,model:model.id,verifiedRoster,context:{metrics:{attempted:12,diagnosticPasses:4},pdfReview:{checked:12,failed:0}},...(freeDecision?{authorizeDecisionRoute:async({attemptId})=>({model:model.id,protocol:FREE_DREX_DECISION_PROTOCOL,taskId:active.id,attemptId,evidenceHash:'e'.repeat(64)})}:{})});
     const price=getVerifiedModelPrice(model.id);assert.equal(f.events[0][1].usd,price.contextTokens*price.maxRate/1e6);
     assert.equal(response.execution.returnedModel,model.id);assert.equal(response.execution.billingTier,model.billingTier);
     assert.equal(f.calls.length,model.billingTier==='free-allowance'?2:1);assert.equal(f.calls.at(-1).url.endsWith(typed?'/decisions':'/chat/completions'),true);
     if(typed){assert.equal(response.contributionKind,'typed-decision');assert.equal(Object.hasOwn(response,'result'),false);}
-    if(plain){assert.equal(response.contributionKind,'plain-classification');assert.equal(Object.hasOwn(response,'result'),false);}
+    if(freeDecision){assert.equal(response.protocol,FREE_DREX_DECISION_PROTOCOL);assert.equal(Object.hasOwn(response,'result'),false);}
   }
 });
 
@@ -278,23 +280,31 @@ test('a fenced unknown-usage callback cannot discard partial SSE evidence or tri
   assert.equal(calls,1);assert.equal(record.content,partial);assert.equal(record.contentSha256,createHash('sha256').update(partial).digest('hex'));assert.equal(record.execution.streamEvidence.complete,false);assert.equal(record.streamErrorCode,'STREAM_INCOMPLETE');
   assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
 });
-test('free Drex uses only its documented minimal plain-classification protocol and preserves raw identity/billing evidence',async()=>{
-  const model='free/drex-v2.0',raw=' geometry_review\n';let record;
-  const f=fixture({chat:async()=>json({id:'plain-request',model,usage:{cost_tokens:0,total_tokens:100},choices:[{finish_reason:'stop',message:{role:'assistant',content:raw}}]})});
-  const r=await requestOrganizationRole({...task,constraints:{maxRuntimeMs:120000,maxOutputTokens:8000}},{...f.options,model,context:{metrics:{attempted:12,diagnosticPasses:4},pdfReview:{checked:12,failed:0}},verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:x=>{record=x;}});
-  const post=f.calls.find(c=>c.init.method==='POST'),body=JSON.parse(post.init.body);assert.deepEqual(Object.keys(body).sort(),['messages','model','stream']);assert.equal(body.stream,false);
-  assert.equal(r.contributionKind,'plain-classification');assert.equal(Object.hasOwn(r,'result'),false);assert.equal(r.classification.label,'geometry_review');assert.equal(r.classification.originalText,raw);assert.equal(r.validation.agreesWithExpected,true);assert.equal(r.validation.metricClaimsApplicable,false);
-  assert.equal(r.execution.settings.requestOutputTokenLimit,null);assert.equal(r.execution.settings.responseFormat,'literal-enum');assert.equal(r.execution.settings.clientOutputByteLimit,65536);assert.equal(r.execution.settings.protocol,'free-drex-plain-classification-v1');
-  assert.equal(r.execution.returnedModel,model);assert.equal(record.content,raw);assert.equal(record.contentSha256,createHash('sha256').update(raw).digest('hex'));
-  assert.equal(f.events.find(e=>e[0]==='reserve')[1].allowance.reservedUnits,268288);assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+test('free Drex requires a committed receipt and sends only the real typed Decisions envelope',async()=>{
+  const model=FREE_DREX_DECISION_MODEL,evidenceHash='e'.repeat(64),active={...task,policyVersion:FREE_DREX_DECISION_PROTOCOL,inputHashes:[hash,evidenceHash]};let original;
+  const raw={object:'decision',model,usage:{cost_tokens:0,total_tokens:100},answers:{review_queue:{type:'choice',choice:'geometry_review'}}};
+  const f=fixture({chat:async()=>json(raw)});
+  const result=await requestOrganizationRole(active,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},context:{metrics:{attempted:12,diagnosticPasses:4},pdfReview:{checked:12,failed:0}},
+    authorizeDecisionRoute:async({taskId,attemptId})=>{assert.equal(f.events.at(-1)[0],'dispatch');return {model,protocol:FREE_DREX_DECISION_PROTOCOL,taskId,attemptId,evidenceHash};},onResponse:r=>{original=r;}});
+  const post=f.calls.find(c=>c.init.method==='POST');assert.equal(post.url,'https://api.apinex.bond/v1/decisions');
+  const body=JSON.parse(post.init.body);assert.deepEqual(Object.keys(body).sort(),['model','questions','state']);assert.equal(body.questions.review_queue.type,'choice');
+  assert.equal(result.contributionKind,'typed-decision');assert.equal(result.protocol,FREE_DREX_DECISION_PROTOCOL);assert.equal(result.result,undefined);assert.equal(result.peerReview,undefined);assert.equal(result.metricClaims,undefined);
+  assert.equal(result.execution.settings.protocol,FREE_DREX_DECISION_PROTOCOL);assert.equal(result.execution.settings.requestOutputTokenLimit,null);assert.equal(result.execution.routeMigration.evidenceHash,evidenceHash);
+  assert.deepEqual(JSON.parse(original.content),raw);assert.equal(result.validation.peerReviewApplicable,false);assert.equal(result.validation.releaseAuthority,false);
+  assert.equal(f.events.find(e=>e[0]==='reserve')[1].usd,0);assert.equal(f.events.find(e=>e[0]==='reserve')[1].allowance.reservedUnits,268288);
+  assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
 });
-test('plain classifier cannot be forced into SSE/JSON repair, substituted identities or unsupported completion',async()=>{
-  const model='free/drex-v2.0',base={model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()}};
-  const forced=fixture();await assert.rejects(requestOrganizationRole(task,{...forced.options,...base,stream:true}),{code:'STREAM_UNSUPPORTED'});assert.equal(forced.calls.length,0);
-  for(const content of ['{"label":"geometry_review"}','geometry_review because failures exist']){
-    const f=fixture({chat:async()=>json({model,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content}}]})});
-    await assert.rejects(requestOrganizationRole(task,{...f.options,...base}),{code:'INVALID_PLAIN_CLASSIFICATION_OUTPUT'});assert.equal(f.events.find(e=>e[0]==='usage')[2].reportedUsd,0);
-  }
+test('new free typed route cannot bypass receipt binding, force SSE or repair a chat answer',async()=>{
+  const model=FREE_DREX_DECISION_MODEL,evidenceHash='e'.repeat(64),active={...task,policyVersion:FREE_DREX_DECISION_PROTOCOL,inputHashes:[hash,evidenceHash]};
+  const base={model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},context:{metrics:{attempted:1,diagnosticPasses:0},pdfReview:{checked:1,failed:0}},authorizeDecisionRoute:async({taskId,attemptId})=>({model,protocol:FREE_DREX_DECISION_PROTOCOL,taskId,attemptId,evidenceHash})};
+  const missing=fixture();await assert.rejects(requestOrganizationRole(active,{...missing.options,...base,authorizeDecisionRoute:undefined}),{code:'ROUTE_MIGRATION_REQUIRED'});assert.equal(missing.calls.length,0);
+  const forced=fixture();await assert.rejects(requestOrganizationRole(active,{...forced.options,...base,stream:true}),{code:'STREAM_UNSUPPORTED'});assert.equal(forced.calls.length,0);
+  const forged=fixture();await assert.rejects(requestOrganizationRole(active,{...forged.options,...base,authorizeDecisionRoute:async({taskId,attemptId})=>({model,protocol:FREE_DREX_DECISION_PROTOCOL,taskId,attemptId,evidenceHash:'f'.repeat(64)})}),{code:'ROUTE_MIGRATION_REQUIRED'});
+  assert.equal(forged.calls.filter(c=>c.init.method==='POST').length,0);assert.equal(forged.events.at(-1)[2].reportedUsd,null);
+  const chat=fixture({chat:async()=>json({model,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content:'geometry_review'}}]})});
+  await assert.rejects(requestOrganizationRole(active,{...chat.options,...base}),{code:'INVALID_DECISION_OUTPUT'});assert.equal(chat.calls.filter(c=>c.init.method==='POST').length,1);
+  const mismatch=fixture({chat:async()=>json({object:'decision',model:'drex-v2.0',usage:{cost_tokens:0},answers:{review_queue:{type:'choice',choice:'geometry_review'}}})});
+  await assert.rejects(requestOrganizationRole(active,{...mismatch.options,...base}),{code:'MODEL_MISMATCH'});assert.equal(mismatch.events.at(-1)[2].reportedUsd,0);
 });
 test('JSON compatibility responses require one assistant text choice and never accept tools, refusal or ambiguous choices',async()=>{
   const model='free/gpt-6-luna',good={index:0,finish_reason:'stop',message:{role:'assistant',content:JSON.stringify(output())}};
