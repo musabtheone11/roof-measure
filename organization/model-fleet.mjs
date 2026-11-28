@@ -123,10 +123,11 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   developmentContext={},aggregateContext={},paidAllowed=false,apiKey=process.env.APINEX_API_KEY,
   requestRole=requestOrganizationRole,verifyModels=verifyRoster,checkpoint=async()=>{},limits={},now=Date.now,signal,
   minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=60*60000,catalogAudit,selectedModelIds=null,allowanceReserveUnits=0,
-  scheduleHeartbeat=(callback,ms)=>setInterval(callback,ms),cancelHeartbeat=clearInterval,preserveCatalogRoles=false,deferPrimaryPeerReview=false}={}) {
+  scheduleHeartbeat=(callback,ms)=>setInterval(callback,ms),cancelHeartbeat=clearInterval,preserveCatalogRoles=false,deferPrimaryPeerReview=false,calculateAllowance=false}={}) {
   if(!text(evaluationHash,200)||!text(sourceRevision,200)||!/^([a-f0-9]{64})$/.test(inputHash||''))fail('INVALID_FLEET_INPUT','Frozen evaluation/source/input bindings are required');
   if(!Number.isInteger(runtimeMs)||runtimeMs<0||runtimeMs>60*60000)fail('INVALID_FLEET_LIMIT','Fleet runtime must be 0..60minutes');
   if(!Number.isSafeInteger(allowanceReserveUnits)||allowanceReserveUnits<0||allowanceReserveUnits>500000000)fail('INVALID_FLEET_LIMIT','Allowance design headroom must be a bounded host policy');
+  if(typeof calculateAllowance!=='boolean')fail('INVALID_FLEET_INPUT','Calculated allowance opt-in must be explicit');
   if(typeof preserveCatalogRoles!=='boolean'||typeof deferPrimaryPeerReview!=='boolean'||(preserveCatalogRoles&&selectedModelIds===null))fail('INVALID_FLEET_INPUT','Scoped role/review controls require explicit booleans and selected IDs for preserved catalog roles');
   const deadline=now()+runtimeMs,timeout=AbortSignal.timeout(Math.max(1,runtimeMs));
   const fleetSignal=signal?AbortSignal.any([signal,timeout]):timeout;
@@ -148,7 +149,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   const migrationEvidence=all.some(row=>row.model===FREE_DREX_DECISION_MODEL)&&store?findFreeDrexRoutingEvidence(store):null;
   const actualLimits=limitsOf(limits,all.length),planBinding={protocol:FLEET_PROTOCOL,evaluationHash,sourceRevision,inputHash,
     selectedModelIds,
-    ...(preserveCatalogRoles?{preserveCatalogRoles:true}:{}),...(deferPrimaryPeerReview?{deferPrimaryPeerReview:true}:{}),
+    ...(calculateAllowance?{calculateAllowance:true}:{}),...(preserveCatalogRoles?{preserveCatalogRoles:true}:{}),...(deferPrimaryPeerReview?{deferPrimaryPeerReview:true}:{}),
     ...(all.some(row=>row.model===FREE_DREX_DECISION_MODEL)?{freeDrexRoute:{protocol:FREE_DREX_DECISION_PROTOCOL,evidenceHash:migrationEvidence?.evidenceHash||null}}:{}),
     ...(allowanceReserveUnits?{allowanceReserveUnits}:{}),
     catalogHash:catalogData.catalogHash,catalogAuditHash:catalogAudit?.hash||null,developmentContextHash:hash(developmentContext),aggregateContextHash:hash(aggregateContext),
@@ -273,12 +274,13 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       const last=store.events().filter(e=>e.kind==='fleet-dispatched').at(-1)?.created;
       const delay=last==null||minimumDispatchIntervalMs===0?0:Math.max(0,last+minimumDispatchIntervalMs-now());
       if(delay)await waitImpl(delay,{signal:callSignal});
-      const responseValue=await requestRole(task,{apiKey,model:assignment.model,context,signal:callSignal,verifiedRoster:roster,timeoutMs:requestRuntimeMs,
+      const responseValue=await requestRole(task,{apiKey,model:assignment.model,context,signal:callSignal,verifiedRoster:roster,timeoutMs:requestRuntimeMs,calculateAllowance,
+        onAllowanceCalculationQuote:record=>store.putArtifact(Buffer.from(JSON.stringify(record))),
         ...(freeDecision?{authorizeDecisionRoute:()=>authorizeFreeDrexDecisionDispatch(store,{taskId:task.id,attemptId:migrationAttemptId})}:{}),
-        reserve:async({usd,allowance})=>{
+        reserve:async({usd,allowance,allowanceCalculationReservation})=>{
           if(entry.billingTier==='free-allowance'&&(usd!==0||allowance?.reservedUnits!==textAllowanceReservationUnits(assignment.model,task.constraints.maxOutputTokens)))
             fail('ALLOWANCE_RESERVATION_MISSING','Free text requires its complete verified weighted allowance hold');
-          const id=store.reserve(task.id,'fleet-worker',lease.fence,{usd,...actualLimits,...(allowance?{allowance,allowanceHeadroomUnits:allowanceReserveUnits}:{})});await checkpoint({phase:'reserved',taskId:task.id,model:assignment.model});return id;
+          const id=store.reserve(task.id,'fleet-worker',lease.fence,{usd,...actualLimits,allowanceCalculationReservation,...(allowance?{allowance,allowanceHeadroomUnits:allowanceReserveUnits}:{})});await checkpoint({phase:'reserved',taskId:task.id,model:assignment.model});return id;
         },
         onDispatch:async id=>{
           if(timeout.aborted||now()+requestRuntimeMs>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient remaining runtime before model dispatch');
@@ -294,7 +296,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
           dispatched=true;row.attempted=true;store.event(task.id,'fleet-dispatched',{model:assignment.model,planHash,requestProtocol:freeDecision?FREE_DREX_DECISION_PROTOCOL:isPlainClassifier(assignment.model)?PLAIN_CLASSIFIER_PROTOCOL:null});await checkpoint({phase:'dispatched',taskId:task.id,model:assignment.model});
         },
         onUsage:async(id,usage)=>{store.settle(id,'fleet-worker',lease.fence,usage);await checkpoint({phase:'settled',taskId:task.id,model:assignment.model});},
-        onResponse:record=>{rawArtifact=store.putArtifact(Buffer.from(JSON.stringify(record)));}});
+        onResponse:record=>{rawArtifact=store.putArtifact(Buffer.from(JSON.stringify(record)));return rawArtifact;}});
       response=responseValue;
       const saved=store.putArtifact(Buffer.from(JSON.stringify(response)));row.resultHash=saved.hash;row.execution=response.execution||null;
       if(!dispatched)fail('DISPATCH_EVIDENCE_MISSING','An adapter response is not proof that a model request was dispatched');

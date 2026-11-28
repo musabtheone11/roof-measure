@@ -142,7 +142,7 @@ export function qualifyCaseWorkers({store,catalog=MODEL_CATALOG,roster,catalogAu
   return {workers,excluded};
 }
 
-function ledgerAggregate(store){const a=store.allowanceLedger();return Object.fromEntries(['requests','reservedUnits','reportedUnits','estimatedUnits','unknownAllowanceRequests','unknownUnits','pendingUnits','rollingDayUnits','rollingWeekUnits','incident','limits'].map(k=>[k,a[k]]));}
+function ledgerAggregate(store){const a=store.allowanceLedger();return Object.fromEntries(['requests','reservedUnits','reportedUnits','estimatedUnits','calculatedUnits','calculatedAllowanceRequests','calculationRejectedRequests','unknownAllowanceRequests','unknownUnits','pendingUnits','rollingDayUnits','rollingWeekUnits','incident','limits'].map(k=>[k,a[k]]));}
 function validateEvidence(result,refs){for(const finding of result.findings)if(finding.evidence.some(ref=>!refs.has(ref)))fail('CASE_WORK_EVIDENCE_MISMATCH','Proposal cited evidence outside its immutable case packet');}
 function exactRoleResponse(response,model){return response?.execution?.requestedModel===model&&response.execution.returnedModel===model&&response.result&&
   response.execution.settings?.route==='chat/completions'&&response.execution.settings.responseFormat==='json_object'&&
@@ -150,8 +150,9 @@ function exactRoleResponse(response,model){return response?.execution?.requested
 
 export async function runCaseWorkQueue({store,plan,sourceRevision,apiKey=process.env.APINEX_API_KEY,paidAllowed=false,
   requestRole=requestOrganizationRole,checkpoint=async()=>{},now=Date.now,signal,catalog=MODEL_CATALOG,roster=null,catalogAudit=null,
-  verifyModels=verifyRoster,catalogAuditor=auditModelCatalog,limits={},runtimeMs=60*60000,minimumDispatchIntervalMs=4200,
+  verifyModels=verifyRoster,catalogAuditor=auditModelCatalog,limits={},runtimeMs=60*60000,minimumDispatchIntervalMs=4200,calculateAllowance=false,
   waitImpl=(ms,options)=>wait(ms,null,options)}={}){
+  if(typeof calculateAllowance!=='boolean')fail('CASE_WORK_INVALID_LIMIT','Calculated allowance opt-in must be explicit');
   if(!store||plan?.protocol!==CASE_WORK_PROTOCOL||!Array.isArray(plan.items)||plan.items.length>24||!bounded(sourceRevision)||
     plan.planHash!==hash({protocol:CASE_WORK_PROTOCOL,measurementIdentityHash:plan.measurementIdentityHash,items:plan.items.map(i=>i.workId)}))fail('CASE_WORK_INVALID_PLAN','An immutable bounded case-work plan is required');
   store.recover();store.setControl('running');
@@ -241,10 +242,11 @@ export async function runCaseWorkQueue({store,plan,sourceRevision,apiKey=process
       heartbeat=setInterval(()=>{try{if(store.getControl()==='stopped')abort.abort();else store.heartbeat(task.id,workerId,lease.fence,120000);}catch{abort.abort();}},15000);
       const last=store.events().filter(e=>['fleet-dispatched','design-dispatched','case-work-dispatched'].includes(e.kind)).at(-1)?.created;
       const delay=last==null?0:Math.max(0,last+minimumDispatchIntervalMs-now());if(delay)await waitImpl(delay,{signal:callSignal});
-      const response=await requestRole(task,{model,apiKey,context,signal:callSignal,timeoutMs:120000,verifiedRoster:roster,
-        reserve:async({usd,allowance})=>{
+      const response=await requestRole(task,{model,apiKey,context,signal:callSignal,timeoutMs:120000,verifiedRoster:roster,calculateAllowance,
+        onAllowanceCalculationQuote:record=>store.putArtifact(Buffer.from(JSON.stringify(record))),
+        reserve:async({usd,allowance,allowanceCalculationReservation})=>{
           if(usd!==0||allowance?.reservedUnits!==textAllowanceReservationUnits(model,8000))fail('CASE_WORK_ALLOWANCE_REQUIRED','Exact free-model weighted reservation is required');
-          const id=store.reserve(task.id,workerId,lease.fence,{usd,...budget,allowance});await checkpoint({phase:'case-work-reserved',taskId:task.id,model});return id;
+          const id=store.reserve(task.id,workerId,lease.fence,{usd,...budget,allowance,allowanceCalculationReservation});await checkpoint({phase:'case-work-reserved',taskId:task.id,model});return id;
         },
         onDispatch:async id=>{
           if(dispatches>=budget.requestLimit||queueSignal.aborted||now()+120000>deadline)fail('CASE_WORK_RUNTIME_OR_REQUEST_LIMIT','Case-work dispatch limit reached');
@@ -252,7 +254,7 @@ export async function runCaseWorkQueue({store,plan,sourceRevision,apiKey=process
           row.attempted=true;dispatches++;await checkpoint({phase:'case-work-dispatched',taskId:task.id,model});
         },
         onUsage:async(id,usage)=>{store.settle(id,workerId,lease.fence,usage);await checkpoint({phase:'case-work-settled',taskId:task.id,model});},
-        onResponse:record=>{rawHash=store.putArtifact(Buffer.from(JSON.stringify(record))).hash;}});
+        onResponse:record=>{const artifact=store.putArtifact(Buffer.from(JSON.stringify(record)));rawHash=artifact.hash;return artifact;}});
       row.resultHash=store.putArtifact(Buffer.from(JSON.stringify(response))).hash;
       if(!row.attempted)fail('DISPATCH_EVIDENCE_MISSING','Adapter output is not evidence of a model dispatch');
       if(!exactRoleResponse(response,model))fail('MODEL_MISMATCH','Original structured response must match the assigned model and role protocol');

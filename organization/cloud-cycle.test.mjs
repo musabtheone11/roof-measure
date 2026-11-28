@@ -9,7 +9,7 @@ async function casesRunner({outputDir}){const cases=[];for(const [i,split]of['de
  return{scope:'Unit fixture, not actual tracer',fixtureHash:'a'.repeat(64),generatorSourceSha256:'b'.repeat(64),cases,metrics:{attempted:3,traceFailures:0,diagnosticPasses:3,generatedCustomerPDFs:3,splits:{holdout:{cases:1},validation:{cases:1}}}};}
 test('cloudcycle works withoutWindows and blocks paid inference unless explicit eligibility',async t=>{
  const opts=setup(t);let calls=0;const r=await runCloudCycle({...opts,casesRunner,apiKey:'configured-but-disabled',requestRole:async()=>{calls++;}});
- assert.equal(calls,0);assert.equal(r.windowsDownloadsRequired,false);assert.equal(r.pdfReview.failed,0);assert.equal(r.pdfReview.checked,3);
+ assert.equal(r.allowance.calculatedUnits,0);assert.equal(r.allowance.calculatedAllowanceRequests,0);assert.equal(r.allowance.calculationRejectedRequests,0);assert.equal(calls,0);assert.equal(r.windowsDownloadsRequired,false);assert.equal(r.pdfReview.failed,0);assert.equal(r.pdfReview.checked,3);
  assert.equal(r.decision.productionReleaseApproved,false);assert.equal(r.reviews[0].code,'CHECKPOINT_LINEAGE_BLOCKED');assert.ok(readFileSync(join(opts.outputDir,'roof-reports.zip')).length>100);
 });
 test('two qualified roles use budgets, receive isolated detail and reruns reuse persisted results',async t=>{
@@ -134,4 +134,13 @@ test('targeted recovery uses one existing development case, preserved specialist
  assert.equal(input.developmentContext.developmentCases.length,1);assert.equal(input.developmentContext.developmentCases[0].id,'case0');assert.equal(input.developmentContext.metrics.attempted,1);assert.equal(input.developmentContext.pdfReview.checked,1);
  assert.equal(input.developmentContext.metrics.splits,undefined);assert.equal(r.executionProfile,'allowance-recovery');assert.equal(r.budget.maxUsd,0);assert.equal(r.budget.requestLimit,6);assert.equal(r.fleet.design,undefined);assert.equal(r.decision.productionReleaseApproved,false);
  assert.deepEqual(cloudModelProfile('allowance-recovery'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,allowanceRecovery:true,fleetMode:true,designMode:false});
+});
+
+test('manual work limit can reduce the validation batch and cannot exceed the daily cap',async t=>{
+ const opts=setup(t);let seen;
+ const r=await runCloudCycle({...opts,casesRunner,allowanceWork:true,calculateAllowance:true,maxCaseWorkItems:2,
+  casePacketBuilder:()=>[],casePlanBuilder:input=>{seen=input.maxItems;return{planHash:'e'.repeat(64)};},
+  caseWorkRunner:async input=>{assert.equal(input.calculateAllowance,true);return{sourceRevision:opts.sourceRevision,workItems:[],models:[],counts:{uniqueModels:0,workItems:0}};}});
+ assert.equal(seen,2);assert.equal(r.allowance.calculatedAllowanceRequests,0);assert.equal(r.allowance.calculatedUnits,0);
+ for(const maxCaseWorkItems of [0,9,1.5,NaN])await assert.rejects(runCloudCycle({...opts,maxCaseWorkItems,casesRunner:()=>{throw new Error('Must reject before execution');}}),/limit must be 1..8/);
 });

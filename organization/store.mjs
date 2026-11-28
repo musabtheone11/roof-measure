@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, openSync, closeSync, readFileSync, writeFileSync, lstatSync, mkdirSync, chmodSync, existsSync, fsyncSync } from 'node:fs';
 import { resolve, join, parse } from 'node:path';
+import {POLICY as ALLOWANCE_CALCULATION_POLICY,validateAllowanceCalculationReservation,calculateDocumentedAllowance} from './allowance-calculation.mjs';
 
 const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/;
@@ -88,6 +89,24 @@ export class OrgStore {
         created INTEGER NOT NULL, updated INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS allowance_workflow ON attempt_allowances(workflow_id,created);
+      CREATE TABLE IF NOT EXISTS allowance_calculation_authorizations (
+        attempt_id TEXT PRIMARY KEY REFERENCES attempts(id),
+        policy TEXT NOT NULL, model TEXT NOT NULL, weight INTEGER NOT NULL,
+        quote_artifact_hash TEXT NOT NULL, created INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS allowance_calculation_dispatches (
+        attempt_id TEXT PRIMARY KEY REFERENCES allowance_calculation_authorizations(attempt_id),
+        quote_artifact_hash TEXT NOT NULL, dispatched_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS allowance_calculations (
+        attempt_id TEXT PRIMARY KEY REFERENCES allowance_calculation_authorizations(attempt_id),
+        task_id TEXT NOT NULL REFERENCES tasks(id), policy TEXT NOT NULL,
+        model TEXT NOT NULL, weight INTEGER NOT NULL,
+        quote_artifact_hash TEXT NOT NULL, response_artifact_hash TEXT NOT NULL,
+        prompt_tokens INTEGER NOT NULL, completion_tokens INTEGER NOT NULL,
+        calculated_units INTEGER NOT NULL, proof_artifact_hash TEXT NOT NULL,
+        created INTEGER NOT NULL
+      );
       INSERT OR IGNORE INTO settings(key,value) VALUES ('control','paused');
       INSERT OR IGNORE INTO settings(key,value) VALUES ('budgetIncident','false');
       INSERT OR IGNORE INTO settings(key,value) VALUES ('allowanceIncident','false');
@@ -177,6 +196,30 @@ export class OrgStore {
     // provider. Later settlements must still be counted when reusing a snapshot.
     const outstanding=this.db.prepare(`SELECT coalesce(sum(charged_units),0) AS n FROM attempt_allowances WHERE ${held} OR (state='settled' AND updated>=?)`).get(snapshot.observedAt).n;
     if(!snapshot.unlimited&&outstanding+additionalUnits>snapshot.remainingUnits)fail('ALLOWANCE_EXHAUSTED','Fresh provider remaining allowance cannot cover unresolved holds and new work');
+  }
+  calculationArtifact(hash) {
+    if(typeof hash!=='string'||!HASH.test(hash))fail('INVALID_CALCULATION_ARTIFACT','A content-addressed calculation artifact is required');
+    try{return JSON.parse(this.readArtifact(hash).toString('utf8'));}
+    catch{fail('INVALID_CALCULATION_ARTIFACT','Calculation evidence is missing, corrupt or not JSON');}
+  }
+  calculationAuthorization(spec,snapshot,row,usd) {
+    if(spec===null)return null;
+    if(!snapshot||usd!==0)fail('ALLOWANCE_CALCULATION_REQUIRES_FREE_RESERVATION','Documented allowance calculation requires a zero-dollar allowance reservation');
+    let checked;
+    try {
+      if(!spec||typeof spec!=='object'||Array.isArray(spec)||Object.keys(spec).some(k=>!['policy','model','weight','quoteArtifactHash'].includes(k)))
+        return {eligible:false,reason:'INVALID_CALCULATION_AUTHORIZATION'};
+      const quoteArtifact=this.calculationArtifact(spec.quoteArtifactHash);
+      checked=validateAllowanceCalculationReservation({authorization:spec,quoteArtifact,at:this.now()});
+    }catch(error){return {eligible:false,reason:error.code||'INVALID_CALCULATION_QUOTE'};}
+    if(checked?.blockDispatch)fail('ALLOWANCE_CALCULATION_DISPATCH_BLOCKED','Current quote contradicts the authorized free model or published bounds');
+    if(checked?.eligible!==true)return {eligible:false,reason:checked?.reason||'UNVERIFIED_CALCULATION_QUOTE'};
+    const maxOutput=JSON.parse(row.body).constraints?.maxOutputTokens??2000;
+    const context=checked.publishedContextTokens,weight=checked.publishedWeight;
+    const minimum=(context+Math.max(context,maxOutput))*weight;
+    if(!Number.isSafeInteger(context)||context<1||!Number.isSafeInteger(weight)||weight<1||!Number.isSafeInteger(minimum)||minimum<1||snapshot.reservedUnits<minimum)
+      fail('ALLOWANCE_CALCULATION_RESERVATION_INSUFFICIENT','The complete published conservative weighted window must remain reserved');
+    return {eligible:true,authorization:{policy:spec.policy,model:spec.model,weight:spec.weight,quoteArtifactHash:spec.quoteArtifactHash}};
   }
   claim(workerId, { leaseMs = 120000 } = {}) {
     id(workerId); if (!Number.isInteger(leaseMs) || leaseMs < 1 || leaseMs > 120000) fail('INVALID_LIMIT', 'Lease must be 1–120000 ms');
@@ -288,7 +331,7 @@ export class OrgStore {
       return rows.length;
     });
   }
-  reserve(taskId, workerId, fence, { usd = 0, requestLimit = 0, maxUsd = 0, hourUsd = 0, dayUsd = 0, weekUsd = 0, monthUsd = 0, allowance = null, allowanceHeadroomUnits = 0 } = {}) {
+  reserve(taskId, workerId, fence, { usd = 0, requestLimit = 0, maxUsd = 0, hourUsd = 0, dayUsd = 0, weekUsd = 0, monthUsd = 0, allowance = null, allowanceHeadroomUnits = 0, allowanceCalculationReservation = null } = {}) {
     for (const [name, value] of Object.entries({ usd, requestLimit, maxUsd, hourUsd, dayUsd, weekUsd, monthUsd })) finite(value, name);
     if (!Number.isInteger(requestLimit)) fail('INVALID_LIMIT', 'Request limit must be an integer');
     units(allowanceHeadroomUnits,'allowanceHeadroomUnits');
@@ -299,6 +342,7 @@ export class OrgStore {
       if (this.db.prepare("SELECT value FROM settings WHERE key='budgetIncident'").get().value === 'true') fail('BUDGET_INCIDENT', 'Usage exceeded a reservation; operator investigation required');
       if(this.db.prepare("SELECT value FROM settings WHERE key='allowanceIncident'").get().value==='true')fail('ALLOWANCE_INCIDENT','Allowance usage exceeded its reservation; operator investigation required');
       const snapshot=allowance===null?null:allowanceSnapshot(allowance,this.now());
+      const calculation=this.calculationAuthorization(allowanceCalculationReservation,snapshot,row,usd);
       const workflow = this.db.prepare('SELECT count(*) AS requests,coalesce(sum(charged_usd),0) AS usd FROM attempts WHERE workflow_id=?').get(row.workflow_id);
       const stage = this.db.prepare('SELECT count(*) AS requests FROM attempts WHERE task_id=?').get(taskId);
       const hour = this.db.prepare('SELECT coalesce(sum(charged_usd),0) AS usd FROM attempts WHERE created>=?').get(this.now() - 3600000).usd;
@@ -317,6 +361,14 @@ export class OrgStore {
       if(snapshot){
         this.db.prepare("INSERT INTO attempt_allowances(attempt_id,task_id,workflow_id,state,reserved_units,charged_units,remaining_units,observed_at,expires_at,period_key,unlimited,created,updated) VALUES (?,?,?,'reserved',?,?,?,?,?,?,?,?,?)").run(attemptId,taskId,row.workflow_id,snapshot.reservedUnits,snapshot.reservedUnits,snapshot.remainingUnits??null,snapshot.observedAt,snapshot.expiresAt,snapshot.periodKey,snapshot.unlimited?1:0,this.now(),this.now());
         this.event(taskId,'allowance-reserved',{attemptId,reservedUnits:snapshot.reservedUnits,periodKey:snapshot.periodKey});
+      }
+      if(calculation?.eligible){
+        const auth=calculation.authorization;
+        this.db.prepare('INSERT INTO allowance_calculation_authorizations(attempt_id,policy,model,weight,quote_artifact_hash,created) VALUES (?,?,?,?,?,?)')
+          .run(attemptId,auth.policy,auth.model,auth.weight,auth.quoteArtifactHash,this.now());
+        this.event(taskId,'allowance-calculation-authorized',{attemptId,policy:auth.policy,model:auth.model,weight:auth.weight,quoteArtifactHash:auth.quoteArtifactHash});
+      }else if(calculation){
+        this.event(taskId,'allowance-calculation-authorization-rejected',{attemptId,reason:calculation.reason});
       }
       this.event(taskId, 'reserved', { attemptId, usd }); return attemptId;
     });
@@ -339,6 +391,19 @@ export class OrgStore {
           observedAt:storedAllowance.observed_at,expiresAt:storedAllowance.expires_at,periodKey:storedAllowance.period_key,unlimited:storedAllowance.unlimited===1},this.now());
         this.checkAllowance(attempt,snapshot,0);
       }
+      const calculation=this.db.prepare('SELECT * FROM allowance_calculation_authorizations WHERE attempt_id=?').get(attemptId);
+      if(calculation){
+        const authorization={policy:calculation.policy,model:calculation.model,weight:calculation.weight,quoteArtifactHash:calculation.quote_artifact_hash};
+        let quote;
+        try{quote=validateAllowanceCalculationReservation({authorization,quoteArtifact:this.calculationArtifact(calculation.quote_artifact_hash),at:this.now()});}
+        catch(error){quote={eligible:false,reason:error.code||'INVALID_CALCULATION_QUOTE'};}
+        if(quote?.blockDispatch)fail('ALLOWANCE_CALCULATION_DISPATCH_BLOCKED','Current quote contradicts the authorized free model or published bounds');
+        if(quote?.eligible===true){
+          this.db.prepare('INSERT INTO allowance_calculation_dispatches(attempt_id,quote_artifact_hash,dispatched_at) VALUES (?,?,?)')
+            .run(attemptId,calculation.quote_artifact_hash,this.now());
+          this.event(attempt.task_id,'allowance-calculation-dispatch-eligible',{attemptId,policy:calculation.policy,quoteArtifactHash:calculation.quote_artifact_hash});
+        }else this.event(attempt.task_id,'allowance-calculation-dispatch-ineligible',{attemptId,reason:quote?.reason||'UNVERIFIED_CALCULATION_QUOTE'});
+      }
       // Trusted host-only coordination. Its marker and dispatch commit together;
       // a failure rolls back both, before any external provider operation.
       if(beforeDispatch){
@@ -350,26 +415,75 @@ export class OrgStore {
       this.event(attempt.task_id, 'dispatched', { attemptId }); return attemptId;
     });
   }
-  settle(attemptId, workerId, fence, { reportedUsd = null, reportedAllowanceUnits = null, estimatedAllowanceUnits = null } = {}) {
+  documentedAllowanceCalculation(attempt,allowance,spec,reportedAllowanceUnits,reportedUsd) {
+    const reject=reason=>({eligible:false,reason});
+    if(!spec||typeof spec!=='object'||Array.isArray(spec)||Object.keys(spec).some(k=>!['policy','quoteArtifactHash','responseArtifactHash'].includes(k))||
+      spec.policy!==ALLOWANCE_CALCULATION_POLICY||!HASH.test(spec.quoteArtifactHash||'')||!HASH.test(spec.responseArtifactHash||''))return reject('INVALID_CALCULATION_SETTLEMENT');
+    if(!allowance||attempt.reserve_usd!==0)return reject('FREE_ALLOWANCE_RESERVATION_REQUIRED');
+    if(reportedUsd!==null&&reportedUsd!==0)return reject('CONFLICTING_WALLET_USAGE');
+    if(reportedAllowanceUnits!==null)return reject('CONFLICTING_ALLOWANCE_SETTLEMENT');
+    const auth=this.db.prepare('SELECT * FROM allowance_calculation_authorizations WHERE attempt_id=?').get(attempt.id);
+    if(!auth)return reject('PROSPECTIVE_AUTHORIZATION_MISSING');
+    if(auth.policy!==spec.policy||auth.quote_artifact_hash!==spec.quoteArtifactHash)return reject('RESERVATION_QUOTE_BINDING_MISMATCH');
+    const dispatched=this.db.prepare('SELECT * FROM allowance_calculation_dispatches WHERE attempt_id=?').get(attempt.id);
+    if(!dispatched||dispatched.quote_artifact_hash!==auth.quote_artifact_hash)return reject('ELIGIBLE_DISPATCH_PROOF_MISSING');
+    const authorization={policy:auth.policy,model:auth.model,weight:auth.weight,quoteArtifactHash:auth.quote_artifact_hash};
+    let checked;
+    try {
+      checked=calculateDocumentedAllowance({authorization,quoteArtifact:this.calculationArtifact(spec.quoteArtifactHash),
+        responseArtifact:this.calculationArtifact(spec.responseArtifactHash),dispatchAt:dispatched.dispatched_at,attemptId:attempt.id,taskId:attempt.task_id});
+    }catch(error){return reject(error.code||'INVALID_CALCULATION_ARTIFACT');}
+    if(checked?.eligible!==true)return reject(checked?.reason||'CALCULATION_UNVERIFIED');
+    const p=checked.proof?.promptTokens,c=checked.proof?.completionTokens,weight=auth.weight,total=p+c;
+    const calculated=Math.ceil(total*weight);
+    if(!Number.isSafeInteger(p)||p<0||!Number.isSafeInteger(c)||c<0||!Number.isSafeInteger(total)||
+      !Number.isSafeInteger(weight)||weight<1||checked.proof?.weight!==weight||!Number.isSafeInteger(calculated)||calculated<0||checked.units!==calculated)
+      return reject('CALCULATION_RECOMPUTATION_FAILED');
+    return {eligible:true,units:calculated,authorization,dispatchAt:dispatched.dispatched_at,
+      proof:{schemaVersion:1,kind:'documented-calculated-allowance-v1',directlyReported:false,
+        ...checked.proof,attemptBinding:{attemptId:attempt.id,taskId:attempt.task_id,model:auth.model,protocol:'chat/completions'},
+        quoteArtifactHash:spec.quoteArtifactHash,responseArtifactHash:spec.responseArtifactHash,
+        dispatchAt:dispatched.dispatched_at,calculatedUnits:calculated}};
+  }
+  settle(attemptId, workerId, fence, { reportedUsd = null, reportedAllowanceUnits = null, estimatedAllowanceUnits = null, allowanceCalculation = null } = {}) {
     if (reportedUsd !== null) finite(reportedUsd, 'reportedUsd');
     if(reportedAllowanceUnits!==null)units(reportedAllowanceUnits,'reportedAllowanceUnits');
     if(estimatedAllowanceUnits!==null)units(estimatedAllowanceUnits,'estimatedAllowanceUnits');
     return this.transaction(() => {
       const attempt = this.requireAttempt(attemptId, workerId, fence);
       if (attempt.state !== 'dispatched') fail('ATTEMPT_STATE', 'Only a dispatched attempt can be settled once');
+      const allowance=this.db.prepare('SELECT * FROM attempt_allowances WHERE attempt_id=?').get(attemptId);
+      const calculation=allowanceCalculation===null?null:this.documentedAllowanceCalculation(attempt,allowance,allowanceCalculation,reportedAllowanceUnits,reportedUsd);
       const state = reportedUsd === null ? 'unknown' : 'settled', charged = reportedUsd ?? attempt.reserve_usd;
       this.db.prepare('UPDATE attempts SET state=?,reported_usd=?,charged_usd=?,updated=? WHERE id=?').run(state, reportedUsd, charged, this.now(), attemptId);
       if (reportedUsd !== null && reportedUsd > attempt.reserve_usd) this.db.prepare("UPDATE settings SET value='true' WHERE key='budgetIncident'").run();
-      const allowance=this.db.prepare('SELECT * FROM attempt_allowances WHERE attempt_id=?').get(attemptId);
       if(allowance){
-        const allowanceState=reportedAllowanceUnits===null?'unknown':'settled',chargedUnits=reportedAllowanceUnits??allowance.reserved_units;
-        this.db.prepare('UPDATE attempt_allowances SET state=?,reported_units=?,estimated_units=?,charged_units=?,updated=? WHERE attempt_id=?').run(allowanceState,reportedAllowanceUnits,estimatedAllowanceUnits,chargedUnits,this.now(),attemptId);
-        if((reportedAllowanceUnits!==null&&reportedAllowanceUnits>allowance.reserved_units)||(estimatedAllowanceUnits!==null&&estimatedAllowanceUnits>allowance.reserved_units)){
-          this.db.prepare("UPDATE settings SET value='true' WHERE key='allowanceIncident'").run();
-          this.event(attempt.task_id,'allowance-reservation-breach',{attemptId,reservedUnits:allowance.reserved_units,reportedAllowanceUnits,estimatedAllowanceUnits});
+        const directReported=calculation===null?reportedAllowanceUnits:null;
+        const calculated=calculation?.eligible===true?calculation.units:null;
+        const allowanceState=calculated!==null||directReported!==null?'settled':'unknown',chargedUnits=calculated??directReported??allowance.reserved_units;
+        if(calculated!==null){
+          const proofArtifact=this.putArtifact(Buffer.from(JSON.stringify(calculation.proof)));
+          this.db.prepare('INSERT INTO allowance_calculations(attempt_id,task_id,policy,model,weight,quote_artifact_hash,response_artifact_hash,prompt_tokens,completion_tokens,calculated_units,proof_artifact_hash,created) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+            .run(attemptId,attempt.task_id,calculation.authorization.policy,calculation.authorization.model,calculation.authorization.weight,
+              allowanceCalculation.quoteArtifactHash,allowanceCalculation.responseArtifactHash,calculation.proof.promptTokens,calculation.proof.completionTokens,
+              calculated,proofArtifact.hash,this.now());
+          this.event(attempt.task_id,'allowance-documented-calculated',{attemptId,policy:calculation.authorization.policy,calculatedUnits:calculated,
+            quoteArtifactHash:allowanceCalculation.quoteArtifactHash,responseArtifactHash:allowanceCalculation.responseArtifactHash,proofArtifactHash:proofArtifact.hash});
+        }else if(calculation){
+          this.event(attempt.task_id,'allowance-calculation-rejected',{attemptId,reason:calculation.reason,
+            quoteArtifactHash:HASH.test(allowanceCalculation?.quoteArtifactHash||'')?allowanceCalculation.quoteArtifactHash:null,
+            responseArtifactHash:HASH.test(allowanceCalculation?.responseArtifactHash||'')?allowanceCalculation.responseArtifactHash:null});
         }
-        this.event(attempt.task_id,'allowance-'+allowanceState,{attemptId,reportedAllowanceUnits,estimatedAllowanceUnits});
+        this.db.prepare('UPDATE attempt_allowances SET state=?,reported_units=?,estimated_units=?,charged_units=?,updated=? WHERE attempt_id=?').run(allowanceState,directReported,estimatedAllowanceUnits,chargedUnits,this.now(),attemptId);
+        if((directReported!==null&&directReported>allowance.reserved_units)||(estimatedAllowanceUnits!==null&&estimatedAllowanceUnits>allowance.reserved_units)||
+          (calculated!==null&&calculated>allowance.reserved_units)){
+          this.db.prepare("UPDATE settings SET value='true' WHERE key='allowanceIncident'").run();
+          this.event(attempt.task_id,'allowance-reservation-breach',{attemptId,reservedUnits:allowance.reserved_units,reportedAllowanceUnits:directReported,estimatedAllowanceUnits,
+            ...(calculated!==null?{calculatedAllowanceUnits:calculated}:{})});
+        }
+        if(calculated===null)this.event(attempt.task_id,'allowance-'+allowanceState,{attemptId,reportedAllowanceUnits:directReported,estimatedAllowanceUnits});
       }else if(reportedAllowanceUnits!==null||estimatedAllowanceUnits!==null)fail('ALLOWANCE_RESERVATION_MISSING','Allowance usage cannot settle without its original reservation');
+      else if(calculation)this.event(attempt.task_id,'allowance-calculation-rejected',{attemptId,reason:calculation.reason});
       this.event(attempt.task_id, state, { attemptId, reportedUsd }); return this.ledger(attempt.task_id);
     });
   }
@@ -384,11 +498,23 @@ export class OrgStore {
     const rows=taskId?this.db.prepare('SELECT * FROM attempt_allowances WHERE task_id=? ORDER BY created,attempt_id').all(id(taskId)):
       this.db.prepare('SELECT * FROM attempt_allowances ORDER BY created,attempt_id').all();
     const sum=(items,key)=>items.reduce((total,row)=>total+(row[key]??0),0),unknown=rows.filter(row=>['dispatched','unknown'].includes(row.state));
+    const calculations=this.db.prepare(`SELECT coalesce(sum(calculated_units),0) AS units,count(*) AS requests FROM allowance_calculations${taskId?' WHERE task_id=?':''}`).get(...(taskId?[id(taskId)]:[]));
+    const rejected=this.events(taskId).filter(event=>event.kind==='allowance-calculation-rejected');
     return {requests:rows.length,reservedUnits:sum(rows,'charged_units'),reportedUnits:sum(rows,'reported_units'),estimatedUnits:sum(rows,'estimated_units'),
+      calculatedUnits:calculations.units,calculatedAllowanceRequests:calculations.requests,calculationRejectedRequests:rejected.length,
       unknownAllowanceRequests:unknown.length,unknownUnits:sum(unknown,'charged_units'),pendingUnits:sum(rows.filter(row=>row.state==='reserved'),'charged_units'),
       rollingDayUnits:sum(rows.filter(row=>row.created>=this.now()-86400000),'charged_units'),
       rollingWeekUnits:sum(rows.filter(row=>row.created>=this.now()-7*86400000),'charged_units'),
       incident:this.db.prepare("SELECT value FROM settings WHERE key='allowanceIncident'").get().value==='true',limits:ALLOWANCE_LIMITS,attempts:rows};
+  }
+  allowanceCalculations(taskId) {
+    const parameters=taskId?[id(taskId)]:[];
+    const clause=taskId?' WHERE attempt_id IN (SELECT id FROM attempts WHERE task_id=?)':'';
+    const authorizations=this.db.prepare('SELECT * FROM allowance_calculation_authorizations'+clause+' ORDER BY created,attempt_id').all(...parameters);
+    const dispatches=this.db.prepare('SELECT * FROM allowance_calculation_dispatches'+clause+' ORDER BY dispatched_at,attempt_id').all(...parameters);
+    const calculations=this.db.prepare('SELECT * FROM allowance_calculations'+(taskId?' WHERE task_id=?':'')+' ORDER BY created,attempt_id').all(...parameters);
+    const rejected=this.events(taskId).filter(event=>event.kind==='allowance-calculation-rejected');
+    return {authorizations,dispatches,calculations,rejected};
   }
   backfillLegacyAllowance({attemptId,model,reservedUnits,evidence}={}) {
     id(attemptId);units(reservedUnits,'reservedUnits');

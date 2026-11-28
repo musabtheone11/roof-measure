@@ -60,8 +60,9 @@ function directoryZip(directory) {
 export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevision,apiKey=process.env.APINEX_API_KEY,paidAllowed=false,browserStatus='not-run',
   casesRunner=runCloudCases,requestRole=requestOrganizationRole,checkpoint=async()=>{},now=Date.now,
   fleetMode=false,fleetRunner=runModelFleet,catalogAuditor=auditModelCatalog,
-  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts,allowanceQualification=false,allowanceRoster=false,allowanceWork=false,allowanceRecovery=false,caseWorkRunner=runCaseWorkQueue,casePacketBuilder=buildCloudCaseWorkPackets,casePlanBuilder=buildCaseWorkPlan}={}) {
+  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts,allowanceQualification=false,allowanceRoster=false,allowanceWork=false,allowanceRecovery=false,caseWorkRunner=runCaseWorkQueue,casePacketBuilder=buildCloudCaseWorkPackets,casePlanBuilder=buildCaseWorkPlan,calculateAllowance=false,maxCaseWorkItems=8}={}) {
   if(!stateDir||!outputDir||!sourceRevision||!Number.isSafeInteger(seed))throw new Error('Explicit cloud state/output/seed/revision required');
+  if(!Number.isInteger(maxCaseWorkItems)||maxCaseWorkItems<1||maxCaseWorkItems>8)throw new Error('Case-work item limit must be 1..8');
   const allowanceOnly=allowanceQualification||allowanceRoster||allowanceWork||allowanceRecovery,allowanceRequestLimit=allowanceRoster||allowanceWork?48:6;
   if(allowanceOnly){fleetMode=!allowanceWork;designMode=false;}
   const executionProfile=allowanceRecovery?'allowance-recovery':allowanceWork?'allowance-work':allowanceRoster?'allowance-roster':allowanceQualification?'allowance-qualification':fleetMode?(designMode?'all-models':'text-fleet'):'two-role';
@@ -119,8 +120,8 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
     if(allowanceWork) {
       if(!store)throw new Error('CASE_WORK_RESTORED_STATE_REQUIRED');
       const casePackets=casePacketBuilder({generated,outputDir,pdfResults,store});
-      const plan=casePlanBuilder({store,measurementIdentity:{engineSourceHashes:generated.engineSourceHashes,generatorSourceSha256:generated.generatorSourceSha256},casePackets,maxItems:8});
-      caseWork=await caseWorkRunner({store,plan,sourceRevision,apiKey,paidAllowed,requestRole,checkpoint,now,catalogAuditor,limits:{requestLimit:48,maxUsd:0},runtimeMs:60*60000});
+      const plan=casePlanBuilder({store,measurementIdentity:{engineSourceHashes:generated.engineSourceHashes,generatorSourceSha256:generated.generatorSourceSha256},casePackets,maxItems:maxCaseWorkItems});
+      caseWork=await caseWorkRunner({store,plan,sourceRevision,apiKey,paidAllowed,requestRole,checkpoint,now,catalogAuditor,calculateAllowance,limits:{requestLimit:48,maxUsd:0},runtimeMs:60*60000});
       writeFileSync(join(outputDir,'case-work.json'),JSON.stringify(caseWork,null,2));
       mkdirSync(join(outputDir,'case-work-evidence'),{recursive:true});
       for(const item of caseWork.workItems||[]) {
@@ -134,7 +135,7 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       const catalogAudit=paidAllowed&&apiKey?await catalogAuditor():null;
       fleet=await fleetRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
         developmentContext:{...contextBase,metrics:developmentMetrics,pdfReview:{checked:developmentPDFs.length,failed:developmentPDFs.filter(p=>!p.ok).length},developmentCases:development,...(allowanceRecovery?{qualificationQuestion:'Review only the single supplied development counterexample. Verify one diagnostic finding or draft one concise provisional-report note using your assigned role. Return the shortest complete contract, at most one finding and a short summary. Do not invent UI controls, create artifacts, or analyze absent cases.'}:{})},
-        aggregateContext:contextBase,paidAllowed,apiKey,requestRole,checkpoint,now,catalogAudit,
+        aggregateContext:contextBase,paidAllowed,apiKey,requestRole,checkpoint,now,catalogAudit,calculateAllowance,
         allowanceReserveUnits:designMode?5000000:0,
         ...(allowanceOnly?{selectedModelIds:[...(allowanceRecovery?ALLOWANCE_RECOVERY_MODELS:allowanceRoster?ALLOWANCE_ROSTER_MODELS:ALLOWANCE_QUALIFICATION_MODELS)]}:{}),
         ...(allowanceRoster?{runtimeMs:60*60000}:{}),
@@ -218,7 +219,7 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
     const ledger=store?store.ledger():{requests:null,reportedUsd:null,reservedUsd:null,unknownBillingRequests:null};
     const allowanceLedger=store?.allowanceLedger();
     // This private aggregate omits attempt-level provider balances/snapshots.
-    const allowance=allowanceLedger?Object.fromEntries(['requests','reservedUnits','reportedUnits','estimatedUnits','unknownAllowanceRequests','unknownUnits','pendingUnits','rollingDayUnits','rollingWeekUnits','incident','limits'].map(key=>[key,allowanceLedger[key]])):null;
+    const allowance=allowanceLedger?Object.fromEntries(['requests','reservedUnits','reportedUnits','estimatedUnits','calculatedUnits','calculatedAllowanceRequests','calculationRejectedRequests','unknownAllowanceRequests','unknownUnits','pendingUnits','rollingDayUnits','rollingWeekUnits','incident','limits'].map(key=>[key,allowanceLedger[key]])):null;
     if(fleet) {
       fleet.coverage={...fleet.coverage,assigned:fleet.agents.length,attempted:fleet.agents.filter(a=>a.attempted).length,
         validContributions:fleet.agents.filter(a=>a.primaryValidated).length,
@@ -254,7 +255,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const seed=Number(arg('--seed',new Date().toISOString().slice(0,10).replaceAll('-','')));
   runCloudCycle({stateDir:arg('--state','.devcache/cloud-state'),outputDir:arg('--output','.devcache/cloud-output'),
     count:Number(arg('--count','12')),seed,sourceRevision,browserStatus:process.env.ROOF_CLOUD_BROWSER_STATUS==='success'?'passed':'not-run',paidAllowed:process.env.ROOF_CLOUD_PAID_ALLOWED==='true',apiKey:process.env.ROOF_CLOUD_PAID_ALLOWED==='true'?process.env.APINEX_API_KEY:null,
-    ...cloudModelProfile(process.env.ROOF_CLOUD_MODEL_MODE),
+    ...cloudModelProfile(process.env.ROOF_CLOUD_MODEL_MODE),calculateAllowance:process.env.ROOF_CLOUD_CALCULATE_ALLOWANCE==='true',maxCaseWorkItems:Number(arg('--work-items','8')),
     checkpoint:async event=>{if(event.model&&event.phase)console.log(JSON.stringify({event:'model-task',phase:event.phase,model:event.model}));}}).then(r=>{
       console.log(JSON.stringify({status:r.decision.status,metrics:r.metrics,reviews:r.reviews.map(x=>({role:x.role,status:x.status})),caseWork:r.caseWork?{counts:r.caseWork.counts,models:r.caseWork.models}:null,budget:r.budget}));
       if(process.env.GITHUB_STEP_SUMMARY)writeFileSync(process.env.GITHUB_STEP_SUMMARY,
