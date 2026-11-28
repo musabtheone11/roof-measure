@@ -160,9 +160,14 @@ the six image tasks and their visual review within the total 64-call ceiling.
 - Completed: 45 text/decision and six image-model catalogs; endpoint/pricing audits;
   specialist assignments; durable budgeted execution; typed numerical grounding;
   independent model/visual review; responsive status dashboard and regression tests.
-- Active: targeted CEO/visual follow-up on retained baseline artifacts;
-  budget admission and bounded provider-error diagnostics.
-- Next: inspect real outputs, deploy the verified source pin/dashboard and verify host.
+- Completed: hosted all-model cycle and targeted retained-baseline follow-up;
+  budget admission, bounded provider-error diagnostics, five original raster
+  concepts and independent review of their actual pixels. The dashboard is live.
+- Completed: retained raster-validation counts and a combined six-model design
+  manifest. Independent replay of actual hosted evidence made zero API calls,
+  preserved the entire ledger, and recovered the same five reviewed images.
+- Next: address recorded provider/contract failures and implement only independently
+  reviewed design changes through normal application checks.
 - Known limits: generated evidence is not field accuracy; catalog claims are not
   task qualification; subscription access and free allowance must be observed.
 
@@ -189,3 +194,23 @@ The old $2 per-job policy blocked CEO and visual review. The $3 policy addresses
 that admission defect without changing the $20 rolling-week ceiling or refunding
 any unknown cost. Follow-up output distinguishes retained PDFs, newly generated
 concepts, the original measurement source and the current review operator.
+
+The targeted run (`46093943711`, operator `edce25e`) exercised the remaining CEO,
+bringing actual unique model dispatch coverage to 51/51. Flare and Sunburst
+returned original images, bringing the concept collection to five. Paid Nano
+returned HTTP 502; its previous failed request and unknown reservation remain.
+Terra reviewed all five actual images with exact model/hash evidence and returned
+`needs-human`. Opus executed but returned contradictory envelope/payload decisions;
+the response remains rejected. The prompt now states the validator's existing
+decision mapping explicitly, without relabeling that failed response.
+
+The follow-up added exactly five requests. All 48 baseline case/oracle/report/PDF
+files remained byte-identical and all 31 original unknown holds remained. The
+cumulative ledger records 57 requests, $0.08325 reported, $2.0448564 committed
+including 34 unknown-billing reservations. These are distinct from provider
+invoices and remain subject to the shared rolling-week ceiling. There are 11
+validated text/typed contributions and five format-validated raster concepts;
+neither count means the designs are production-ready or roof accuracy is proven.
+Known visual defects include low contrast, tiny text, inconsistent units,
+misspelling and an unsupported inferred-status claim. The customer report and
+measurement algorithms are unchanged by the design studio.
