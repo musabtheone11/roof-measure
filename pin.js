@@ -8,7 +8,7 @@
  * lookups need) and fills the address box from Google's reverse geocoder. Uses globals from app.js: map, geocoder,
  * state, setLocation, setTool, toast, $.
  */
-const pin = { marker: null, picking: false, busy: false, requestId: 0 };
+const pin = { marker: null, picking: false, busy: false, requestId: 0, afterLock: null };
 
 function pinSetMarker(loc) {
   if (!(typeof map !== "undefined" && map) || !loc) return;
@@ -33,33 +33,43 @@ async function reverseAddress(ll) {
 async function lockHouse(latLng, opts = {}) {
   if (!latLng) return;
   const request = ++pin.requestId; const epoch = typeof locationGeneration === 'function' ? locationGeneration() : 0;
-  pin.busy = true; pinStopPicking();
+  const addressRequest = ++state.addressRequestEpoch;
+  const afterLock = pin.picking ? pin.afterLock : null;
+  pin.busy = true; pinStopPicking({ keepPending: true });
   const loc = { lat: typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat, lng: typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng, selectedByPin: true };
   toast('Locking in this house...');
   try {
     const addr = await reverseAddress(loc);
-    if (request !== pin.requestId || (typeof locationGeneration === 'function' && epoch !== locationGeneration())) return;
+    if (request !== pin.requestId || addressRequest !== state.addressRequestEpoch || (typeof locationGeneration === 'function' && epoch !== locationGeneration())) return;
     const label = addr || `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
     const view = opts.keepView && (typeof map !== "undefined" && map) ? { c: map.getCenter(), z: map.getZoom() } : null;
     setLocation(loc, label);                      // also resets Solar / permits / commercial for the new house
     if (view) { map.setCenter(view.c); map.setZoom(view.z); }
     pinSetMarker(loc);
     toast(addr ? `Locked: ${addr}` : 'Locked at this point (no street address found here)');
+    if (typeof afterLock === 'function') {
+      const panel = $('#panelAuto'); if (panel) panel.open = true;
+      await afterLock();
+    }
   } finally { if (request === pin.requestId) pin.busy = false; }
 }
 
 // ------------------------------------------------------------------ pick mode
-function pinStartPicking() {
+function pinStartPicking(options = {}) {
   if (!(typeof map !== "undefined" && map)) return;
+  pinStopPicking();
   if (typeof setTool === 'function') setTool('select');
   pin.picking = true;
+  pin.afterLock = typeof options.afterLock === 'function' ? options.afterLock : null;
   document.body.classList.add('picking');
   map.setOptions({ draggableCursor: 'crosshair' });
   $('#btnPick').classList.add('on'); $('#btnPick').textContent = 'Cancel pick';
   $('#btnLockCenter').hidden = false;
   setHint('Click the house, or move the map with the arrow keys so the + is on the roof and press Enter. Esc cancels.');
 }
-function pinStopPicking() {
+function pinStopPicking(options = {}) {
+  pin.afterLock = null;
+  if (!options.keepPending) { pin.requestId++; pin.busy = false; }
   if (!pin.picking) return;
   pin.picking = false;
   document.body.classList.remove('picking');
