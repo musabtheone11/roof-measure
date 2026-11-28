@@ -20,6 +20,14 @@ test('every role has strict bounded contracts and runtime-injected identity',()=
 test('changed candidate, dataset, policy and inputs invalidate prior result',()=>{
   for(const changed of [{candidateHash:b},{datasetRevision:'changed'},{policyVersion:'changed'},{inputHashes:[a]},{sourceRevision:'changed'}])assert.throws(()=>validateResult({...result(),...changed},task()));
 });
+test('fleet claims and peer review are typed and bound to the assigned independent task',()=>{
+  const t={...task(),constraints:{requireMetricClaims:true,reviewTaskId:'other-task'}};
+  const good={...result(t),metricClaims:{attempted:12,diagnosticPasses:4,reviewRequired:8},peerReview:{taskId:'other-task',decision:'revise',findings:['Check the independent edge inventory.']}};
+  assert.equal(validateResult(good,t).metricClaims.reviewRequired,8);
+  for(const change of [{metricClaims:undefined},{metricClaims:{attempted:'12'}},{metricClaims:{attempted:NaN}},{peerReview:undefined},{peerReview:{...good.peerReview,taskId:t.id}},{peerReview:{...good.peerReview,taskId:'unassigned-task'}},{peerReview:{...good.peerReview,findings:[]}}])assert.throws(()=>validateResult({...good,...change},t));
+  assert.throws(()=>validateTask({...task(),constraints:{reviewTaskId:task().id}}));
+  assert.throws(()=>validateTask({...task(),constraints:{requireMetricClaims:'true'}}));
+});
 test('workflow metadata is strictly typed and original source hashes remain bounded',()=>{
   const constraints={extension:'.txt',actors:Object.fromEntries(ROLES.map(r=>[r,r+'-actor'])),externalProcessingAuthorized:false,cycles:0,stageCount:1,previousTaskId:'previous',sourceHashes:[a,b]};
   assert.deepEqual(validateTask({...task(),constraints}).constraints,constraints);

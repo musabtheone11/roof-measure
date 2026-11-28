@@ -1,0 +1,365 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-28T00:28:47.101896+00:00",
+  "modelCount": 6,
+  "sourceURLs": {
+    "catalog": "https://apinex.bond/api/user/media/models",
+    "apiReference": "https://apinex.bond/developers/models/images.md",
+    "pricing": "https://apinex.bond/pricing.md"
+  },
+  "sourceHashes": {
+    "catalogSha256": "a41dfd25bda579bba64c282f0f051580c814877da7d26eeeba6e01b88602108c",
+    "apiReferenceSha256": "9de716c97fad35954b0f376a353d2fbd8c9d29b446cfd6c6e4892a42bee5e4d5",
+    "pricingSha256": "743469cca95fdbfcd448daeae80a8eb9d12e140ca57a5d46fd93fea7fe1615fa",
+    "publicApplicationBundleSha256": "ec6ee21cc6a7850cba7079be74de0ca369f7b240748c1c56f70d01666efe9181"
+  },
+  "catalogObservation": "GET media catalog HTTP200 without authentication and with configured API key; listing does not prove generation entitlement. GET /v1/models separately lists only45 text models.",
+  "billingEvidence": "Pricing reference:1,000,000 balance tokens perUSD1. Public media UI computes dollarsPerImage=priceTokens/1e6, displays2 decimals; Sunburst65000 meansUSD0.065 and displayedUSD0.07. Free row shows baseTokens tokens/image; allowFree:false shows Subscriptiononly.",
+  "apiCapabilities": {
+    "generationRoute": "POST /v1/images/generations",
+    "editRoute": "POST /v1/images/edits",
+    "authentication": "Bearer configured server environment key",
+    "documentedRequestFields": [
+      "model",
+      "prompt",
+      "size",
+      "aspect_ratio",
+      "response_format",
+      "n"
+    ],
+    "documentedEditFields": [
+      "image",
+      "mask"
+    ],
+    "editEncodings": [
+      "multipart/form-data file",
+      "JSON base64 data URI"
+    ],
+    "documentedResponse": "data[].b64_json or data[].url",
+    "asynchronousPollingDocumented": false,
+    "returnedModelIdentityDocumented": false,
+    "perModelSizeOrEditSupportVerified": false,
+    "callerRetryPolicy": "Never automatically replay an ambiguous generation; no provider idempotency documented.",
+    "providerFailover": "Generic public page advertises automatic failover; requested model identity alone does not attest actual upstream model."
+  },
+  "models": [
+    {
+      "id": "free/nano-banana-2",
+      "name": "Nano Banana 2",
+      "provider": "free",
+      "priceUsd": 0.0,
+      "reserveUsd": 0.0,
+      "priceMicroUsd": 0,
+      "billingTier": "free-allowance",
+      "allowanceTokens": 5000000,
+      "subscriptionRequired": true,
+      "health": "live",
+      "pricingStatus": "verified-published",
+      "availabilityStatus": "catalog-listed; generation entitlement and output not yet exercised",
+      "sizes": [
+        "1024x1024"
+      ],
+      "aspectRatios": [
+        "1:1"
+      ],
+      "responseFormats": [
+        "b64_json"
+      ],
+      "maxImages": 1,
+      "sizeConstraints": {
+        "type": "string",
+        "requestPolicy": "1024x1024 square, one image; conservative client qualification policy",
+        "perModelSupportVerified": false,
+        "exactReturnedSizeGuaranteed": false
+      },
+      "endpoints": {
+        "generation": "https://api.apinex.bond/v1/images/generations",
+        "edit": "https://api.apinex.bond/v1/images/edits"
+      },
+      "sourceUrls": [
+        "https://apinex.bond/api/user/media/models",
+        "https://apinex.bond/developers/models/images.md",
+        "https://apinex.bond/pricing.md"
+      ],
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/user/media/models",
+        "catalogSha256": "a41dfd25bda579bba64c282f0f051580c814877da7d26eeeba6e01b88602108c",
+        "apiReferenceURL": "https://apinex.bond/developers/models/images.md",
+        "apiReferenceSha256": "9de716c97fad35954b0f376a353d2fbd8c9d29b446cfd6c6e4892a42bee5e4d5"
+      },
+      "publishedMetadata": {
+        "category": "free",
+        "priceTokens": 0,
+        "tokenWeight": 0,
+        "baseTokens": 5000000,
+        "allowFree": false,
+        "health": "live"
+      }
+    },
+    {
+      "id": "nano-banana-2",
+      "name": "Nano Banana 2",
+      "provider": "gemini",
+      "priceUsd": 0.03,
+      "reserveUsd": 0.03,
+      "priceMicroUsd": 30000,
+      "billingTier": "paid",
+      "allowanceTokens": 0,
+      "subscriptionRequired": false,
+      "health": "live",
+      "pricingStatus": "verified-published",
+      "availabilityStatus": "catalog-listed; generation entitlement and output not yet exercised",
+      "sizes": [
+        "1024x1024"
+      ],
+      "aspectRatios": [
+        "1:1"
+      ],
+      "responseFormats": [
+        "b64_json"
+      ],
+      "maxImages": 1,
+      "sizeConstraints": {
+        "type": "string",
+        "requestPolicy": "1024x1024 square, one image; conservative client qualification policy",
+        "perModelSupportVerified": false,
+        "exactReturnedSizeGuaranteed": false
+      },
+      "endpoints": {
+        "generation": "https://api.apinex.bond/v1/images/generations",
+        "edit": "https://api.apinex.bond/v1/images/edits"
+      },
+      "sourceUrls": [
+        "https://apinex.bond/api/user/media/models",
+        "https://apinex.bond/developers/models/images.md",
+        "https://apinex.bond/pricing.md"
+      ],
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/user/media/models",
+        "catalogSha256": "a41dfd25bda579bba64c282f0f051580c814877da7d26eeeba6e01b88602108c",
+        "apiReferenceURL": "https://apinex.bond/developers/models/images.md",
+        "apiReferenceSha256": "9de716c97fad35954b0f376a353d2fbd8c9d29b446cfd6c6e4892a42bee5e4d5"
+      },
+      "publishedMetadata": {
+        "category": "gemini",
+        "priceTokens": 30000,
+        "tokenWeight": 0.375,
+        "baseTokens": 80000,
+        "allowFree": true,
+        "health": "live"
+      }
+    },
+    {
+      "id": "gpt-image-2.6-flare",
+      "name": "GPT Image 2.6 Flare",
+      "provider": "openai",
+      "priceUsd": 0.05,
+      "reserveUsd": 0.05,
+      "priceMicroUsd": 50000,
+      "billingTier": "paid",
+      "allowanceTokens": 0,
+      "subscriptionRequired": false,
+      "health": "live",
+      "pricingStatus": "verified-published",
+      "availabilityStatus": "catalog-listed; generation entitlement and output not yet exercised",
+      "sizes": [
+        "1024x1024"
+      ],
+      "aspectRatios": [
+        "1:1"
+      ],
+      "responseFormats": [
+        "b64_json"
+      ],
+      "maxImages": 1,
+      "sizeConstraints": {
+        "type": "string",
+        "requestPolicy": "1024x1024 square, one image; conservative client qualification policy",
+        "perModelSupportVerified": false,
+        "exactReturnedSizeGuaranteed": false
+      },
+      "endpoints": {
+        "generation": "https://api.apinex.bond/v1/images/generations",
+        "edit": "https://api.apinex.bond/v1/images/edits"
+      },
+      "sourceUrls": [
+        "https://apinex.bond/api/user/media/models",
+        "https://apinex.bond/developers/models/images.md",
+        "https://apinex.bond/pricing.md"
+      ],
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/user/media/models",
+        "catalogSha256": "a41dfd25bda579bba64c282f0f051580c814877da7d26eeeba6e01b88602108c",
+        "apiReferenceURL": "https://apinex.bond/developers/models/images.md",
+        "apiReferenceSha256": "9de716c97fad35954b0f376a353d2fbd8c9d29b446cfd6c6e4892a42bee5e4d5"
+      },
+      "publishedMetadata": {
+        "category": "openai",
+        "priceTokens": 50000,
+        "tokenWeight": 0.625,
+        "baseTokens": 80000,
+        "allowFree": true,
+        "health": "live"
+      }
+    },
+    {
+      "id": "gpt-image-2.6-sunburst",
+      "name": "GPT Image 2.6 Sunburst",
+      "provider": "openai",
+      "priceUsd": 0.065,
+      "reserveUsd": 0.07,
+      "priceMicroUsd": 65000,
+      "billingTier": "paid",
+      "allowanceTokens": 0,
+      "subscriptionRequired": false,
+      "health": "live",
+      "pricingStatus": "verified-published",
+      "availabilityStatus": "catalog-listed; generation entitlement and output not yet exercised",
+      "sizes": [
+        "1024x1024"
+      ],
+      "aspectRatios": [
+        "1:1"
+      ],
+      "responseFormats": [
+        "b64_json"
+      ],
+      "maxImages": 1,
+      "sizeConstraints": {
+        "type": "string",
+        "requestPolicy": "1024x1024 square, one image; conservative client qualification policy",
+        "perModelSupportVerified": false,
+        "exactReturnedSizeGuaranteed": false
+      },
+      "endpoints": {
+        "generation": "https://api.apinex.bond/v1/images/generations",
+        "edit": "https://api.apinex.bond/v1/images/edits"
+      },
+      "sourceUrls": [
+        "https://apinex.bond/api/user/media/models",
+        "https://apinex.bond/developers/models/images.md",
+        "https://apinex.bond/pricing.md"
+      ],
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/user/media/models",
+        "catalogSha256": "a41dfd25bda579bba64c282f0f051580c814877da7d26eeeba6e01b88602108c",
+        "apiReferenceURL": "https://apinex.bond/developers/models/images.md",
+        "apiReferenceSha256": "9de716c97fad35954b0f376a353d2fbd8c9d29b446cfd6c6e4892a42bee5e4d5"
+      },
+      "publishedMetadata": {
+        "category": "openai",
+        "priceTokens": 65000,
+        "tokenWeight": 0.8125,
+        "baseTokens": 80000,
+        "allowFree": true,
+        "health": "live"
+      }
+    },
+    {
+      "id": "seedream-5",
+      "name": "Seedream 5",
+      "provider": "seedance",
+      "priceUsd": 0.02,
+      "reserveUsd": 0.02,
+      "priceMicroUsd": 20000,
+      "billingTier": "paid",
+      "allowanceTokens": 0,
+      "subscriptionRequired": false,
+      "health": "live",
+      "pricingStatus": "verified-published",
+      "availabilityStatus": "catalog-listed; generation entitlement and output not yet exercised",
+      "sizes": [
+        "1024x1024"
+      ],
+      "aspectRatios": [
+        "1:1"
+      ],
+      "responseFormats": [
+        "b64_json"
+      ],
+      "maxImages": 1,
+      "sizeConstraints": {
+        "type": "string",
+        "requestPolicy": "1024x1024 square, one image; conservative client qualification policy",
+        "perModelSupportVerified": false,
+        "exactReturnedSizeGuaranteed": false
+      },
+      "endpoints": {
+        "generation": "https://api.apinex.bond/v1/images/generations",
+        "edit": "https://api.apinex.bond/v1/images/edits"
+      },
+      "sourceUrls": [
+        "https://apinex.bond/api/user/media/models",
+        "https://apinex.bond/developers/models/images.md",
+        "https://apinex.bond/pricing.md"
+      ],
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/user/media/models",
+        "catalogSha256": "a41dfd25bda579bba64c282f0f051580c814877da7d26eeeba6e01b88602108c",
+        "apiReferenceURL": "https://apinex.bond/developers/models/images.md",
+        "apiReferenceSha256": "9de716c97fad35954b0f376a353d2fbd8c9d29b446cfd6c6e4892a42bee5e4d5"
+      },
+      "publishedMetadata": {
+        "category": "seedance",
+        "priceTokens": 20000,
+        "tokenWeight": 0.25,
+        "baseTokens": 80000,
+        "allowFree": true,
+        "health": "live"
+      }
+    },
+    {
+      "id": "grok-imagine-2",
+      "name": "Grok Imagine 2",
+      "provider": "xai",
+      "priceUsd": 0.02,
+      "reserveUsd": 0.02,
+      "priceMicroUsd": 20000,
+      "billingTier": "paid",
+      "allowanceTokens": 0,
+      "subscriptionRequired": false,
+      "health": "live",
+      "pricingStatus": "verified-published",
+      "availabilityStatus": "catalog-listed; generation entitlement and output not yet exercised",
+      "sizes": [
+        "1024x1024"
+      ],
+      "aspectRatios": [
+        "1:1"
+      ],
+      "responseFormats": [
+        "b64_json"
+      ],
+      "maxImages": 1,
+      "sizeConstraints": {
+        "type": "string",
+        "requestPolicy": "1024x1024 square, one image; conservative client qualification policy",
+        "perModelSupportVerified": false,
+        "exactReturnedSizeGuaranteed": false
+      },
+      "endpoints": {
+        "generation": "https://api.apinex.bond/v1/images/generations",
+        "edit": "https://api.apinex.bond/v1/images/edits"
+      },
+      "sourceUrls": [
+        "https://apinex.bond/api/user/media/models",
+        "https://apinex.bond/developers/models/images.md",
+        "https://apinex.bond/pricing.md"
+      ],
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/user/media/models",
+        "catalogSha256": "a41dfd25bda579bba64c282f0f051580c814877da7d26eeeba6e01b88602108c",
+        "apiReferenceURL": "https://apinex.bond/developers/models/images.md",
+        "apiReferenceSha256": "9de716c97fad35954b0f376a353d2fbd8c9d29b446cfd6c6e4892a42bee5e4d5"
+      },
+      "publishedMetadata": {
+        "category": "xai",
+        "priceTokens": 20000,
+        "tokenWeight": 0.25,
+        "baseTokens": 80000,
+        "allowFree": true,
+        "health": "live"
+      }
+    }
+  ]
+}

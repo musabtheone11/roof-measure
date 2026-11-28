@@ -4,6 +4,7 @@ import {resolve,join,relative,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {CATALOG_METADATA} from './model-catalog.mjs';
 const execute=promisify(execFile);
 const WORKFLOW='roof-cloud.yml',BUDGET_VERSION='roof-cloud-budget-v1';
 const MANIFEST='cloud-checkpoint.json',BOOTSTRAP='cloud-bootstrap.json';
@@ -160,15 +161,16 @@ export async function packReports(directory,output) {
 }
 const STATUS_BRANCH='roof-cloud-status',STATUS_FILE='latest-status.json';
 const boundedCount=value=>Number.isSafeInteger(value)&&value>=0&&value<=1000000?value:null;
+const publicLabel=(value,max)=>typeof value==='string'&&value.length<=max&&!/[\x00-\x1f<>]/.test(value)?value:null;
+const publicModel=value=>typeof value==='string'&&/^[a-z0-9][a-z0-9/_.:-]{0,199}$/.test(value)?value:'unknown';
 export function publicCloudStatus(cycle,{env=process.env,now=Date.now}={}) {
   const ctx=context(env);
   if(!/^[a-f0-9]{40}$/.test(ctx.sourceRevision))fail('Public status requires the exact checked-out source revision');
   if(cycle&&cycle.sourceRevision!==ctx.sourceRevision)fail('Cycle status source revision mismatch');
   const runURL=`https://github.com/${ctx.repository}/actions/runs/${ctx.runId}`;
   const allowedDecision=new Set(['review-required','synthetic-monitoring-pass']);
-  const allowedModel=new Set(['gpt-6.2-astra','claude-opus-5.5']);
-  const allowedRole=new Set(['critique','ceo']);
-  const allowedStatus=new Set(['complete','rejected','failed','blocked','disabled','needs-human']);
+  const allowedRole=new Set(['ceo','extraction','reference','engineering','critique','verification','reporting','operations']);
+  const allowedStatus=new Set(['complete','rejected','failed','blocked','disabled','needs-human','deferred','running','pending','unknown']);
   const allowedResult=new Set(['pass','revise','reject','needs-human']);
   const pipelineResult=new Set(['success','failure','cancelled','skipped']).has(env.ROOF_CLOUD_GENERATION_RESULT)?env.ROOF_CLOUD_GENERATION_RESULT:'unknown';
   const browserResult=new Set(['success','failure','cancelled','skipped']).has(env.ROOF_CLOUD_BROWSER_STATUS)?env.ROOF_CLOUD_BROWSER_STATUS:'unknown';
@@ -180,11 +182,46 @@ export function publicCloudStatus(cycle,{env=process.env,now=Date.now}={}) {
       traceFailures:boundedCount(cycle?.metrics?.traceFailures),generatedCustomerPDFs:boundedCount(cycle?.metrics?.generatedCustomerPDFs),
       pdfChecked:boundedCount(cycle?.pdfReview?.checked),pdfFailed:boundedCount(cycle?.pdfReview?.failed),browserResult,
       productionReleaseApproved:false,fieldAccuracyValidated:false},
-    models:(Array.isArray(cycle?.reviews)?cycle.reviews:[]).slice(0,2).map(r=>({
-      role:allowedRole.has(r.role)?r.role:'unknown',model:allowedModel.has(r.model)?r.model:'unknown',
-      status:allowedStatus.has(r.status)?r.status:'unknown',decision:allowedResult.has(r.decision)?r.decision:null})),
+    models:(Array.isArray(cycle?.reviews)?cycle.reviews:[]).slice(0,256).map(r=>({
+      role:allowedRole.has(r.role)?r.role:'unknown',model:publicModel(r.model),
+      team:publicLabel(r.team,100),task:publicLabel(r.task,600),reviewerModel:(r.reviewerModel||r.proposedReviewerModel)?publicModel(r.reviewerModel||r.proposedReviewerModel):null,
+      status:allowedStatus.has(r.status)?r.status:'unknown',decision:allowedResult.has(r.decision)?r.decision:null,
+      code:typeof r.code==='string'&&/^[A-Z0-9_:-]{1,100}$/.test(r.code)?r.code:null,
+      httpStatus:Number.isInteger(r.errorDetails?.httpStatus)&&r.errorDetails.httpStatus>=100&&r.errorDetails.httpStatus<=599?r.errorDetails.httpStatus:null,
+      attempted:r.attempted===true,contributionValidated:typeof r.primaryValidated==='boolean'?r.primaryValidated:null,
+      reviewStatus:new Set(['complete','pending','unavailable','failed','blocked']).has(r.reviewStatus)?r.reviewStatus:null,
+      reviewCode:typeof r.reviewCode==='string'&&/^[A-Z0-9_:-]{1,100}$/.test(r.reviewCode)?r.reviewCode:null,
+      reportedUsd:Number.isFinite(r.reportedUsd)&&r.reportedUsd>=0?r.reportedUsd:null})),
     scope:'Generated synthetic monitoring only; no field accuracy certification or production code promotion'};
-  if(Buffer.byteLength(JSON.stringify(status))>32768)fail('Public cloud status exceeds32KiB');
+  if(cycle?.fleet) {
+    const fleet=cycle.fleet,catalog=fleet.catalog||{},coverage=fleet.coverage||{};
+    status.fleet={mode:'all-models',catalogCheckedAt:publicLabel(catalog.checkedAt,100),
+      catalogHash:typeof catalog.hash==='string'&&/^[a-f0-9]{64}$/.test(catalog.hash)?catalog.hash:null,
+      rosterCount:boundedCount(coverage.rosterCount??catalog.rosterCount??status.models.length),
+      assignedCount:status.models.length,attemptedCount:status.models.filter(m=>m.attempted).length,
+      validCount:status.models.filter(m=>m.contributionValidated===true||(m.contributionValidated===null&&['complete','rejected'].includes(m.status))).length,
+      blockedCount:status.models.filter(m=>['blocked','disabled','deferred'].includes(m.status)).length,
+      reviewedCount:status.models.filter(m=>m.reviewStatus==='complete').length,
+      textModelCount:boundedCount(catalog.textRosterCount??catalog.authenticatedCount),
+      designModelCount:boundedCount(catalog.designModelCount),
+      unavailableModels:(CATALOG_METADATA.documentedUnavailableModels||[]).map(publicModel).filter(m=>m!=='unknown')};
+    if(fleet.design)status.design={assigned:boundedCount(fleet.design.coverage?.assigned),generated:boundedCount(fleet.design.coverage?.generated),
+      attempted:boundedCount(fleet.design.coverage?.attempted),reviewerModel:publicModel(fleet.designReview?.reviewerModel),
+      reviewCompleted:fleet.designReview?.reviewCompleted===true,reviewStatus:publicLabel(fleet.designReview?.status,100),
+      conceptOnly:true,measurementUse:false,productionApproved:false,artifactURL:runURL+'#artifacts'};
+  }
+  if(cycle?.followup&&cycle?.baseline) {
+    const prior=cycle.baseline,runId=/^\d+$/.test(String(prior.runId||''))?String(prior.runId):null;
+    status.baseline={runId,sourceRevision:/^[a-f0-9]{40}$/.test(prior.sourceRevision||'')?prior.sourceRevision:null,
+      evaluationHash:/^[a-f0-9]{64}$/.test(prior.evaluationHash||'')?prior.evaluationHash:null,
+      url:runId?`https://github.com/${ctx.repository}/actions/runs/${runId}`:null};
+    status.evaluation.evidenceMode='retained-baseline';
+    status.evaluation.retainedCustomerPDFs=boundedCount(cycle.metrics?.generatedCustomerPDFs);
+    status.evaluation.generatedCustomerPDFs=0;
+    status.evaluation.newlyGeneratedCases=0;status.evaluation.newlyGeneratedConcepts=boundedCount(cycle.followup.newlyGeneratedConcepts)??0;
+    status.scope='Retained measurement baseline; new model reviews and explicitly requested design qualifications only. No new measurements, PDF rendering, field accuracy certification or production code promotion.';
+  }
+  if(Buffer.byteLength(JSON.stringify(status))>131072)fail('Public cloud status exceeds128KiB');
   return status;
 }
 export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,now=Date.now}={}) {
@@ -208,7 +245,7 @@ export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,
   if(!branch)await request('/git/refs',{method:'POST',body:{ref:`refs/heads/${STATUS_BRANCH}`,sha:status.sourceRevision}});
   const previous=await request(`/contents/${STATUS_FILE}?ref=${STATUS_BRANCH}`,{allow404:true});
   if(previous) {
-    if(previous.type!=='file'||!/^([a-f0-9]{40})$/.test(previous.sha||'')||previous.encoding!=='base64'||typeof previous.content!=='string'||previous.content.length>50000)fail('Existing public status has invalid content metadata; refusing replacement');
+    if(previous.type!=='file'||!/^([a-f0-9]{40})$/.test(previous.sha||'')||previous.encoding!=='base64'||typeof previous.content!=='string'||previous.content.length>200000)fail('Existing public status has invalid content metadata; refusing replacement');
     let old;try{old=JSON.parse(Buffer.from(previous.content,'base64').toString('utf8'));}catch{fail('Existing public status is unreadable; refusing replacement');}
     if(old.schemaVersion!==1||old.repository!==status.repository||old.workflow!==WORKFLOW||typeof old.run?.id!=='string'||!/^[1-9]\d*$/.test(old.run.id)||!Number.isInteger(old.run?.attempt)||old.run.attempt<1||!/^([a-f0-9]{40})$/.test(old.sourceRevision||'')||!Number.isFinite(Date.parse(old.run.startedAt||'')))fail('Existing public status provenance mismatch; refusing replacement');
     const oldStarted=Date.parse(old.run.startedAt);

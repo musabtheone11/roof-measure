@@ -123,9 +123,12 @@ jobs:
           node tools/dev/source-review-recovery-test.mjs
           node tools/dev/map-pointer-test.mjs
           node tools/dev/static-ai-test.mjs
+          node tools/dev/agents-dashboard-test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: synthetic-review-browser-artifacts
-          path: .devcache/ai-report-tests/
+          path: |
+            .devcache/ai-report-tests/
+            .devcache/agents-dashboard/
           if-no-files-found: ignore
