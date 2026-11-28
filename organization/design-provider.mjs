@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {inflateSync} from 'node:zlib';
 import {validateTask} from './contracts.mjs';
 import {DESIGN_CATALOG} from './design-catalog.mjs';
+import {readProviderErrorDetails} from './provider-error.mjs';
 
 const ENDPOINT='https://api.apinex.bond/v1/images/generations',SUBSCRIPTION='https://api.apinex.bond/v1/subscription';
 const MAX_RESPONSE=16*1024*1024,MAX_IMAGE=4*1024*1024,MAX_ENCODED=4*Math.ceil(MAX_IMAGE/3);
@@ -98,7 +99,12 @@ export async function requestDesignConcept(task,{apiKey=process.env.APINEX_API_K
   async function request(url,body,maxBytes) {
     const response=await fetchImpl(url,{method:body?'POST':'GET',redirect:'error',signal:combined,
       headers:{Authorization:`Bearer ${apiKey}`,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
-    if(!response.ok){const status=response.status;await response.body?.cancel();fail('UPSTREAM_HTTP',`API NEX image service failed with HTTP ${status}`,{status,retryable:false});}
+    if(!response.ok){
+      const errorDetails=await readProviderErrorDetails(response,{apiKey,signal:combined});
+      if(onResponse)await onResponse({errorDetails});
+      fail('UPSTREAM_HTTP',`API NEX image service failed with HTTP ${response.status}`,
+        {status:response.status,retryable:false,retryAfterMs:errorDetails?.retryAfterMs,errorDetails});
+    }
     return readJSON(response,combined,maxBytes);
   }
   try {

@@ -88,3 +88,19 @@ test('budgets, callbacks and unverified model/endpoint controls cannot leak cred
   const redirect=fixture({fetchImpl:async()=>{throw new Error('untrusted redirect with secret debug');}});
   await assert.rejects(requestDesignConcept(task,redirect.options),e=>e.code==='NETWORK_ERROR'&&!e.message.includes('test-image-secret'));assert.equal(redirect.calls.length,1);
 });
+test('HTTP image failures retain bounded redacted diagnostics and unknown holds without retrying',async()=>{
+  const f=fixture({response:()=>new Response(JSON.stringify({error:{code:'upstream_timeout',type:'provider_error',param:'model',message:'Bearer leaked-token test-image-secret unavailable'},request_id:'image-http-request'}),
+    {status:504,headers:{'retry-after':'15'}})});
+  await assert.rejects(requestDesignConcept(task,f.options),error=>{
+    assert.equal(error.code,'UPSTREAM_HTTP');assert.equal(error.status,504);assert.equal(error.retryable,false);assert.equal(error.retryAfterMs,15000);
+    assert.equal(error.errorDetails.requestId,'image-http-request');assert.equal(error.errorDetails.code,'upstream_timeout');
+    assert.doesNotMatch(JSON.stringify(error.errorDetails),/test-image-secret|leaked-token/);return true;
+  });
+  assert.equal(f.calls.length,1);assert.equal(f.events.filter(e=>e.kind==='usage').length,1);assert.equal(f.events.find(e=>e.kind==='usage').value.reportedUsd,null);
+  const metadata=f.events.find(e=>e.kind==='response').metadata;assert.equal(metadata.errorDetails.httpStatus,504);assert.ok(Buffer.byteLength(JSON.stringify(metadata.errorDetails))<=2048);
+});
+test('subscription HTTP denials retain status before any paid dispatch and do not retry permanent failures',async()=>{
+  const f=fixture({model:'free/nano-banana-2',fetchImpl:async()=>new Response('{"error":{"code":"subscription_required","message":"Subscription required"}}',{status:403})});
+  await assert.rejects(requestDesignConcept(task,f.options),error=>error.code==='UPSTREAM_HTTP'&&error.status===403&&error.errorDetails.code==='subscription_required');
+  assert.equal(f.calls.length,1);assert.deepEqual(f.events.map(e=>e.kind),['response']);
+});

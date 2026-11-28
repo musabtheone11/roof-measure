@@ -7,6 +7,13 @@ const hash = 'a'.repeat(64);
 const task = { schemaVersion: 1, id: 'task1', role: 'engineering', actorId: 'engineer1', sourceRevision: 'commit1', datasetRevision: 'data1', candidateHash: hash, policyVersion: 'policy1', inputHashes: [hash] };
 const output = () => ({ schemaVersion: 1, taskId: task.id, role: task.role, sourceRevision: task.sourceRevision, datasetRevision: task.datasetRevision, candidateHash: hash, policyVersion: task.policyVersion, inputHashes: [hash], decision: 'needs-human', findings: [], artifactRefs: [], summary: 'No independently measured reference is supplied.', payload: { hypothesis: 'Inspect source registration.', patchArtifact: null, predictedMetric: 'Lower registration error.' } });
 const json = (data, init = {}) => new Response(JSON.stringify(data), { status: 200, ...init });
+test('incomplete output retains actual finish reason before rejection',async()=>{
+  let original;
+  const f=fixture({chat:async()=>json({model:'gpt-6.2-astra',usage:{cost_tokens:3,completion_tokens:2000},choices:[{finish_reason:'length',message:{content:'{"summary":"cut'}}]})});
+  await assert.rejects(requestOrganizationRole(task,{...f.options,onResponse:record=>{original=record;}}),{code:'INVALID_AGENT_OUTPUT'});
+  assert.equal(original.execution.finishReason,'length');assert.equal(original.content,'{"summary":"cut');
+  assert.equal(original.execution.reportedUsd,.000003);
+});
 test('design visual review binds bounded image bytes to task hashes and refuses unsupported vision',async()=>{
   const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
   const sha=createHash('sha256').update(png).digest('hex'),t={...task,inputHashes:[hash,sha]};

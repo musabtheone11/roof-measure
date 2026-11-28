@@ -4,9 +4,10 @@ import {resolve,join,parse} from 'node:path';
 import {setTimeout as wait} from 'node:timers/promises';
 import {DESIGN_CATALOG,DESIGN_CATALOG_METADATA,auditDesignCatalog} from './design-catalog.mjs';
 import {requestDesignConcept,inspectDesignImage} from './design-provider.mjs';
+import {sanitizeProviderErrorDetails} from './provider-error.mjs';
 
 export const DESIGN_PROTOCOL='roof-design-concepts-v1';
-export const DESIGN_LIMITS=Object.freeze({requestLimit:6,maxUsd:2,hourUsd:2,dayUsd:3,weekUsd:20,monthUsd:80});
+export const DESIGN_LIMITS=Object.freeze({requestLimit:6,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80});
 const MAX_IMAGE_BYTES=4*1024*1024,MAX_TOTAL_IMAGE_BYTES=24*1024*1024;
 const hash=value=>createHash('sha256').update(Buffer.isBuffer(value)||typeof value==='string'?value:JSON.stringify(value)).digest('hex');
 const fail=(code,message)=>{const error=new Error(message);error.code=code;throw error;};
@@ -58,7 +59,7 @@ function validateImage(bytes,response){
 function limitsOf(value){
   const limits={...DESIGN_LIMITS,...value};
   for(const [key,number]of Object.entries(limits))if(!Object.hasOwn(DESIGN_LIMITS,key)||!Number.isFinite(number)||number<0)fail('INVALID_DESIGN_LIMIT','Invalid design spending/request limit');
-  if(!Number.isInteger(limits.requestLimit)||limits.requestLimit>6||limits.maxUsd>2||limits.hourUsd>2||limits.dayUsd>3||limits.weekUsd>20||limits.monthUsd>80)
+  if(!Number.isInteger(limits.requestLimit)||limits.requestLimit>6||limits.maxUsd>3||limits.hourUsd>3||limits.dayUsd>3||limits.weekUsd>20||limits.monthUsd>80)
     fail('INVALID_DESIGN_LIMIT','Design limits exceed the configured shared ceilings');
   return limits;
 }
@@ -81,7 +82,7 @@ function gallery(directory,agents){
 
 /** Six bounded concept requests, sharing the same durable account spending ledger. */
 export async function runDesignFleet({store,evaluationHash,sourceRevision,inputHash,paidAllowed=false,apiKey=process.env.APINEX_API_KEY,
-  checkpoint=async()=>{},requestDesign=requestDesignConcept,catalog=DESIGN_CATALOG,outputDir,now=Date.now,signal,limits={},workflowId,
+  checkpoint=async()=>{},requestDesign=requestDesignConcept,catalog=DESIGN_CATALOG,outputDir,now=Date.now,signal,limits={},workflowId,workflowRequestLimit,
   auditCatalog=auditDesignCatalog,catalogAudit,runtimeMs=15*60000,minimumDispatchIntervalMs=4200,
   waitImpl=(ms,options)=>wait(ms,null,options),archiveRef}={}){
   if(!text(evaluationHash,200)||!text(sourceRevision,200)||!/^([a-f0-9]{64})$/.test(inputHash||'')||!text(outputDir,2000))fail('INVALID_DESIGN_INPUT','Frozen source/input/evaluation and output directory are required');
@@ -105,7 +106,9 @@ export async function runDesignFleet({store,evaluationHash,sourceRevision,inputH
   for(const event of existingEvents)if(event.kind==='design-quota-cooldown')quotaUntil=Math.max(quotaUntil,event.detail?.notBefore||0);
   if(store){store.recover();store.setControl('running');}
   const otherWorkflowRequests=store?store.ledger().attempts.filter(a=>a.workflow_id===workflowId&&store.getTask(a.task_id)?.stage!=='design-concept').length:0;
-  const requestCap=Math.min(64,otherWorkflowRequests+actualLimits.requestLimit);
+  if(workflowRequestLimit!==undefined&&(!Number.isInteger(workflowRequestLimit)||workflowRequestLimit<0||workflowRequestLimit>64))fail('INVALID_DESIGN_LIMIT','Shared workflow request limit must be0..64');
+  const requestCap=workflowRequestLimit??Math.min(64,otherWorkflowRequests+actualLimits.requestLimit);
+  let phaseDispatches=0;
   function restoreImage(row,result){
     const bytes=store.readArtifact(result.imageHash),actual=validateImage(bytes,{...result,sha256:result.imageHash});
     if(totalBytes+bytes.length>MAX_TOTAL_IMAGE_BYTES)fail('DESIGN_ARCHIVE_LIMIT','Design raster output exceeds24MiB');
@@ -124,7 +127,9 @@ export async function runDesignFleet({store,evaluationHash,sourceRevision,inputH
     const old=store?.getTask(row.taskId);
     if(old){
       row.attempted=dispatched(store,row.taskId);const billed=store.ledger(row.taskId);row.reportedUsd=billed.unknownBillingRequests?null:billed.reportedUsd;
+      if(row.attempted)phaseDispatches++;
       row.status=old.status;row.code=old.result?.code||null;row.execution=old.result?.execution||null;row.reused=true;
+      if(old.result?.errorDetails)row.errorDetails=sanitizeProviderErrorDetails(old.result.errorDetails,{apiKey});
       if(old.result?.imageHash)try{restoreImage(row,old.result);}catch(error){
         if(error.code==='ENOENT'){
           row.status='blocked';row.code='ARTIFACT_ARCHIVED';row.archivedArtifact={sha256:old.result.imageHash,archiveRef:old.result.archiveRef||null};
@@ -133,6 +138,7 @@ export async function runDesignFleet({store,evaluationHash,sourceRevision,inputH
       continue;
     }
     if(!assignment){row.code='DESIGN_ASSIGNMENT_REQUIRED';continue;}
+    if(phaseDispatches>=actualLimits.requestLimit){row.code='DESIGN_REQUEST_LIMIT';continue;}
     if(!paidAllowed||!apiKey||!store){row.status='disabled';row.code=!paidAllowed?'CHECKPOINT_LINEAGE_BLOCKED':!apiKey?'CLOUD_SECRET_NOT_CONFIGURED':'DURABLE_STORE_UNAVAILABLE';continue;}
     if(signal?.aborted){row.code='CANCELLED';continue;}
     if(timeout.aborted||now()+120000>deadline){row.code='DESIGN_RUNTIME_LIMIT';continue;}
@@ -160,7 +166,7 @@ export async function runDesignFleet({store,evaluationHash,sourceRevision,inputH
       if(delay)await waitImpl(delay,{signal:callSignal});
       response=await requestDesign(task,{model:entry.id,prompt,apiKey,signal:callSignal,timeoutMs:120000,
         reserve:async({usd})=>{if(usd!==entry.reserveUsd)fail('DESIGN_RESERVATION_MISMATCH','Image reservation differs from verified flat-price hold');const id=store.reserve(task.id,'design-worker',lease.fence,{usd,...actualLimits,requestLimit:requestCap});await checkpoint({phase:'design-reserved',taskId:task.id,model:entry.id});return id;},
-        onDispatch:async id=>{if(timeout.aborted||now()+120000>deadline)fail('DESIGN_RUNTIME_LIMIT','Insufficient design runtime before image dispatch');store.dispatch(id,'design-worker',lease.fence);dispatchedNow=true;row.attempted=true;store.event(task.id,'design-dispatched',{model:entry.id});await checkpoint({phase:'design-dispatched',taskId:task.id,model:entry.id});},
+        onDispatch:async id=>{if(timeout.aborted||now()+120000>deadline)fail('DESIGN_RUNTIME_LIMIT','Insufficient design runtime before image dispatch');store.dispatch(id,'design-worker',lease.fence);dispatchedNow=true;row.attempted=true;phaseDispatches++;store.event(task.id,'design-dispatched',{model:entry.id});await checkpoint({phase:'design-dispatched',taskId:task.id,model:entry.id});},
         onUsage:async(id,usage)=>{store.settle(id,'design-worker',lease.fence,usage);await checkpoint({phase:'design-settled',taskId:task.id,model:entry.id});},
         onResponse:record=>{rawMetadata=store.putArtifact(Buffer.from(JSON.stringify(record)));}});
       if(!dispatchedNow)fail('DESIGN_DISPATCH_EVIDENCE_MISSING','An adapter response without durable dispatch is not model participation');
@@ -177,7 +183,10 @@ export async function runDesignFleet({store,evaluationHash,sourceRevision,inputH
       store.event(task.id,'design-image-cached',{hash:image.hash,taskId:task.id,evaluationHash,model:entry.id,archiveRef:archive});
     }catch(error){
       row.status='failed';row.code=error.code||'DESIGN_GENERATION_FAILED';
-      if(lease?.id===task.id)try{store.finish(task.id,'design-worker',lease.fence,{status:'failed',result:{rawMetadataHash:rawMetadata?.hash||null,code:row.code},error:row.code});}catch{row.code='DESIGN_LEASE_RECONCILIATION_REQUIRED';store.recover();}
+      const errorDetails=sanitizeProviderErrorDetails(error.errorDetails||{httpStatus:error.status,retryAfterMs:error.retryAfterMs},{apiKey});
+      if(errorDetails)row.errorDetails=errorDetails;
+      if(lease?.id===task.id)try{store.finish(task.id,'design-worker',lease.fence,{status:'failed',result:{rawMetadataHash:rawMetadata?.hash||null,code:row.code,...(errorDetails?{errorDetails}:{})},error:row.code});}catch{row.code='DESIGN_LEASE_RECONCILIATION_REQUIRED';store.recover();}
+      if(errorDetails)store.event(task.id,'design-http-failure',{model:entry.id,code:row.code,errorDetails});
       if(error.status===401){authBlocked=true;store.event(null,'design-provider-circuit-open',{status:401,code:row.code});store.event(null,'fleet-provider-circuit-open',{status:401,code:row.code});}
       else if([400,403].includes(error.status)||['DESIGN_MODEL_IDENTITY_MISMATCH','MODEL_MISMATCH','SUBSCRIPTION_REQUIRED'].includes(row.code))store.event(null,'design-model-circuit-open',{model:entry.id,status:error.status||null,code:row.code});
       if(error.status===429){quotaUntil=now()+Math.max(60000,error.retryAfterMs||0);store.event(null,'design-quota-cooldown',{notBefore:quotaUntil,model:entry.id});}

@@ -89,10 +89,10 @@ remain visible and blocked. New catalog IDs require verified prices before paid
 dispatch. Exact returned-model identity and local role schemas remain mandatory.
 No paid fallback replaces a free model that has exhausted its allowance.
 
-Fleet limits: at most 64 model requests/cycle, one in flight, $2/workflow,
-$2/rolling hour, $3/rolling day, $20/rolling 7 days and $80/UTC month. The $2
-reservation ceiling accommodates the verified model whose full-context maximum
-exceeds the old $1/workflow ceiling; it does not increase the user's weekly limit.
+Fleet limits: at most 64 model requests/cycle, one in flight, $3/workflow,
+$3/rolling hour, $3/rolling day, $20/rolling 7 days and $80/UTC month. The $3
+reservation ceiling leaves capacity for CEO and visual-review holds after
+other provider timeouts; it does not increase the user's weekly limit.
 Explicit zero budgets disable inference. All paid/free allowance use is recorded;
 unknown billing retains its conservative reservation. No idle model calls.
 The text fleet has a 40-minute deadline inside a 70-minute hosted job, leaving time to
@@ -160,7 +160,32 @@ the six image tasks and their visual review within the total 64-call ceiling.
 - Completed: 45 text/decision and six image-model catalogs; endpoint/pricing audits;
   specialist assignments; durable budgeted execution; typed numerical grounding;
   independent model/visual review; responsive status dashboard and regression tests.
-- Active: frozen-source GitHub CI and budgeted hosted execution with the existing ledger.
+- Active: targeted CEO/visual follow-up on retained baseline artifacts;
+  budget admission and bounded provider-error diagnostics.
 - Next: inspect real outputs, deploy the verified source pin/dashboard and verify host.
 - Known limits: generated evidence is not field accuracy; catalog claims are not
   task qualification; subscription access and free allowance must be observed.
+
+## Retained-baseline recovery
+
+A manual `review-existing` operation downloads a selected completed laboratory
+artifact and restores the latest shared budget checkpoint. It verifies original
+case/report/image hashes, preserves original measurement provenance, and performs
+only the missing visual and CEO reviews. It generates no measurements or PDFs.
+
+`generate_missing_designs` is off by default. Enabling it admits at most one new,
+explicitly versioned qualification for each of three original image HTTP failures,
+with fresh prices, circuit/quota checks, a separate prompt/evaluation identity and
+retained old reservations. It does not replay transport-ambiguous requests. These
+three requests plus visual and CEO review admit at most five additional dispatches
+under the same original workflow budget, never more than 64 total requests.
+
+The first full hosted run (`46089368732`, `c96c45c`) dispatched 50 of 51 models,
+validated 11 text/typed contributions, and generated three original concepts.
+Twenty-four text timeouts and eight invalid outputs remain recorded. Six of
+12 synthetic cases passed diagnostics; all 12 PDFs passed readback. New reported
+fees were $0.065505; unknown holds of $1.8116064 remained charged conservatively.
+The old $2 per-job policy blocked CEO and visual review. The $3 policy addresses
+that admission defect without changing the $20 rolling-week ceiling or refunding
+any unknown cost. Follow-up output distinguishes retained PDFs, newly generated
+concepts, the original measurement source and the current review operator.

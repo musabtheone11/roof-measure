@@ -66,7 +66,7 @@ closing reviews within the same total request limit. Same evaluation identity re
 paying again. Unknown costs retain reservations. Model-specific permanent faults
 block that model; authentication failures stop the provider and quota failures
 defer further affected work. No silent substitute or permanent-error retry.
-Fleet limits are $2/workflow/hour, $3/rolling day, $20/rolling7days and $80/UTC month;
+Fleet limits are $3/workflow/hour, $3/rolling day, $20/rolling7days and $80/UTC month;
 the original two-role mode retains its smaller request/workflow defaults.
 Other account activity outside this ledger is not an account-wide spending cap.
 

@@ -126,6 +126,15 @@ test('all-model public status exposes assignments and actual dispatch separately
   assert.equal(status.models[0].task,data.reviews[0].task);
   assert.equal(JSON.stringify(status).includes('PRIVATE_FLEET_PROSE'),false);assert.equal(JSON.stringify(status).includes('DO_NOT_PUBLISH'),false);
 });
+test('follow-up status preserves baseline provenance and cannot claim retained reports were newly generated',()=>{
+ const data=cycle();data.followup={newlyGeneratedCases:0,newlyGeneratedCustomerPDFs:0};
+ data.baseline={runId:'123',sourceRevision:'b'.repeat(40),evaluationHash:'c'.repeat(64)};
+ const status=publicCloudStatus(data,{env:env(20)});
+ assert.equal(status.sourceRevision,'a'.repeat(40));assert.equal(status.baseline.sourceRevision,'b'.repeat(40));
+ assert.equal(status.evaluation.evidenceMode,'retained-baseline');assert.equal(status.evaluation.generatedCustomerPDFs,0);
+ assert.equal(status.evaluation.retainedCustomerPDFs,12);assert.equal(status.evaluation.newlyGeneratedCases,0);
+ assert.match(status.scope,/No new measurements/);
+});
 test('status journal creates only its fixed branch from the checked-out revision and writes CAS content',async()=>{
   const calls=[];
   const fetchImpl=async(url,init)=>{

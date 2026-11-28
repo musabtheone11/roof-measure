@@ -187,6 +187,7 @@ export function publicCloudStatus(cycle,{env=process.env,now=Date.now}={}) {
       team:publicLabel(r.team,100),task:publicLabel(r.task,600),reviewerModel:(r.reviewerModel||r.proposedReviewerModel)?publicModel(r.reviewerModel||r.proposedReviewerModel):null,
       status:allowedStatus.has(r.status)?r.status:'unknown',decision:allowedResult.has(r.decision)?r.decision:null,
       code:typeof r.code==='string'&&/^[A-Z0-9_:-]{1,100}$/.test(r.code)?r.code:null,
+      httpStatus:Number.isInteger(r.errorDetails?.httpStatus)&&r.errorDetails.httpStatus>=100&&r.errorDetails.httpStatus<=599?r.errorDetails.httpStatus:null,
       attempted:r.attempted===true,contributionValidated:typeof r.primaryValidated==='boolean'?r.primaryValidated:null,
       reviewStatus:new Set(['complete','pending','unavailable','failed','blocked']).has(r.reviewStatus)?r.reviewStatus:null,
       reviewCode:typeof r.reviewCode==='string'&&/^[A-Z0-9_:-]{1,100}$/.test(r.reviewCode)?r.reviewCode:null,
@@ -208,6 +209,17 @@ export function publicCloudStatus(cycle,{env=process.env,now=Date.now}={}) {
       attempted:boundedCount(fleet.design.coverage?.attempted),reviewerModel:publicModel(fleet.designReview?.reviewerModel),
       reviewCompleted:fleet.designReview?.reviewCompleted===true,reviewStatus:publicLabel(fleet.designReview?.status,100),
       conceptOnly:true,measurementUse:false,productionApproved:false,artifactURL:runURL+'#artifacts'};
+  }
+  if(cycle?.followup&&cycle?.baseline) {
+    const prior=cycle.baseline,runId=/^\d+$/.test(String(prior.runId||''))?String(prior.runId):null;
+    status.baseline={runId,sourceRevision:/^[a-f0-9]{40}$/.test(prior.sourceRevision||'')?prior.sourceRevision:null,
+      evaluationHash:/^[a-f0-9]{64}$/.test(prior.evaluationHash||'')?prior.evaluationHash:null,
+      url:runId?`https://github.com/${ctx.repository}/actions/runs/${runId}`:null};
+    status.evaluation.evidenceMode='retained-baseline';
+    status.evaluation.retainedCustomerPDFs=boundedCount(cycle.metrics?.generatedCustomerPDFs);
+    status.evaluation.generatedCustomerPDFs=0;
+    status.evaluation.newlyGeneratedCases=0;status.evaluation.newlyGeneratedConcepts=boundedCount(cycle.followup.newlyGeneratedConcepts)??0;
+    status.scope='Retained measurement baseline; new model reviews and explicitly requested design qualifications only. No new measurements, PDF rendering, field accuracy certification or production code promotion.';
   }
   if(Buffer.byteLength(JSON.stringify(status))>131072)fail('Public cloud status exceeds128KiB');
   return status;

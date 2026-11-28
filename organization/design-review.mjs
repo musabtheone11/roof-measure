@@ -11,7 +11,7 @@ import {getModelCatalogEntry,getVerifiedModelPrice} from './model-catalog.mjs';
 export const DESIGN_REVIEW_MODEL='gpt-6.1-terra';
 export const DESIGN_REVIEW_PROTOCOL='design-visual-review-v1';
 const MAX_IMAGE=4*1024*1024,MAX_TOTAL=16*1024*1024;
-const LIMITS=Object.freeze({requestLimit:64,maxUsd:2,hourUsd:2,dayUsd:3,weekUsd:20,monthUsd:80});
+const LIMITS=Object.freeze({requestLimit:64,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80});
 const SHA=/^[a-f0-9]{64}$/;
 const digest=value=>createHash('sha256').update(Buffer.isBuffer(value)?value:JSON.stringify(value)).digest('hex');
 const error=(code,message)=>Object.assign(new Error(message),{code});

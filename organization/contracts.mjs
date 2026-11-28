@@ -62,7 +62,7 @@ export function validateTask(task) {
 export const ROLE_PAYLOAD_CONTRACTS = Object.freeze({
   ceo:'{priority: integer 0..100, requestedDecision: "approve"|"revise"|"reject"|"needs-human"}',
   extraction:'{observations:[{page: positive integer, region: [x,y,width,height]|null, literal: string, unit: string|null, ambiguity: string|null}]}',
-  reference:'{propertyGroup:string|null, referenceTier:"verified"|"source-claim"|"synthetic"|"excluded"|"needs-human", split:"development"|"validation"|"holdout"|"quarantine", contradictions:string[]}',
+  reference:'{propertyGroup:string|null, referenceTier:"verified"|"source-claim"|"synthetic"|"excluded"|"needs-human", split:"development"|"validation"|"holdout"|"quarantine", contradictions:string[]}. If propertyGroup is null, split MUST be "quarantine"; do not invent a property identity.',
   engineering:'{hypothesis:string, patchArtifact:string|null, predictedMetric:string}',
   critique:'{counterexamples:string[], recommendation:string}',
   verification:'{evidenceIds:string[]}',

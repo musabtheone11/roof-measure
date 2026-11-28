@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {setTimeout as wait} from 'node:timers/promises';
 
 export const FLEET_PROTOCOL='apinex-model-fleet-v1';
-export const FLEET_LIMITS=Object.freeze({requestLimit:64,maxUsd:2,hourUsd:2,dayUsd:3,weekUsd:20,monthUsd:80});
+export const FLEET_LIMITS=Object.freeze({requestLimit:64,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80});
 export class FleetError extends Error {constructor(code,message){super(message);this.name='FleetError';this.code=code;}}
 const fail=(code,message)=>{throw new FleetError(code,message);};
 const hash=value=>createHash('sha256').update(typeof value==='string'?value:JSON.stringify(value)).digest('hex');
@@ -179,6 +179,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         ...(assignment.contributionKind==='typed-decision'?{}:{requireMetricClaims:true,...(target?{reviewTaskId:target.taskId}:{})})}};
     const old=store?.getTask(row.taskId);
     if(old){
+      row.errorDetails=old.result?.errorDetails||null;
       row.attempted=hasDispatched(store,row.taskId);Object.assign(row,cost(store,row.taskId));
       if(old.result?.resultHash){
         response=JSON.parse(store.readArtifact(old.result.resultHash));
@@ -244,11 +245,11 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       store.finish(task.id,'fleet-worker',lease.fence,{status:row.status,result:{resultHash:row.resultHash,rawResponseHash:row.rawResponseHash,decision:row.decision,primaryValidated:true,code:null}});
       if(!closing)pending.push(row);
     }catch(error){
-      row.code=error.code||'FLEET_REVIEW_FAILED';row.status='failed';row.primaryValidated=false;
+      row.code=error.code||'FLEET_REVIEW_FAILED';row.status='failed';row.primaryValidated=false;row.errorDetails=error.errorDetails||null;
       row.rawResponseHash=rawArtifact?.hash||null;
       if(row.code==='FLEET_RUNTIME_LIMIT'&&!dispatched){row.status='blocked';row.deferred=true;}
       if(store&&lease?.id===task.id){
-        try{store.finish(task.id,'fleet-worker',lease.fence,{status:row.deferred?'needs-human':'failed',result:{resultHash:row.resultHash,rawResponseHash:rawArtifact?.hash||null,decision:row.decision,primaryValidated:false,code:row.code},error:row.code});}catch{row.code='LEASE_LOST_RECONCILIATION_REQUIRED';}
+        try{store.finish(task.id,'fleet-worker',lease.fence,{status:row.deferred?'needs-human':'failed',result:{resultHash:row.resultHash,rawResponseHash:rawArtifact?.hash||null,decision:row.decision,primaryValidated:false,code:row.code,errorDetails:row.errorDetails},error:row.code});}catch{row.code='LEASE_LOST_RECONCILIATION_REQUIRED';}
       }
       if(error.status===401){providerBlocked='PROVIDER_AUTH_RECONCILIATION_REQUIRED';store?.event(null,'fleet-provider-circuit-open',{code:row.code,status:401});}
       else if([400,403].includes(error.status)||['MODEL_MISMATCH','MODEL_UNAVAILABLE','PRICING_UNKNOWN'].includes(row.code))store?.event(null,'fleet-model-circuit-open',{model:assignment.model,code:row.code,status:error.status||null});

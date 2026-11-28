@@ -8,6 +8,7 @@ import {deflateSync} from 'node:zlib';
 import {OrgStore} from './store.mjs';
 import {DESIGN_CATALOG} from './design-catalog.mjs';
 import {DESIGN_ASSIGNMENTS,runDesignFleet} from './design-fleet.mjs';
+import {requestDesignConcept} from './design-provider.mjs';
 
 function png(){
   const crc=bytes=>{let c=0xffffffff;for(const byte of bytes){c^=byte;for(let i=0;i<8;i++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;}return(c^0xffffffff)>>>0;};
@@ -103,4 +104,20 @@ test('shared weekly ledger prevents new image charges and image byte bounds cann
   const two=options(t,DESIGN_CATALOG.filter(m=>m.id==='nano-banana-2'));const original=two.base.requestDesign;
   const bad=await runDesignFleet({...two.base,requestDesign:async(task,opts)=>{const response=await original(task,opts);response.imageBytes=Buffer.alloc(4*1024*1024+1);return response;}});
   assert.equal(bad.coverage.generated,0);assert.equal(bad.agents[0].code,'DESIGN_IMAGE_SIZE_LIMIT');
+});
+test('actual HTTP adapter diagnostics survive rows, durable tasks, metadata artifacts and cache reuse without replay',async t=>{
+  const one=options(t,DESIGN_CATALOG.filter(m=>m.id==='nano-banana-2'));let httpCalls=0;
+  const requestDesign=(task,opts)=>requestDesignConcept(task,{...opts,fetchImpl:async()=>{
+    httpCalls++;return new Response(JSON.stringify({error:{code:'upstream_error',type:'server_error',param:'model',message:'Unavailable Bearer confidential-token test-key-not-real'}}),
+      {status:503,headers:{'x-request-id':'design-http-503','retry-after':'30'}});
+  }});
+  const result=await runDesignFleet({...one.base,requestDesign}),row=result.agents[0];
+  assert.equal(httpCalls,1);assert.equal(row.code,'UPSTREAM_HTTP');assert.equal(row.attempted,true);assert.equal(row.errorDetails.httpStatus,503);assert.equal(row.errorDetails.requestId,'design-http-503');
+  assert.equal(row.errorDetails.retryAfterMs,30000);assert.doesNotMatch(JSON.stringify(result),/confidential-token|test-key-not-real/);
+  const stored=one.store.getTask(row.taskId);assert.deepEqual(stored.result.errorDetails,row.errorDetails);
+  const metadata=JSON.parse(one.store.readArtifact(stored.result.rawMetadataHash));assert.deepEqual(metadata.errorDetails,row.errorDetails);
+  const event=one.store.events(row.taskId).find(e=>e.kind==='design-http-failure');assert.deepEqual(event.detail.errorDetails,row.errorDetails);
+  assert.equal(one.store.ledger().unknownBillingRequests,1);assert.equal(one.store.ledger().reservedUsd,.03);
+  const reused=await runDesignFleet({...one.base,requestDesign});assert.equal(httpCalls,1);assert.deepEqual(reused.agents[0].errorDetails,row.errorDetails);
+  assert.equal(one.store.ledger().reservedUsd,.03);assert.equal(one.store.ledger().unknownBillingRequests,1);
 });
