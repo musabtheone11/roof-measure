@@ -7,6 +7,8 @@ import {testServer} from './ui-test-server.mjs';
 const STATUS_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-status.json';
 const QUALIFICATION_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-qualification.json';
 const WORK_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-work.json';
+const RECOVERY_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-recovery.json';
+const RECOVERY_MODELS=['free/drex-v2.0','free/gemini-4-hydrogen','free/hy4-flash'];
 const artifacts=path.resolve('.devcache/agents-dashboard');
 await fs.mkdir(artifacts,{recursive:true});
 const now=Date.now(),teams=['Roof measurement engineering','Sketch and document interpretation','Independent verification','Reports and visual layout','Reference data','Real-case testing','Operations'];
@@ -27,8 +29,8 @@ let browser;
 try {
   browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath()});
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
-  const errors=[],unexpected=[],requests=[],qualificationRequests=[],workRequests=[];
-  let response={status:200,body:fixture},qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}},workResponse={status:404,body:{error:'No synthetic work journal'}};
+  const errors=[],unexpected=[],requests=[],qualificationRequests=[],workRequests=[],recoveryRequests=[];
+  let response={status:200,body:fixture},qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}},workResponse={status:404,body:{error:'No synthetic work journal'}},recoveryResponse={status:404,body:{error:'No synthetic recovery journal'}};
   await context.route('**/*',async route=>{
     const url=route.request().url();
     if(url===STATUS_URL) {
@@ -41,6 +43,9 @@ try {
     } else if(url===WORK_URL) {
       workRequests.push({url,method:route.request().method(),headers:route.request().headers()});
       await route.fulfill({status:workResponse.status,contentType:'application/json',body:JSON.stringify(workResponse.body)});
+    } else if(url===RECOVERY_URL) {
+      recoveryRequests.push({url,method:route.request().method(),headers:route.request().headers()});
+      await route.fulfill({status:recoveryResponse.status,contentType:'application/json',body:JSON.stringify(recoveryResponse.body)});
     } else if(new URL(url).origin===new URL(server.baseURL).origin)await route.continue();
     else {unexpected.push(url);await route.abort();}
   });
@@ -81,6 +86,8 @@ try {
   assert.match(await page.locator('#qualification-notice').innerText(),/No subscription run journal has been published/);
   assert.match(await page.locator('#work-notice').innerText(),/No productive engineering work journal has been published/);
   assert.equal(await page.locator('#work-content').isVisible(),false,'Missing work records must not invent task or fix counts.');
+  assert.match(await page.locator('#recovery-notice').innerText(),/No targeted recovery journal has been published/);
+  assert.equal(await page.locator('#recovery-content').isVisible(),false);
   assert.equal(await page.locator('#unavailable-count').innerText(),'(9)');
   await page.click('#unavailable-models > summary');
   assert.deepEqual(await page.locator('#unavailable-list li').allTextContents(),unavailableModels);
@@ -275,22 +282,65 @@ try {
   assert.match(await page.locator('#work-notice').innerText(),/Questions were recorded, but no model task was dispatched/);
   assert.equal(await page.locator('#work-counts [data-metric="workItems"] dd').innerText(),'4');assert.equal(await page.locator('#work-counts [data-metric="uniqueModels"] dd').innerText(),'0');
   assert.equal(await page.locator('.agent-card').count(),51);assert.equal(await page.locator('#qualification-models li').count(),23);
+
+  // A recovery check is a fourth journal for exactly three selected routes.
+  // Its results cannot replace the23-model qualification, work or full roster.
+  const recovery={schemaVersion:1,repository:'musabtheone11/roof-measure',executionProfile:'allowance-recovery',generatedAt:new Date(now).toISOString(),sourceRevision:'e'.repeat(40),
+    run:{id:'33333',attempt:1,url:'https://github.com/musabtheone11/roof-measure/actions/runs/33333',pipelineResult:'success'},
+    reportArtifact:{available:true,url:'https://github.com/musabtheone11/roof-measure/actions/runs/33333#artifacts'},
+    summary:{selectedCount:3,attemptedCount:3,validCount:2,reviewedCount:2},scope:'SYNTHETIC TARGETED RECOVERY FIXTURE — three selected routes only; no whole-catalog or measurement approval.',
+    models:RECOVERY_MODELS.map((model,index)=>({model,status:index===1?'failed':'needs-human',attempted:true,contributionValidated:index!==1,reviewStatus:index===1?'pending':'complete',code:index===1?'INVALID_AGENT_OUTPUT':null})),
+    allowance:{remainingUnits:'SYNTHETIC_PRIVATE_RECOVERY_BALANCE'},packet:{prompt:'SYNTHETIC_PRIVATE_RECOVERY_PACKET'}};
+  workResponse={status:200,body:work};recoveryResponse={status:200,body:recovery};await refresh(page,{status:200,body:fullRoster});
+  assert(await page.locator('#qualification #recovery-heading').isVisible());
+  assert.match(await page.locator('#recovery-counts').innerText(),/Published route records: 3 \/ 3 · Inference attempted: 3 · Valid contributions: 2 · Reviews completed: 2/);
+  assert.deepEqual(await page.locator('#recovery-models li code').allTextContents(),RECOVERY_MODELS);
+  assert.equal(await page.locator('#recovery-source').innerText(),'Source '+'e'.repeat(40));
+  assert.match(await page.locator('#recovery-run').innerText(),/Run #33333/);
+  assert.equal(await page.locator('#recovery-evidence').getAttribute('href'),recovery.reportArtifact.url);
+  assert.equal(await page.locator('.agent-card').count(),51);assert.equal(await page.locator('#qualification-models li').count(),23);
+  assert.match(await page.locator('#qualification-counts').innerText(),/Selected: 23.*Valid contributions: 20/);
+  assert.equal(await page.locator('#work-counts [data-metric="workItems"] dd').innerText(),'4');
+  assert.equal(await page.locator('#work-models li').count(),3);
+  assert.doesNotMatch(await page.locator('body').innerText(),/SYNTHETIC_PRIVATE_RECOVERY_BALANCE|SYNTHETIC_PRIVATE_RECOVERY_PACKET/);
+  await page.locator('#recovery-models-heading').click();await page.locator('#qualification').evaluate(element=>element.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(artifacts,'recovery-journal-desktop.png')});
+  await page.setViewportSize({width:390,height:844});await noClipping(page);await page.locator('#recovery').evaluate(element=>element.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(artifacts,'recovery-journal-mobile.png')});await page.setViewportSize({width:1440,height:1000});
+  recoveryResponse={status:503,body:{error:'Synthetic recovery outage'}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#recovery-notice').innerText(),/last loaded record remains/);
+  assert.match(await page.locator('#recovery-counts').innerText(),/Published route records: 3 \/ 3/);
+  for(const invalid of [
+    {...recovery,executionProfile:'allowance-roster'},
+    {...recovery,sourceRevision:'not-a-source-revision'},
+    {...recovery,models:[...recovery.models.slice(0,2),{...recovery.models[2],model:'free/qwen-3.8-max'}]},
+    {...recovery,models:[recovery.models[0],recovery.models[0],recovery.models[2]]},
+    {...recovery,models:recovery.models.slice(0,2),summary:{selectedCount:2,attemptedCount:2,validCount:1,reviewedCount:1}}
+  ]){recoveryResponse={status:200,body:invalid};await refresh(page,{status:200,body:fullRoster});assert.match(await page.locator('#recovery-notice').innerText(),/Could not refresh/);assert.match(await page.locator('#recovery-counts').innerText(),/Published route records: 3 \/ 3/);}
+  const failedRecovery={...recovery,run:{...recovery.run,pipelineResult:'failure'},models:[],summary:{selectedCount:0,attemptedCount:0,validCount:0,reviewedCount:0}};
+  recoveryResponse={status:200,body:failedRecovery};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#recovery-notice').innerText(),/No recovery model results were published/);
+  assert.equal(await page.locator('#recovery-models li').count(),0);
+  recoveryResponse={status:200,body:{...failedRecovery,run:{...failedRecovery.run,pipelineResult:'success'}}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#recovery-notice').innerText(),/Could not refresh/);assert.match(await page.locator('#recovery-run').innerText(),/pipeline Failure/);
+  recoveryResponse={status:200,body:{...recovery,run:{...recovery.run,pipelineResult:'failure'},models:recovery.models.slice(0,2),summary:{selectedCount:2,attemptedCount:2,validCount:1,reviewedCount:1}}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#recovery-counts').innerText(),/Published route records: 2 \/ 3/);
+  assert.equal(await page.locator('.agent-card').count(),51);assert.equal(await page.locator('#qualification-models li').count(),23);assert.equal(await page.locator('#work-models li').count(),3);
   await page.close();
 
   // Run the real browser timer under a virtual clock. Hidden tabs must not poll;
   // visible polling is bounded to one request a minute, with manual refresh allowed.
-  response={status:200,body:fixture};qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}};workResponse={status:404,body:{error:'No synthetic work journal'}};
+  response={status:200,body:fixture};qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}};workResponse={status:404,body:{error:'No synthetic work journal'}};recoveryResponse={status:404,body:{error:'No synthetic recovery journal'}};
   const polling=await open({clock:true});await loaded(polling);
-  let before=requests.length,beforeQualification=qualificationRequests.length,beforeWork=workRequests.length;
-  await polling.clock.runFor(59_000);assert.equal(requests.length,before);assert.equal(qualificationRequests.length,beforeQualification);assert.equal(workRequests.length,beforeWork);
+  let before=requests.length,beforeQualification=qualificationRequests.length,beforeWork=workRequests.length,beforeRecovery=recoveryRequests.length;
+  await polling.clock.runFor(59_000);assert.equal(requests.length,before);assert.equal(qualificationRequests.length,beforeQualification);assert.equal(workRequests.length,beforeWork);assert.equal(recoveryRequests.length,beforeRecovery);
   const automatic=polling.waitForResponse(STATUS_URL);await polling.clock.runFor(1000);await automatic;
   await polling.waitForFunction(()=>!document.querySelector('#refresh').disabled);
   assert.equal(requests.length,before+1);
   assert.equal(qualificationRequests.length,beforeQualification+1);
   assert.equal(workRequests.length,beforeWork+1);
-  await refresh(polling,response);before=requests.length;beforeQualification=qualificationRequests.length;beforeWork=workRequests.length;
+  assert.equal(recoveryRequests.length,beforeRecovery+1);
+  await refresh(polling,response);before=requests.length;beforeQualification=qualificationRequests.length;beforeWork=workRequests.length;beforeRecovery=recoveryRequests.length;
   await polling.evaluate(()=>{window.__fixtureVisibility='hidden';document.dispatchEvent(new Event('visibilitychange'));});
-  await polling.clock.runFor(180_000);assert.equal(requests.length,before,'Hidden pages must not poll.');assert.equal(qualificationRequests.length,beforeQualification);assert.equal(workRequests.length,beforeWork);
+  await polling.clock.runFor(180_000);assert.equal(requests.length,before,'Hidden pages must not poll.');assert.equal(qualificationRequests.length,beforeQualification);assert.equal(workRequests.length,beforeWork);assert.equal(recoveryRequests.length,beforeRecovery);
   const resumed=polling.waitForResponse(STATUS_URL);
   await polling.evaluate(()=>{window.__fixtureVisibility='visible';document.dispatchEvent(new Event('visibilitychange'));});
   await polling.clock.runFor(1);await resumed;
@@ -298,12 +348,13 @@ try {
   assert.equal(requests.length,before+1);
   assert.equal(qualificationRequests.length,beforeQualification+1);
   assert.equal(workRequests.length,beforeWork+1);
+  assert.equal(recoveryRequests.length,beforeRecovery+1);
   await polling.clock.runFor(59_000);assert.equal(requests.length,before+1,'Visibility changes must not create duplicate polling loops.');
   await polling.close();
 
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
-  assert([...requests,...qualificationRequests,...workRequests].every(request=>request.method==='GET'&&!request.headers.authorization),'Dashboard must only read public status without credentials.');
+  assert([...requests,...qualificationRequests,...workRequests,...recoveryRequests].every(request=>request.method==='GET'&&!request.headers.authorization),'Dashboard must only read public status without credentials.');
   await fs.writeFile(path.join(artifacts,'dashboard-check.json'),JSON.stringify({fixture:'Synthetic offline dashboard responses; not live model activity',models:45,fullRosterClarity:{models:51,validContributions:18,recordedComplete:7,needsReview:11,executionFailed:6,blocked:27},subscriptionJournalIndependent:true,subscriptionScopeSizes:[3,23],documentedUnavailableModels:9,unavailableNotCountedAsAssignedOrAttempted:true,legacyTwoModelRecord:true,blockedAndDisabledExplicit:true,inferenceVersusAssignmentCounts:true,fetchFailurePreservesPriorRecord:true,initialFailureDoesNotInventCounts:true,staleSnapshotWarning:true,inertPublicStringsAndProjectOnlyLinks:true,desktopAndMobileInspected:true,visibleOnlyMinutePolling:true,modelInferenceCalls:0,browserErrors:errors},null,2));
-  console.log('Chromium:51model contribution clarity, independent3/23model subscription and productive question/task journals, zero completed-fix claims, privacy, failed-empty scopes, refresh isolation, responsive layout and visible-only60s polling passed.');
+  console.log('Chromium:four independent journals, exact3route recovery without replacing23/full/work records, scoped partial/empty failures, provenance, privacy, zerofix claims, responsive layout and visible-only60s polling passed.');
   console.log('Synthetic dashboard screenshots: '+artifacts);
 } finally {await browser?.close();await server.close();}
