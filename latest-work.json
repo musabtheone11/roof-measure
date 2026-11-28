@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "repository": "musabtheone11/roof-measure",
+  "workflow": "roof-cloud.yml",
+  "executionProfile": "allowance-work",
+  "generatedAt": "2026-11-28T16:05:31.088Z",
+  "sourceRevision": "052a370812b966f3f44113a98c1ac08395fc5ff1",
+  "run": {
+    "id": "46162398482",
+    "attempt": 1,
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46162398482",
+    "pipelineResult": "success",
+    "startedAt": "2026-11-28T15:55:28.000Z"
+  },
+  "reportArtifact": {
+    "name": "roof-cloud-reports-46162398482-1",
+    "available": true,
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46162398482#artifacts"
+  },
+  "summary": {
+    "uniqueModels": 3,
+    "workItems": 7,
+    "authorTasks": 7,
+    "reviewTasks": 7,
+    "dispatchedTasks": 14,
+    "validatedTasks": 14,
+    "independentlyReviewed": 7,
+    "awaitingIndependentReview": 0,
+    "failed": 0,
+    "completedFixes": 0
+  },
+  "models": [
+    {
+      "model": "free/deepseek-v4-pro-0813",
+      "taskCount": 4,
+      "validatedTaskCount": 4
+    },
+    {
+      "model": "free/claude-sonnet-4.6",
+      "taskCount": 7,
+      "validatedTaskCount": 7
+    },
+    {
+      "model": "free/qwen-3.8-max",
+      "taskCount": 3,
+      "validatedTaskCount": 3
+    }
+  ],
+  "scope": "Scoped productive engineering work; accepted proposals and reviews are not implemented or released fixes. No field accuracy or production approval."
+}
