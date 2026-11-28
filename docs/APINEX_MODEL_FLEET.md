@@ -72,7 +72,8 @@ using the existing SQLite queue, fencing, content-addressed evidence, reservatio
 dispatch markers and usage settlement. Tasks bind source, fixture, policy and
 candidate hashes. One request at a time, at most one primary attempt/model/evaluation
 plus bounded closing reviews by different models (within 64 total requests),
-45 seconds/request, 2,000 output tokens, and a bounded catalog size. Re-running an
+45 seconds/2,000 output tokens for paid roles, and 120 seconds/8,000 for
+subscription roles, with bounded catalog size. Re-running an
 evaluation reuses terminal results; ambiguous dispatched work is never resent.
 Checkpoints and the same global GitHub concurrency group preserve budget lineage.
 
@@ -95,7 +96,7 @@ reservation ceiling leaves capacity for CEO and visual-review holds after
 other provider timeouts; it does not increase the user's weekly limit.
 Explicit zero budgets disable inference. All paid/free allowance use is recorded;
 unknown billing retains its conservative reservation. No idle model calls.
-The text fleet has a 40-minute deadline inside a 70-minute hosted job, leaving time to
+The text fleet has a 60-minute deadline inside a 90-minute hosted job, leaving time to
 run a bounded 15-minute design phase, perform visual review, close the database, upload checkpoints and retain artifacts. Unstarted work is
 explicitly deferred when the remaining runtime cannot accommodate another call.
 

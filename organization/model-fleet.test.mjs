@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {OrgStore} from './store.mjs';
+import {OrgStore,ALLOWANCE_LIMITS} from './store.mjs';
 import {MODEL_CATALOG,textAllowanceReservationUnits} from './model-catalog.mjs';
 import {runModelFleet,buildFleetAssignments,buildMetricFacts,validateMetricClaims} from './model-fleet.mjs';
+import {isPlainClassifier,PLAIN_CLASSIFIER_PROTOCOL,validatePlainClassificationResponse,expectedPlainClassificationLabel} from './plain-classifier.mjs';
 
 const contexts={developmentContext:{metrics:{attempted:6,diagnosticPasses:2,misclassifiedEdges:0},pdfReview:{checked:6,failed:0}},
   aggregateContext:{metrics:{attempted:12,diagnosticPasses:4,reviewRequired:8,misclassifiedEdges:0,
@@ -29,13 +30,15 @@ function freeHold(model){return {reservedUnits:textAllowanceReservationUnits(mod
 function options(store,catalog=THREE,extra={}){return {store,catalog,evaluationHash:'a'.repeat(64),sourceRevision:'test-source',inputHash:'b'.repeat(64),...contexts,
   paidAllowed:true,apiKey:'not-real-test-key',minimumDispatchIntervalMs:0,
   verifyModels:async()=>({ids:catalog.map(m=>m.id),checkedAt:new Date().toISOString()}),
-  requestRole:async(task,opts)=>{const free=opts.model.startsWith('free/');const id=await opts.reserve({usd:free?0:.01,...(free?{allowance:freeHold(opts.model)}:{})});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:free?0:.0001,...(free?{reportedAllowanceUnits:0}:{})});return response(task,opts);},...extra};}
+  requestRole:async(task,opts)=>{const free=opts.model.startsWith('free/');const id=await opts.reserve({usd:free?0:.01,...(free?{allowance:freeHold(opts.model)}:{})});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:free?0:.0001,...(free?{reportedAllowanceUnits:0}:{})});
+    if(isPlainClassifier(opts.model))return {...validatePlainClassificationResponse({model:opts.model,choices:[{finish_reason:'stop',message:{role:'assistant',content:expectedPlainClassificationLabel(opts.context)}}]},opts.context),execution:{requestedModel:opts.model,returnedModel:opts.model,reportedUsd:0}};
+    return response(task,opts);},...extra};}
 test('all catalog IDs receive distinct concrete assignments, one CEO last and alias reviewers excluded',()=>{
   const assignments=buildFleetAssignments();assert.equal(assignments.length,MODEL_CATALOG.length);
   assert.equal(new Set(assignments.map(a=>a.model)).size,MODEL_CATALOG.length);
   assert.equal(new Set(assignments.map(a=>a.task)).size,MODEL_CATALOG.length);
   assert.equal(assignments.at(-1).role,'ceo');assert.equal(assignments.filter(a=>a.role==='ceo').length,1);
-  for(const model of ['drex-v2.0','jev-1.13','free/hy4-flash'])assert.equal(assignments.find(a=>a.model===model).mayReview,false);
+  for(const model of ['drex-v2.0','jev-1.13','free/drex-v2.0','free/hy4-flash'])assert.equal(assignments.find(a=>a.model===model).mayReview,false);
 });
 test('metric claims preserve exact numerical zeros and reject contradicted claims or invented keys',()=>{
   const facts=buildMetricFacts(contexts.aggregateContext);assert.equal(facts['metrics.reviewRequired'],8);assert.equal(facts['metrics.misclassifiedEdges'],0);
@@ -118,11 +121,56 @@ test('design headroom defers free text and cached replay preserves its reason wi
   }});
   const planned=await runModelFleet({...base,paidAllowed:false});
   store.enqueue({id:'prime-design-capacity',workflowId:'fleet-'+planned.planHash.slice(0,32)});const lease=store.claim('prime-worker');
-  const id=store.reserve(lease.id,'prime-worker',lease.fence,{usd:0,requestLimit:64,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80,allowance:{...freeHold(catalog[0].id),reservedUnits:90000000}});
+  const id=store.reserve(lease.id,'prime-worker',lease.fence,{usd:0,requestLimit:64,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80,allowance:{...freeHold(catalog[0].id),reservedUnits:ALLOWANCE_LIMITS.workflowUnits-10000000}});
   store.dispatch(id,'prime-worker',lease.fence);store.settle(id,'prime-worker',lease.fence,{reportedUsd:0});store.finish(lease.id,'prime-worker',lease.fence,{status:'complete'});
   const first=await runModelFleet(base),again=await runModelFleet(base);
   for(const result of [first,again]){assert.equal(result.agents[0].status,'deferred',JSON.stringify(result.agents[0]));assert.equal(result.agents[0].code,'ALLOWANCE_DESIGN_CAPACITY_RESERVED');assert.equal(result.agents[0].attempted,false);}
-  assert.equal(calls,1);assert.equal(store.allowanceLedger().reservedUnits,90000000);assert.equal(store.ledger().requests,1);
+  assert.equal(calls,1);assert.equal(store.allowanceLedger().reservedUnits,ALLOWANCE_LIMITS.workflowUnits-10000000);assert.equal(store.ledger().requests,1);
+});
+test('subscription requests receive longer bounded output and keep a fenced lease alive through preflight and streaming',async t=>{
+ const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id==='free/gpt-6-luna');let clock=0,beat,cancelled=0;
+ store.now=()=>clock;
+ const result=await runModelFleet(options(store,catalog,{now:()=>clock,scheduleHeartbeat:callback=>{beat=callback;return 'test-heartbeat';},cancelHeartbeat:handle=>{assert.equal(handle,'test-heartbeat');cancelled++;},requestRole:async(task,opts)=>{
+   assert.equal(task.constraints.maxRuntimeMs,120000);assert.equal(task.constraints.maxOutputTokens,8000);assert.equal(opts.timeoutMs,120000);
+   clock+=20000;const allowance={...freeHold(opts.model),observedAt:clock,expiresAt:clock+3600000};
+   const id=await opts.reserve({usd:0,allowance});await opts.onDispatch(id);
+   clock+=90000;beat();clock+=20000;
+   assert.equal(opts.signal.aborted,false);await opts.onUsage(id,{reportedUsd:0,reportedAllowanceUnits:0});return response(task,opts);
+ }}));
+ assert.equal(result.coverage.validContributions,1);assert.equal(cancelled,1);assert.equal(store.ledger().requests,1);
+});
+test('minimal free Drex candidate preserves the old structured400 and qualifies only its literal protocol',async t=>{
+ const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-model-circuit-open',{model:catalog[0].id,status:400,code:'UPSTREAM_HTTP'});
+ const first=await runModelFleet(options(store,catalog));assert.equal(first.coverage.validContributions,1);assert.equal(first.agents[0].contributionKind,'plain-classification');assert.equal(first.agents[0].mayReview,false);
+ assert.equal(store.events().filter(e=>e.kind==='plain-protocol-probe-dispatched').length,1);assert.equal(store.events().filter(e=>e.kind==='plain-protocol-qualified').length,1);
+ const same=await runModelFleet(options(store,catalog));assert.equal(same.agents[0].reused,true);assert.equal(store.ledger().requests,1);
+ await runModelFleet({...options(store,catalog),evaluationHash:'c'.repeat(64)});assert.equal(store.ledger().requests,2);
+ assert.equal(store.events().filter(e=>e.kind==='plain-protocol-probe-dispatched').length,1);assert.ok(store.events().some(e=>e.kind==='fleet-model-circuit-open'&&e.detail.status===400&&!e.detail.requestProtocol));
+});
+test('a timed-out minimal protocol probe is not minted again for another evaluation',async t=>{
+ const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-model-circuit-open',{model:catalog[0].id,status:400});
+ const timed=options(store,catalog,{requestRole:async(task,opts)=>{const id=await opts.reserve({usd:0,allowance:freeHold(opts.model)});await opts.onDispatch(id);await opts.onUsage(id,{reportedUsd:null});throw Object.assign(new Error('Unknown probe'),{code:'TIMEOUT'});}});
+ await runModelFleet(timed);const before=JSON.stringify(store.ledger());const next=await runModelFleet({...options(store,catalog),evaluationHash:'d'.repeat(64)});
+ assert.equal(next.agents[0].code,'MODEL_PROTOCOL_PROBE_ALREADY_USED');assert.equal(next.agents[0].attempted,false);assert.equal(JSON.stringify(store.ledger()),before);
+});
+test('a cancelled minimal response cannot qualify a protocol; completed cached evidence can repair a missing marker',async t=>{
+ const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id)),base=options(store,catalog);
+ const cancelled=await runModelFleet({...base,requestRole:async(task,opts)=>{const result=await base.requestRole(task,opts);store.cancel(task.id);return result;}});
+ assert.equal(cancelled.coverage.validContributions,0);assert.equal(store.events().filter(e=>e.kind==='plain-protocol-qualified').length,0);
+ const next=await runModelFleet({...base,evaluationHash:'e'.repeat(64)});assert.equal(next.agents[0].code,'MODEL_PROTOCOL_PROBE_ALREADY_USED');
+ const other=fixture(t),success=await runModelFleet(options(other,catalog));assert.equal(success.coverage.validContributions,1);
+ other.db.prepare("DELETE FROM events WHERE kind='plain-protocol-qualified'").run();const before=JSON.stringify(other.ledger());
+ const replay=await runModelFleet({...options(other,catalog),requestRole:async()=>{throw new Error('Completed proof must not call the provider');}});
+ assert.equal(replay.coverage.validContributions,1);assert.equal(JSON.stringify(other.ledger()),before);
+ assert.equal(other.events().find(e=>e.kind==='plain-protocol-qualified').detail.recoveredFromCompletedTask,true);
+});
+test('minimal protocol never bypasses auth, entitlement, identity, or a new-protocol400 circuit',async t=>{
+ for(const block of [{status:403},{status:null,code:'MODEL_MISMATCH'},{status:400,requestProtocol:PLAIN_CLASSIFIER_PROTOCOL}]) {
+   const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-model-circuit-open',{model:catalog[0].id,...block});let calls=0;
+   const result=await runModelFleet(options(store,catalog,{requestRole:async()=>{calls++;}}));assert.equal(calls,0);assert.equal(result.agents[0].code,'MODEL_RECONCILIATION_REQUIRED');
+ }
+ const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>isPlainClassifier(m.id));store.event(null,'fleet-provider-circuit-open',{status:401});
+ const result=await runModelFleet(options(store,catalog));assert.equal(result.agents[0].code,'PROVIDER_AUTH_RECONCILIATION_REQUIRED');
 });
 test('all45 models can contribute, typed routes and fallback alias do not perform peer review',async t=>{
   const store=fixture(t),base=options(store,MODEL_CATALOG);const primary=[];

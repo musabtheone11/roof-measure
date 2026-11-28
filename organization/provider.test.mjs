@@ -6,7 +6,7 @@ import { verifyRoster, requestOrganizationRole } from './provider.mjs';
 const hash = 'a'.repeat(64);
 const task = { schemaVersion: 1, id: 'task1', role: 'engineering', actorId: 'engineer1', sourceRevision: 'commit1', datasetRevision: 'data1', candidateHash: hash, policyVersion: 'policy1', inputHashes: [hash] };
 const output = () => ({ schemaVersion: 1, taskId: task.id, role: task.role, sourceRevision: task.sourceRevision, datasetRevision: task.datasetRevision, candidateHash: hash, policyVersion: task.policyVersion, inputHashes: [hash], decision: 'needs-human', findings: [], artifactRefs: [], summary: 'No independently measured reference is supplied.', payload: { hypothesis: 'Inspect source registration.', patchArtifact: null, predictedMetric: 'Lower registration error.' } });
-const json = (data, init = {}) => new Response(JSON.stringify(data), { status: 200, ...init });
+const json = (data, init = {}) => new Response(JSON.stringify(data), { status: 200, ...init,headers:{'content-type':'application/json',...init.headers} });
 test('incomplete output retains actual finish reason before rejection',async()=>{
   let original;
   const f=fixture({chat:async()=>json({model:'gpt-6.2-astra',usage:{cost_tokens:3,completion_tokens:2000},choices:[{finish_reason:'length',message:{content:'{"summary":"cut'}}]})});
@@ -174,13 +174,14 @@ test('all45 verified models reserve their own rate and use the documented respon
   const {MODEL_CATALOG,getVerifiedModelPrice}=await import('./model-catalog.mjs');
   const verifiedRoster={ids:MODEL_CATALOG.map(m=>m.id),checkedAt:new Date().toISOString()};
   for(const model of MODEL_CATALOG) {
-    const typed=model.routeClaim==='decisions';
-    const f=fixture({chat:async()=>json(typed?{object:'decision',model:model.id,usage:{cost_tokens:0},answers:{review_queue:{type:'choice',choice:'geometry_review',confidence:.8}}}:{model:model.id,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content:JSON.stringify(output())}}]})});
+    const typed=model.routeClaim==='decisions',plain=model.id==='free/drex-v2.0';
+    const f=fixture({chat:async()=>json(typed?{object:'decision',model:model.id,usage:{cost_tokens:0},answers:{review_queue:{type:'choice',choice:'geometry_review',confidence:.8}}}:{model:model.id,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content:plain?'geometry_review':JSON.stringify(output())}}]})});
     const response=await requestOrganizationRole(task,{...f.options,model:model.id,verifiedRoster,context:{metrics:{attempted:12,diagnosticPasses:4},pdfReview:{checked:12,failed:0}}});
     const price=getVerifiedModelPrice(model.id);assert.equal(f.events[0][1].usd,price.contextTokens*price.maxRate/1e6);
     assert.equal(response.execution.returnedModel,model.id);assert.equal(response.execution.billingTier,model.billingTier);
     assert.equal(f.calls.length,model.billingTier==='free-allowance'?2:1);assert.equal(f.calls.at(-1).url.endsWith(typed?'/decisions':'/chat/completions'),true);
     if(typed){assert.equal(response.contributionKind,'typed-decision');assert.equal(Object.hasOwn(response,'result'),false);}
+    if(plain){assert.equal(response.contributionKind,'plain-classification');assert.equal(Object.hasOwn(response,'result'),false);}
   }
 });
 
@@ -218,4 +219,101 @@ test('fleet task constraints add literal metric claims and named peer challenge 
   const f=fixture({chat:async()=>json({model:'gpt-6.2-astra',usage:{cost_tokens:1},choices:[{finish_reason:'stop',message:{content:JSON.stringify(valid)}}]})});
   const result=await requestOrganizationRole(bound,f.options);assert.equal(result.result.metricClaims.attempted,12);
   const body=JSON.parse(f.calls[1].init.body);assert.match(body.messages[0].content,/metricClaims/);assert.match(body.messages[0].content,/prior-task/);
+});
+function sseChat(model,content,{usage={cost_tokens:0,total_tokens:120},finish='stop',done=true,bytes=5}={}){
+  const event=x=>'data: '+(typeof x==='string'?x:JSON.stringify(x))+'\r\n\r\n';
+  const wire=event({id:'stream-test',model,choices:[{index:0,delta:{role:'assistant',content},finish_reason:null}]})+
+    event({id:'stream-test',model,choices:[{index:0,delta:{},finish_reason:finish}]})+
+    (usage?event({id:'stream-test',model,choices:[],usage}):'')+(done?event('[DONE]'):'');
+  const raw=Buffer.from(wire);return new Response(new ReadableStream({start(c){for(let i=0;i<raw.length;i+=bytes)c.enqueue(raw.subarray(i,i+bytes));c.close();}}),{headers:{'content-type':'text/event-stream; charset=utf-8'}});
+}
+test('free streaming preserves original text/hash/model/usage and private allowance admission before its single POST',async()=>{
+  const model='free/gpt-6-luna',original='```json\n'+JSON.stringify(output())+'\n```';let record;
+  const f=fixture({chat:async()=>sseChat(model,original)});
+  const r=await requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:x=>{record=x;}});
+  const post=f.calls.find(c=>c.init.method==='POST'),body=JSON.parse(post.init.body);
+  assert.equal(body.stream,true);assert.deepEqual(body.stream_options,{include_usage:true});assert.equal(body.response_format.type,'json_object');assert.equal(body.max_tokens,8000);
+  assert.equal(r.execution.transport,'sse');assert.equal(r.execution.settings.stream,true);assert.equal(r.execution.returnedModel,model);assert.equal(r.execution.requestId,'stream-test');assert.equal(r.execution.finishReason,'stop');
+  assert.equal(record.content,original);assert.equal(record.contentSha256,createHash('sha256').update(original).digest('hex'));assert.equal(r.execution.normalization,'single-json-code-fence');assert.equal(record.execution.streamEvidence.complete,true);
+  assert.equal(f.events.find(e=>e[0]==='reserve')[1].allowance.reservedUnits,6291456);assert.equal(f.events.filter(e=>e[0]==='usage').length,1);
+  assert.equal(r.execution.reportedAllowanceUnits,null);assert.equal(r.execution.estimatedAllowanceUnits,360);assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+});
+test('HTTP200 JSON to a streaming request uses the same response and records actual transport without another POST',async()=>{
+  const model='free/minimax-m3.1-flash',f=fixture({chat:async()=>json({model,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content:JSON.stringify(output())}}],streamEvidence:{protocol:'forged'}})});
+  const r=await requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()}});
+  assert.equal(r.execution.settings.stream,true);assert.equal(r.execution.transport,'json-response-to-stream-request');assert.equal(r.execution.streamEvidence,undefined);assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+});
+test('incomplete streaming keeps one unknown hold and retained partial evidence without retry or JSON reinterpretation',async()=>{
+  const model='free/gpt-6-luna';let record;
+  const f=fixture({chat:async()=>sseChat(model,'{"partial":true}',{done:false})});
+  await assert.rejects(requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:x=>{record=x;}}),{code:'STREAM_INCOMPLETE'});
+  assert.equal(record.content,'{"partial":true}');assert.equal(record.execution.finishReason,'stop');assert.equal(record.execution.streamEvidence.complete,false);assert.equal(record.failureCode,'STREAM_INCOMPLETE');
+  assert.equal(f.events.filter(e=>e[0]==='usage').length,1);assert.equal(f.events.find(e=>e[0]==='usage')[2].reportedUsd,null);assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+});
+test('streaming missing usage remains unknown and a terminal length reason retains known billing before role rejection',async()=>{
+  const model='free/gpt-6-luna',f=fixture({chat:async()=>sseChat(model,JSON.stringify(output()),{usage:null})});
+  const r=await requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()}});assert.equal(r.execution.reportedUsd,null);assert.equal(r.execution.billingStatus,'unknown');
+  let record;const cut=fixture({chat:async()=>sseChat(model,'{"cut":',{usage:{cost_tokens:0,total_tokens:10},finish:'length'})});
+  await assert.rejects(requestOrganizationRole(task,{...cut.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:x=>{record=x;}}),{code:'INVALID_AGENT_OUTPUT'});
+  assert.equal(record.execution.finishReason,'length');assert.equal(cut.events.find(e=>e[0]==='usage')[2].reportedUsd,0);
+});
+test('free streaming deadline cancels its reader, retains partial data and never resubmits',async()=>{
+  const model='free/gpt-6-luna';let record,cancelled=false;
+  const f=fixture({chat:async()=>new Response(new ReadableStream({start(c){c.enqueue(Buffer.from('data: '+JSON.stringify({id:'slow',model,choices:[{index:0,delta:{content:'partial'},finish_reason:null}]})+'\n\n'));},cancel(){cancelled=true;}}),{headers:{'content-type':'text/event-stream'}})});
+  await assert.rejects(requestOrganizationRole(task,{...f.options,model,timeoutMs:20,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:x=>{record=x;}}),{code:'TIMEOUT'});
+  assert.equal(cancelled,true);assert.equal(record.content,'partial');assert.equal(record.failureCode,'TIMEOUT');assert.equal(f.events.find(e=>e[0]==='usage')[2].reportedUsd,null);assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+});
+test('paid deadlines and explicit streaming remain bounded and Decisions never use chat SSE',async()=>{
+  const f=fixture();await assert.rejects(requestOrganizationRole(task,{...f.options,timeoutMs:45001}),{code:'INVALID_LIMIT'});assert.equal(f.calls.length,0);
+  await assert.rejects(requestOrganizationRole(task,{...f.options,stream:true,timeoutMs:120001}),{code:'INVALID_LIMIT'});assert.equal(f.calls.length,0);
+  await assert.rejects(requestOrganizationRole(task,{...f.options,model:'jev-1.13',stream:true}),{code:'STREAM_UNSUPPORTED'});assert.equal(f.calls.length,0);
+  await assert.rejects(requestOrganizationRole({...task,constraints:{maxOutputTokens:8000}},f.options),{code:'INVALID_LIMIT'});assert.equal(f.calls.length,0);
+  const paid=fixture({chat:async()=>sseChat('gpt-6.2-astra',JSON.stringify(output()),{usage:{cost_tokens:3}})});
+  const r=await requestOrganizationRole(task,{...paid.options,stream:true,timeoutMs:120000});assert.equal(r.execution.transport,'sse');assert.equal(r.execution.settings.maxOutputTokens,2000);
+});
+test('a fenced unknown-usage callback cannot discard partial SSE evidence or trigger another usage call/POST',async()=>{
+  const model='free/gpt-6-luna',partial='{"partial":true}';let record,calls=0;
+  const f=fixture({chat:async()=>sseChat(model,partial,{done:false}),onUsage:async()=>{calls++;throw Object.assign(new Error('Lease fence rejected settlement'),{code:'STALE_LEASE'});}});
+  await assert.rejects(requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:r=>{record=r;}}),{code:'STALE_LEASE'});
+  assert.equal(calls,1);assert.equal(record.content,partial);assert.equal(record.contentSha256,createHash('sha256').update(partial).digest('hex'));assert.equal(record.execution.streamEvidence.complete,false);assert.equal(record.streamErrorCode,'STREAM_INCOMPLETE');
+  assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+});
+test('free Drex uses only its documented minimal plain-classification protocol and preserves raw identity/billing evidence',async()=>{
+  const model='free/drex-v2.0',raw=' geometry_review\n';let record;
+  const f=fixture({chat:async()=>json({id:'plain-request',model,usage:{cost_tokens:0,total_tokens:100},choices:[{finish_reason:'stop',message:{role:'assistant',content:raw}}]})});
+  const r=await requestOrganizationRole({...task,constraints:{maxRuntimeMs:120000,maxOutputTokens:8000}},{...f.options,model,context:{metrics:{attempted:12,diagnosticPasses:4},pdfReview:{checked:12,failed:0}},verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:x=>{record=x;}});
+  const post=f.calls.find(c=>c.init.method==='POST'),body=JSON.parse(post.init.body);assert.deepEqual(Object.keys(body).sort(),['messages','model','stream']);assert.equal(body.stream,false);
+  assert.equal(r.contributionKind,'plain-classification');assert.equal(Object.hasOwn(r,'result'),false);assert.equal(r.classification.label,'geometry_review');assert.equal(r.classification.originalText,raw);assert.equal(r.validation.agreesWithExpected,true);assert.equal(r.validation.metricClaimsApplicable,false);
+  assert.equal(r.execution.settings.requestOutputTokenLimit,null);assert.equal(r.execution.settings.responseFormat,'literal-enum');assert.equal(r.execution.settings.clientOutputByteLimit,65536);assert.equal(r.execution.settings.protocol,'free-drex-plain-classification-v1');
+  assert.equal(r.execution.returnedModel,model);assert.equal(record.content,raw);assert.equal(record.contentSha256,createHash('sha256').update(raw).digest('hex'));
+  assert.equal(f.events.find(e=>e[0]==='reserve')[1].allowance.reservedUnits,268288);assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+});
+test('plain classifier cannot be forced into SSE/JSON repair, substituted identities or unsupported completion',async()=>{
+  const model='free/drex-v2.0',base={model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()}};
+  const forced=fixture();await assert.rejects(requestOrganizationRole(task,{...forced.options,...base,stream:true}),{code:'STREAM_UNSUPPORTED'});assert.equal(forced.calls.length,0);
+  for(const content of ['{"label":"geometry_review"}','geometry_review because failures exist']){
+    const f=fixture({chat:async()=>json({model,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content}}]})});
+    await assert.rejects(requestOrganizationRole(task,{...f.options,...base}),{code:'INVALID_PLAIN_CLASSIFICATION_OUTPUT'});assert.equal(f.events.find(e=>e[0]==='usage')[2].reportedUsd,0);
+  }
+});
+test('JSON compatibility responses require one assistant text choice and never accept tools, refusal or ambiguous choices',async()=>{
+  const model='free/gpt-6-luna',good={index:0,finish_reason:'stop',message:{role:'assistant',content:JSON.stringify(output())}};
+  for(const choices of [
+    [{...good,message:{...good.message,role:'user'}}],
+    [{...good,message:{...good.message,tool_calls:[{function:{name:'run',arguments:'{}'}}]}}],
+    [{...good,message:{...good.message,function_call:{name:'run'}}}],
+    [{...good,message:{...good.message,refusal:'Cannot comply'}}],
+    [good,good],[{...good,index:1}],
+  ]){
+    const f=fixture({chat:async()=>json({model,usage:{cost_tokens:0},choices})});let record;
+    await assert.rejects(requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:r=>{record=r;}}),{code:'INVALID_AGENT_OUTPUT'});
+    assert.equal(f.events.find(e=>e[0]==='usage')[2].reportedUsd,0);assert.equal(record.execution.transport,'json-response-to-stream-request');assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+  }
+});
+test('oversized JSON compatibility evidence has a bounded UTF-8 prefix and truthful hashes before rejection',async()=>{
+  const model='free/gpt-6-luna',original='é'.repeat(40000);let record;
+  const f=fixture({chat:async()=>json({model,usage:{cost_tokens:0},choices:[{finish_reason:'stop',message:{content:original}}]})});
+  await assert.rejects(requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:r=>{record=r;}}),{code:'OUTPUT_TOO_LARGE'});
+  assert.ok(Buffer.byteLength(record.content)<=65536);assert.equal(record.content.includes('\ufffd'),false);assert.equal(record.contentTruncated,true);
+  assert.equal(record.contentSha256,createHash('sha256').update(record.content).digest('hex'));assert.equal(record.originalContentSha256,createHash('sha256').update(original).digest('hex'));assert.equal(record.originalContentBytes,80000);
 });

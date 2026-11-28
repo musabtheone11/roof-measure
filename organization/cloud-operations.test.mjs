@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,readFile,rm,readdir,cp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {previousExecution,selectStateArtifact,bootstrapCloud,checkpointCloud,verifyCheckpoint,packReports,publicCloudStatus,publishCloudStatus} from './cloud-operations.mjs';
+import {previousExecution,selectStateArtifact,bootstrapCloud,checkpointCloud,verifyCheckpoint,packReports,publicCloudStatus,publicQualificationStatus,publishCloudStatus} from './cloud-operations.mjs';
 
 const stamped=r=>({updated_at:new Date(Number(r.id)*10000).toISOString(),...r});
 const env=(id,attempt=1)=>({GITHUB_REPOSITORY:'owner/roof',GITHUB_RUN_ID:String(id),GITHUB_RUN_ATTEMPT:String(attempt),GITHUB_REF_NAME:'work',GITHUB_SHA:'a'.repeat(40)});
@@ -134,6 +134,40 @@ test('follow-up status preserves baseline provenance and cannot claim retained r
  assert.equal(status.evaluation.evidenceMode,'retained-baseline');assert.equal(status.evaluation.generatedCustomerPDFs,0);
  assert.equal(status.evaluation.retainedCustomerPDFs,12);assert.equal(status.evaluation.newlyGeneratedCases,0);
  assert.match(status.scope,/No new measurements/);
+});
+test('subscription journal counts valid review-needed proposals and omits private data',()=>{
+ const data=cycle();data.executionProfile='allowance-roster';data.allowance={remainingUnits:1155000000,periodKey:'PRIVATE_PERIOD'};
+ data.reviews=[{model:'free/qwen-3.8-max',status:'needs-human',primaryValidated:true,attempted:true,reviewStatus:'pending',summary:'PRIVATE_MODEL_TEXT'},
+  {model:'free/gpt-6-luna',status:'failed',primaryValidated:false,attempted:true,reviewStatus:'pending',code:'TIMEOUT'},
+  {model:'free/drex-v2.0',status:'blocked',primaryValidated:false,attempted:false,code:'MODEL_RECONCILIATION_REQUIRED'}];
+ const status=publicQualificationStatus(data,{env:env(20)});
+ assert.equal(status.executionProfile,'allowance-roster');assert.deepEqual(status.summary,{selectedCount:3,attemptedCount:2,validCount:1,reviewedCount:0});
+ assert.equal(status.models[0].status,'needs-human');assert.equal(status.models[0].contributionValidated,true);
+ for(const value of ['PRIVATE_MODEL_TEXT','PRIVATE_PERIOD','remainingUnits','1155000000'])assert.ok(!JSON.stringify(status).includes(value));
+ data.reviews.push({model:'gpt-6.2-astra',status:'complete'});assert.throws(()=>publicQualificationStatus(data,{env:env(20)}),/paid-model/);
+});
+test('subscription publication uses its separate fixed journal without replacing the full roster',async()=>{
+ const data=cycle();data.executionProfile='allowance-qualification';data.reviews=[{model:'free/qwen-3.8-max',status:'needs-human',primaryValidated:true,attempted:true}];
+ const paths=[];let put;
+ const result=await publishCloudStatus(data,{env:{...env(20),GITHUB_TOKEN:'private-test-token'},fetchImpl:async(url,init)=>{
+   paths.push(url);if(url.includes('/attempts/'))return executionReply(url);
+   if(url.includes('/git/ref/'))return reply({ref:'refs/heads/roof-cloud-status'});
+   if(init.method==='GET')return reply({},404);put=JSON.parse(init.body);return reply({commit:{sha:'c'.repeat(40)}},201);
+ }});
+ assert.ok(paths.some(path=>path.includes('/contents/latest-qualification.json')));assert.ok(paths.every(path=>!path.includes('latest-status.json')));
+ assert.match(result.statusURL,/latest-qualification.json$/);assert.equal(put.branch,'roof-cloud-status');
+ const published=JSON.parse(Buffer.from(put.content,'base64'));assert.equal(published.summary.validCount,1);assert.equal(published.run.startedAt,'2026-11-28T12:00:00.000Z');
+});
+test('failed subscription runs keep their scoped journal and mismatched profiles cannot overwrite either journal',async()=>{
+ const paths=[];
+ await publishCloudStatus(null,{env:{...env(20),GITHUB_TOKEN:'token',ROOF_CLOUD_PUBLIC_PROFILE:'allowance-roster',ROOF_CLOUD_GENERATION_RESULT:'failure'},fetchImpl:async(url,init)=>{
+   paths.push(url);if(url.includes('/attempts/'))return executionReply(url);if(url.includes('/git/ref/'))return reply({});
+   return init.method==='GET'?reply({},404):reply({commit:{sha:'c'.repeat(40)}},201);
+ }});
+ assert.ok(paths.some(path=>path.includes('latest-qualification.json')));assert.ok(paths.every(path=>!path.includes('latest-status.json')));
+ for(const [profile,actual]of [['allowance-roster','all-models'],['cycle','allowance-roster'],['allowance-qualification','allowance-roster']]) {
+   let calls=0;await assert.rejects(publishCloudStatus({...cycle(),executionProfile:actual},{env:{...env(20),GITHUB_TOKEN:'token',ROOF_CLOUD_PUBLIC_PROFILE:profile},fetchImpl:async()=>{calls++;}}));assert.equal(calls,0);
+ }
 });
 test('status journal creates only its fixed branch from the checked-out revision and writes CAS content',async()=>{
   const calls=[];

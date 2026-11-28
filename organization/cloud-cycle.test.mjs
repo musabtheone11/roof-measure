@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import{mkdtempSync,rmSync,writeFileSync,readFileSync}from'node:fs';import{tmpdir}from'node:os';import{join}from'node:path';
-import{runCloudCycle,monitoringDecision,cloudModelProfile,ALLOWANCE_QUALIFICATION_MODELS}from'./cloud-cycle.mjs';import{renderCustomerPDF}from'./customer-report.mjs';
+import{runCloudCycle,monitoringDecision,cloudModelProfile,ALLOWANCE_QUALIFICATION_MODELS,ALLOWANCE_ROSTER_MODELS}from'./cloud-cycle.mjs';import{renderCustomerPDF}from'./customer-report.mjs';
+import{MODEL_CATALOG}from'./model-catalog.mjs';
 function setup(t){const dir=mkdtempSync(join(tmpdir(),'roof-cloud-cycle-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return{stateDir:join(dir,'state'),outputDir:join(dir,'output'),seed:123,count:3,sourceRevision:'fixture-source',browserStatus:'passed'};}
 async function casesRunner({outputDir}){const cases=[];for(const [i,split]of['development','validation','holdout'].entries()){
  const report={schemaVersion:1,jobId:'Synthetic'+i,revision:'v1',date:'2026',buildingScope:'Synthetic',status:'REVIEW REQUIRED',quantities:[{name:'Sloped area',value:100,unit:'ft²',status:'inferred',source:'Actual test-output fixture'}],notes:['Not field validation.']};
@@ -88,7 +89,25 @@ test('allowance qualification forces the selected three-model zero-USD fleet and
  assert.equal(r.decision.productionReleaseApproved,false);assert.match(r.scope,/Three selected free models only/);
 });
 test('CLI model-mode mapping isolates allowance qualification without changing the all-model profile',()=>{
- assert.deepEqual(cloudModelProfile('allowance-qualification'),{allowanceQualification:true,fleetMode:true,designMode:false});
- assert.deepEqual(cloudModelProfile('all-models'),{allowanceQualification:false,fleetMode:true,designMode:true});
- assert.deepEqual(cloudModelProfile(undefined),{allowanceQualification:false,fleetMode:false,designMode:false});
+ assert.deepEqual(cloudModelProfile('allowance-qualification'),{allowanceQualification:true,allowanceRoster:false,fleetMode:true,designMode:false});
+ assert.deepEqual(cloudModelProfile('all-models'),{allowanceQualification:false,allowanceRoster:false,fleetMode:true,designMode:true});
+ assert.deepEqual(cloudModelProfile(undefined),{allowanceQualification:false,allowanceRoster:false,fleetMode:false,designMode:false});
+ assert.deepEqual(cloudModelProfile('allowance-roster'),{allowanceQualification:false,allowanceRoster:true,fleetMode:true,designMode:false});
+});
+test('allowance roster selects every verified free model within zero USD,48requests and60minutes without image calls',async t=>{
+ const opts=setup(t);let received,images=0;
+ const r=await runCloudCycle({...opts,casesRunner,apiKey:'test',paidAllowed:true,allowanceRoster:true,designMode:true,
+   catalogAuditor:async()=>({status:'verified',hash:'c'.repeat(64),issuesByModel:{}}),
+   requestRole:async()=>{throw new Error('Paid fallback must remain disabled');},
+   designRunner:async()=>{images++;throw new Error('Image generation disabled');},
+   designReviewer:async()=>{images++;throw new Error('Image review disabled');},
+   fleetRunner:async input=>{received=input;return{catalog:{rosterCount:MODEL_CATALOG.length},coverage:{selectedCount:input.selectedModelIds.length},budget:{requestLimit:48,maxUsd:0},
+     agents:input.selectedModelIds.map(model=>({model,role:'critique',status:'blocked',attempted:false,primaryValidated:false,reviewStatus:'pending'}))};}});
+ assert.equal(ALLOWANCE_ROSTER_MODELS.length,23);assert.deepEqual([...ALLOWANCE_ROSTER_MODELS],MODEL_CATALOG.filter(m=>m.billingTier==='free-allowance').map(m=>m.id));
+ assert.deepEqual(received.selectedModelIds,[...ALLOWANCE_ROSTER_MODELS]);assert.ok(received.selectedModelIds.every(id=>{const m=MODEL_CATALOG.find(row=>row.id===id);return m.billingTier==='free-allowance'&&m.inputPerMillion===0&&m.outputPerMillion===0;}));
+ assert.deepEqual(received.limits,{requestLimit:48,maxUsd:0});assert.equal(received.runtimeMs,60*60000);assert.equal(received.allowanceReserveUnits,0);
+ assert.equal(images,0);assert.equal(r.executionProfile,'allowance-roster');assert.equal(r.budget.maxUsd,0);assert.equal(r.budget.requestLimit,48);assert.equal(r.budget.weekUsd,20);
+ assert.equal(r.fleet.agents.length,23);assert.equal(r.fleet.design,undefined);assert.match(r.scope,/All 23 verified free-allowance text models selected/);
+ assert.equal(r.allowance.attempts,undefined);assert.doesNotMatch(JSON.stringify(r.allowance),/remaining|observed|expires|period/i);
+ assert.equal(r.decision.productionReleaseApproved,false);assert.equal(r.decision.fieldAccuracyValidated,false);
 });

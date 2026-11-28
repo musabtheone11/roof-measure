@@ -10,6 +10,7 @@ import {requestOrganizationRole} from './provider.mjs';
 import {runCloudCases} from './cloud-cases.mjs';
 import {verifyCloudPDF} from './cloud-pdf.mjs';
 import {runModelFleet} from './model-fleet.mjs';
+import {MODEL_CATALOG} from './model-catalog.mjs';
 import {auditModelCatalog} from './catalog-audit.mjs';
 import {runDesignFleet} from './design-fleet.mjs';
 import {reviewDesignConcepts,DESIGN_REVIEW_MODEL} from './design-review.mjs';
@@ -17,9 +18,10 @@ import {pruneDesignImageCache} from './design-cache.mjs';
 
 export const CLOUD_PROTOCOL='cloud-evaluation-v1';
 export const ALLOWANCE_QUALIFICATION_MODELS=Object.freeze(['free/gpt-6-luna','free/qwen-3.8-max','free/minimax-m3.1-flash']);
+export const ALLOWANCE_ROSTER_MODELS=Object.freeze(MODEL_CATALOG.filter(model=>model.billingTier==='free-allowance').map(model=>model.id));
 export function cloudModelProfile(mode){
-  const allowanceQualification=mode==='allowance-qualification';
-  return {allowanceQualification,fleetMode:allowanceQualification||mode==='all-models',designMode:mode==='all-models'};
+  const allowanceQualification=mode==='allowance-qualification',allowanceRoster=mode==='allowance-roster';
+  return {allowanceQualification,allowanceRoster,fleetMode:allowanceQualification||allowanceRoster||mode==='all-models',designMode:mode==='all-models'};
 }
 export function monitoringDecision(metrics,reviews,pdfReview,browserStatus='not-run',fleet=null) {
   const reasons=[];
@@ -55,10 +57,11 @@ function directoryZip(directory) {
 export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevision,apiKey=process.env.APINEX_API_KEY,paidAllowed=false,browserStatus='not-run',
   casesRunner=runCloudCases,requestRole=requestOrganizationRole,checkpoint=async()=>{},now=Date.now,
   fleetMode=false,fleetRunner=runModelFleet,catalogAuditor=auditModelCatalog,
-  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts,allowanceQualification=false}={}) {
+  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts,allowanceQualification=false,allowanceRoster=false}={}) {
   if(!stateDir||!outputDir||!sourceRevision||!Number.isSafeInteger(seed))throw new Error('Explicit cloud state/output/seed/revision required');
-  if(allowanceQualification){fleetMode=true;designMode=false;}
-  const executionProfile=allowanceQualification?'allowance-qualification':fleetMode?(designMode?'all-models':'text-fleet'):'two-role';
+  const allowanceOnly=allowanceQualification||allowanceRoster,allowanceRequestLimit=allowanceRoster?48:6;
+  if(allowanceOnly){fleetMode=true;designMode=false;}
+  const executionProfile=allowanceRoster?'allowance-roster':allowanceQualification?'allowance-qualification':fleetMode?(designMode?'all-models':'text-fleet'):'two-role';
   outputDir=resolve(outputDir);stateDir=resolve(stateDir);mkdirSync(outputDir,{recursive:true,mode:0o700});
   const generated=await casesRunner({outputDir,seed,count,sourceRevision});
   // Build split pass counts from independently verified case records, never
@@ -115,8 +118,9 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
         developmentContext:{...contextBase,metrics:developmentMetrics,pdfReview:{checked:developmentPDFs.length,failed:developmentPDFs.filter(p=>!p.ok).length},developmentCases:development},
         aggregateContext:contextBase,paidAllowed,apiKey,requestRole,checkpoint,now,catalogAudit,
         allowanceReserveUnits:designMode?5000000:0,
-        ...(allowanceQualification?{selectedModelIds:[...ALLOWANCE_QUALIFICATION_MODELS]}:{}),
-        limits:allowanceQualification?{requestLimit:6,maxUsd:0}:{requestLimit:designMode?57:64}});
+        ...(allowanceOnly?{selectedModelIds:[...(allowanceRoster?ALLOWANCE_ROSTER_MODELS:ALLOWANCE_QUALIFICATION_MODELS)]}:{}),
+        ...(allowanceRoster?{runtimeMs:60*60000}:{}),
+        limits:allowanceOnly?{requestLimit:allowanceRequestLimit,maxUsd:0}:{requestLimit:designMode?57:64}});
       if(designMode) {
         const workflowId='fleet-'+fleet.planHash.slice(0,32);
         const design=await designRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
@@ -195,7 +199,7 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
     const ledger=store?store.ledger():{requests:null,reportedUsd:null,reservedUsd:null,unknownBillingRequests:null};
     const allowanceLedger=store?.allowanceLedger();
     // This private aggregate omits attempt-level provider balances/snapshots.
-    const allowance=allowanceLedger?Object.fromEntries(['requests','reservedUnits','reportedUnits','estimatedUnits','unknownAllowanceRequests','unknownUnits','pendingUnits','incident','limits'].map(key=>[key,allowanceLedger[key]])):null;
+    const allowance=allowanceLedger?Object.fromEntries(['requests','reservedUnits','reportedUnits','estimatedUnits','unknownAllowanceRequests','unknownUnits','pendingUnits','rollingDayUnits','rollingWeekUnits','incident','limits'].map(key=>[key,allowanceLedger[key]])):null;
     if(fleet) {
       fleet.coverage={...fleet.coverage,assigned:fleet.agents.length,attempted:fleet.agents.filter(a=>a.attempted).length,
         validContributions:fleet.agents.filter(a=>a.primaryValidated).length,
@@ -212,9 +216,9 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       browserStatus,pdfReview:{checked:pdfReview.checked,failed:pdfReview.failed},fleet,
       decision:monitoringDecision(generated.metrics,reviews,pdfReview,browserStatus,fleet),
       allowance,
-      budget:{requestLimit:allowanceQualification?6:fleet?.budget?.requestLimit??2,maxUsd:allowanceQualification?0:fleet?.budget?.maxUsd??AUTHORIZED_BUDGET.maxUsd,dayUsd:AUTHORIZED_BUDGET.dayUsd,weekUsd:20,monthUsd:80,
+      budget:{requestLimit:allowanceOnly?allowanceRequestLimit:fleet?.budget?.requestLimit??2,maxUsd:allowanceOnly?0:fleet?.budget?.maxUsd??AUTHORIZED_BUDGET.maxUsd,dayUsd:AUTHORIZED_BUDGET.dayUsd,weekUsd:20,monthUsd:80,
         totalRequests:ledger.requests,reportedUsd:ledger.reportedUsd,committedUsd:ledger.reservedUsd,unknownBillingRequests:ledger.unknownBillingRequests},
-      windowsDownloadsRequired:false,scope:allowanceQualification?'Three selected free models only: bounded allowance qualification; no image generation, paid-model review or all-catalog coverage claim. Synthetic cases are not real-property accuracy evidence.':'Cloud-generated monitoring; synthetic cases are not real-property accuracy evidence'};
+      windowsDownloadsRequired:false,scope:allowanceRoster?`All ${ALLOWANCE_ROSTER_MODELS.length} verified free-allowance text models selected; bounded allowance roster run with no image generation, paid-model review or full-service catalog coverage claim. Synthetic cases are not real-property accuracy evidence.`:allowanceQualification?'Three selected free models only: bounded allowance qualification; no image generation, paid-model review or all-catalog coverage claim. Synthetic cases are not real-property accuracy evidence.':'Cloud-generated monitoring; synthetic cases are not real-property accuracy evidence'};
     writeFileSync(join(outputDir,'cycle.json'),JSON.stringify(report,null,2));
     const escaped=x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
     const pdfs=(generated.cases||[]).map(c=>c.artifacts?.customerPDF?.path).filter(Boolean);

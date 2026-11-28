@@ -20,7 +20,7 @@ automatic purchases and renewals are not part of this change.
    limits, so the requested token count cannot serve as a billing bound. Free
    Nano reserves its published five million units.
 3. Atomically associate the allowance reservation with the existing fenced attempt
-   and USD reservation. Enforce 100 million units per workflow, 250 million per
+   and USD reservation. Enforce 500 million units per workflow, one billion per
    rolling day and one billion per rolling week, plus the live provider allowance.
 4. Exact reported allowance debit may settle the reservation. A calculated usage
    estimate is recorded separately and does not release an unknown hold. Unknown
@@ -50,6 +50,12 @@ Qwen and MiniMax, with at most six requests, zero wallet-dollar reservation and 
 image generation. It runs the actual synthetic-report evaluation and independent
 specialist handoffs. Its scoped artifact does not replace the public journal's
 full-roster status. Scheduled full-roster cycles keep their existing mode.
+
+`allowance-roster` evaluates every verified subscription text ID, with at most
+48 requests, a 60-minute phase, no image requests and zero wallet reservation.
+Its public summary is written to a separate dated qualification journal. The
+larger workflow/day ceilings accommodate complete context reservations while
+retaining the same one-billion-unit weekly ceiling and provider availability.
 
 Full-roster text work protects five million units for its later free-image task.
 The store checks this headroom atomically against workflow, daily, weekly and

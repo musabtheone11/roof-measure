@@ -41,6 +41,9 @@ test('CEO envelope must agree with requested decision',()=>{
   }
 });
 test('limits, evidence, identities, and missing reference identity fail closed',()=>{
+  assert.equal(validateTask({...task(),constraints:{maxOutputTokens:8000,maxRuntimeMs:120000}}).constraints.maxOutputTokens,8000);
+  assert.throws(()=>validateTask({...task(),constraints:{maxOutputTokens:8001}}));
+  assert.throws(()=>validateTask({...task(),constraints:{maxRuntimeMs:120001}}));
   assert.throws(()=>validateTask({...task(),constraints:{maxAttempts:3}}));
   assert.throws(()=>validateTask({...task(),constraints:{maxOutputTokens:-1}}));
   assert.throws(()=>validateTask({...task(),inputHashes:[]}));

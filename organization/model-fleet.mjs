@@ -3,6 +3,7 @@ import {verifyRoster,requestOrganizationRole} from './provider.mjs';
 import {validateResult} from './contracts.mjs';
 import {createHash} from 'node:crypto';
 import {reconcileLegacyFreeAllowance} from './allowance-legacy.mjs';
+import {isPlainClassifier,PLAIN_CLASSIFIER_PROTOCOL} from './plain-classifier.mjs';
 import {setTimeout as wait} from 'node:timers/promises';
 
 export const FLEET_PROTOCOL='apinex-model-fleet-v1';
@@ -15,7 +16,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const text=(value,max=200)=>typeof value==='string'&&value.length>0&&value.length<=max;
 const roleByTeam={'roof engineering':'engineering','real-case testing':'verification',extraction:'extraction','reference data':'reference','independent critique':'critique',reporting:'reporting',operations:'operations'};
 const familyOf=(entry,assignment)=>assignment?.canonicalFamily||String(entry.family||entry.provider||entry.id).toLowerCase().replace(/^free\//,'').replace(/[^a-z0-9]+/g,'-');
-function routeOf(entry){return entry.routeClaim==='decisions'||['drex-v2.0','jev-1.13'].includes(entry.id)?'decisions':'chat-completions';}
+function routeOf(entry){return isPlainClassifier(entry.id)?'plain-classification':entry.routeClaim==='decisions'||['drex-v2.0','jev-1.13'].includes(entry.id)?'decisions':'chat-completions';}
 
 /** Numeric claims bind only supplied deterministic facts; prose remains advisory. */
 export function buildMetricFacts(context={}) {
@@ -80,8 +81,8 @@ export function buildFleetAssignments(catalog=MODEL_CATALOG,{events=[]}={}) {
       'Qualify the exact model on a bounded '+team+' review using supplied development evidence; identify unsupported claims and concrete verification steps.',
       acceptance:known?.acceptance||'Strict contract, exact metric claims, cited source evidence and explicit uncertainty.',
       reviewerModel:known?.reviewer||null,family:familyOf(entry,known),
-      mayReview:known?.mayActAsIndependentReviewer!==false&&routeOf(entry)!=='decisions',
-      contributionKind:routeOf(entry)==='decisions'?'typed-decision':'structured-review',lastDispatched:lastDispatch.get(entry.id)||0};
+      mayReview:known?.mayActAsIndependentReviewer!==false&&routeOf(entry)==='chat-completions',
+      contributionKind:routeOf(entry)==='decisions'?'typed-decision':routeOf(entry)==='plain-classification'?'plain-classification':'structured-review',lastDispatched:lastDispatch.get(entry.id)||0};
   });
   const preferred=rows.find(row=>row.model==='claude-opus-5.5'&&row.mayReview)||[...rows].sort((a,b)=>a.model.localeCompare(b.model)).find(row=>row.mayReview);
   if(preferred){preferred.role='ceo';preferred.team='executive review';preferred.task='Audit deterministic aggregate metrics and validated specialist findings, prioritize actionable changes, and reject unsupported acceptance. No numeric, quota or release gate can be overridden.';}
@@ -119,10 +120,11 @@ function minimalAgent(row){return {model:row.model,team:row.team,role:row.role,s
 export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,sourceRevision,inputHash,
   developmentContext={},aggregateContext={},paidAllowed=false,apiKey=process.env.APINEX_API_KEY,
   requestRole=requestOrganizationRole,verifyModels=verifyRoster,checkpoint=async()=>{},limits={},now=Date.now,signal,
-  minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=40*60000,catalogAudit,selectedModelIds=null,allowanceReserveUnits=0}={}) {
+  minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=60*60000,catalogAudit,selectedModelIds=null,allowanceReserveUnits=0,
+  scheduleHeartbeat=(callback,ms)=>setInterval(callback,ms),cancelHeartbeat=clearInterval}={}) {
   if(!text(evaluationHash,200)||!text(sourceRevision,200)||!/^([a-f0-9]{64})$/.test(inputHash||''))fail('INVALID_FLEET_INPUT','Frozen evaluation/source/input bindings are required');
-  if(!Number.isInteger(runtimeMs)||runtimeMs<0||runtimeMs>40*60000)fail('INVALID_FLEET_LIMIT','Fleet runtime must be 0..40minutes');
-  if(!Number.isSafeInteger(allowanceReserveUnits)||allowanceReserveUnits<0||allowanceReserveUnits>100000000)fail('INVALID_FLEET_LIMIT','Allowance design headroom must be a bounded host policy');
+  if(!Number.isInteger(runtimeMs)||runtimeMs<0||runtimeMs>60*60000)fail('INVALID_FLEET_LIMIT','Fleet runtime must be 0..60minutes');
+  if(!Number.isSafeInteger(allowanceReserveUnits)||allowanceReserveUnits<0||allowanceReserveUnits>500000000)fail('INVALID_FLEET_LIMIT','Allowance design headroom must be a bounded host policy');
   const deadline=now()+runtimeMs,timeout=AbortSignal.timeout(Math.max(1,runtimeMs));
   const fleetSignal=signal?AbortSignal.any([signal,timeout]):timeout;
   validateDevelopmentContext(developmentContext);const devFacts=buildMetricFacts(developmentContext),aggregateFacts=buildMetricFacts(aggregateContext);
@@ -158,8 +160,22 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
     if(priorPlan)all=JSON.parse(store.readArtifact(priorPlan.detail.artifactHash)).assignments;
     else{const artifact=store.putArtifact(Buffer.from(JSON.stringify({planBinding,assignments:all})));store.event(null,'fleet-plan',{planHash,artifactHash:artifact.hash,assigned:all.length});}
   }
-  const circuitFor=model=>existingEvents.some(e=>e.detail?.model===model&&
-    (e.kind==='fleet-model-circuit-open'||e.kind==='fleet-model-ambiguous-billing'&&entries.get(model)?.billingTier!=='free-allowance'));
+  function circuitReason(model) {
+    const events=store?.events()||existingEvents,plain=isPlainClassifier(model);
+    for(const event of events.filter(e=>e.detail?.model===model)) {
+      if(event.kind==='fleet-model-ambiguous-billing'&&entries.get(model)?.billingTier!=='free-allowance')return 'MODEL_RECONCILIATION_REQUIRED';
+      if(event.kind==='fleet-model-circuit-open') {
+        // The original structured-request HTTP400 remains recorded. Only this
+        // separately documented minimal protocol gets a one-shot candidate.
+        if(plain&&event.detail.status===400&&!event.detail.requestProtocol)continue;
+        return 'MODEL_RECONCILIATION_REQUIRED';
+      }
+    }
+    if(plain&&!events.some(e=>e.kind==='plain-protocol-qualified'&&e.detail?.model===model&&e.detail?.protocol===PLAIN_CLASSIFIER_PROTOCOL)&&
+      events.some(e=>e.kind==='plain-protocol-probe-dispatched'&&e.detail?.model===model&&e.detail?.protocol===PLAIN_CLASSIFIER_PROTOCOL))return 'MODEL_PROTOCOL_PROBE_ALREADY_USED';
+    return null;
+  }
+  const circuitFor=model=>circuitReason(model)!==null;
   function taskId(assignment,suffix='primary'){return 'fleet-'+planHash.slice(0,24)+'-'+hash(assignment.model).slice(0,20)+'-'+suffix;}
   function baseRow(assignment){return {...assignment,proposedReviewerModel:assignment.reviewerModel,reviewerModel:null,taskId:taskId(assignment),status:'blocked',code:null,attempted:false,decision:null,reportedUsd:0,
     execution:null,resultHash:null,reviewStatus:'pending',primaryValidated:false};}
@@ -174,7 +190,10 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   }
   async function invoke(assignment,row,{target=null,closing=false}={}) {
     const entry=entries.get(assignment.model),price=entry?priceOf(entry):null;
-    let response=null,rawArtifact=null,lease=null,dispatched=false;
+    let response=null,rawArtifact=null,lease=null,dispatched=false,heartbeat=null;
+    const requestRuntimeMs=entry?.billingTier==='free-allowance'?120000:45000;
+    const requestOutputTokens=entry?.billingTier==='free-allowance'?8000:2000;
+    const localAbort=new AbortController(),callSignal=AbortSignal.any([fleetSignal,localAbort.signal]);
     const aggregateScope=assignment.role==='ceo'||(closing&&target?.role==='ceo');
     const base=aggregateScope?aggregateContext:developmentContext,facts=aggregateScope?aggregateFacts:devFacts;
     const context={...clone(base),trustedMetricFacts:facts,assignment:{team:assignment.team,task:assignment.task,acceptance:assignment.acceptance},
@@ -187,8 +206,8 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       actorId:closing?'fleet-review-'+hash(assignment.model).slice(0,16)+'-'+hash(target.taskId).slice(0,8):'fleet-'+hash(assignment.model).slice(0,24),
       sourceRevision,datasetRevision:FLEET_PROTOCOL,candidateHash:hash(planBinding),policyVersion:FLEET_PROTOCOL,
       inputHashes:[...new Set([inputHash,contextArtifact.hash])],stage:closing?'fleet-closing-review':'fleet-primary',artifacts:[contextArtifact.hash],
-      constraints:{maxAttempts:2,maxRuntimeMs:45000,maxOutputTokens:2000,sourceHashes:[inputHash],
-        ...(assignment.contributionKind==='typed-decision'?{}:{requireMetricClaims:true,...(target?{reviewTaskId:target.taskId}:{})})}};
+      constraints:{maxAttempts:2,maxRuntimeMs:requestRuntimeMs,maxOutputTokens:requestOutputTokens,sourceHashes:[inputHash],
+        ...(['typed-decision','plain-classification'].includes(assignment.contributionKind)?{}:{requireMetricClaims:true,...(target?{reviewTaskId:target.taskId}:{})})}};
     const old=store?.getTask(row.taskId);
     if(old){
       row.errorDetails=old.result?.errorDetails||null;
@@ -198,6 +217,10 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         row.resultHash=old.result.resultHash;row.rawResponseHash=old.result.rawResponseHash||null;row.execution=response.execution||null;row.decision=old.result.decision;
         row.status=old.status;row.code=old.result.code||null;row.primaryValidated=old.result.primaryValidated===true;row.reused=true;row.summary=response.result?.summary||null;
         if(row.primaryValidated){
+          if(isPlainClassifier(assignment.model)&&old.status==='complete'&&response.contributionKind==='plain-classification'&&response.protocol===PLAIN_CLASSIFIER_PROTOCOL&&
+            response.validation?.agreesWithExpected===true&&response.execution?.requestedModel===assignment.model&&response.execution?.returnedModel===assignment.model&&
+            !store.events().some(e=>e.kind==='plain-protocol-qualified'&&e.detail?.model===assignment.model&&e.detail?.protocol===PLAIN_CLASSIFIER_PROTOCOL))
+            store.event(task.id,'plain-protocol-qualified',{model:assignment.model,protocol:PLAIN_CLASSIFIER_PROTOCOL,resultHash:row.resultHash,recoveredFromCompletedTask:true});
           responses.set(row.taskId,response);
           const priorTarget=response.result?.peerReview?.taskId;
           applyReview(row,response,priorTarget?agents.find(a=>a.taskId===priorTarget)||pending.find(a=>a.taskId===priorTarget):null);
@@ -209,7 +232,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
     }
     if(!paidAllowed||!apiKey||!store){row.status='disabled';row.code=!paidAllowed?'CHECKPOINT_LINEAGE_BLOCKED':!apiKey?'CLOUD_SECRET_NOT_CONFIGURED':'DURABLE_STORE_UNAVAILABLE';return;}
     if(signal?.aborted){row.code='CANCELLED';return;}
-    if(timeout.aborted||now()+45000>deadline){row.code='FLEET_RUNTIME_LIMIT';row.deferred=true;return;}
+    if(timeout.aborted||now()+requestRuntimeMs>deadline){row.code='FLEET_RUNTIME_LIMIT';row.deferred=true;return;}
     if(rosterFailure){row.code=rosterFailure.code||'ROSTER_UNAVAILABLE';return;}
     if(!runtimeIds.has(assignment.model)){row.code='MODEL_ABSENT_FROM_ROSTER';return;}
     if(catalogAudit&&catalogAudit.status!=='verified'){row.code='PUBLIC_CATALOG_UNVERIFIED';return;}
@@ -217,36 +240,52 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
     if(!entry||!price){row.code='PRICING_UNKNOWN';return;}
     if(entry.billingTier==='free-allowance'&&allowanceLegacyFailure){row.code=allowanceLegacyFailure;return;}
     if(providerBlocked){row.code=providerBlocked;return;}
-    if(circuitFor(assignment.model)){row.code='MODEL_RECONCILIATION_REQUIRED';return;}
+    const circuit=circuitReason(assignment.model);if(circuit){row.code=circuit;return;}
     if(providerCooldown||(freeCooldown&&entry.billingTier==='free-allowance')){row.code='RATE_LIMIT_COOLDOWN';return;}
     const denied=budgetCheck(store,workflowId,price.contextTokens*price.maxRate/1e6,actualLimits,now());
     if(denied){row.code=denied;row.deferred=true;return;}
     const priorDispatch=store.events().filter(e=>e.kind==='fleet-dispatched').at(-1)?.created;
     const pacingDelay=priorDispatch==null||minimumDispatchIntervalMs===0?0:Math.max(0,priorDispatch+minimumDispatchIntervalMs-now());
-    if(now()+pacingDelay+45000>deadline){row.code='FLEET_RUNTIME_LIMIT';row.deferred=true;return;}
+    if(now()+pacingDelay+requestRuntimeMs>deadline){row.code='FLEET_RUNTIME_LIMIT';row.deferred=true;return;}
     try{
       if(roster&&now()-Date.parse(roster.checkedAt)>8*60000){roster=await verifyModels({apiKey,signal:fleetSignal});runtimeIds.clear();for(const id of roster.ids)runtimeIds.add(id);if(!runtimeIds.has(assignment.model))fail('MODEL_UNAVAILABLE','Model disappeared from refreshed authenticated roster');}
-      if(timeout.aborted||now()+45000>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient fleet runtime remains for a bounded model request');
+      if(timeout.aborted||now()+requestRuntimeMs>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient fleet runtime remains for a bounded model request');
       if(!old)store.enqueue(task);
       lease=store.claim('fleet-worker',{leaseMs:120000});
       if(!lease||lease.id!==task.id)fail('UNRESOLVED_QUEUE_WORK','Earlier queue work must be reconciled before fleet dispatch');
+      heartbeat=scheduleHeartbeat(()=>{try{if(store.getControl()==='stopped')localAbort.abort();else store.heartbeat(task.id,'fleet-worker',lease.fence,120000);}catch{localAbort.abort();}},15000);
       const last=store.events().filter(e=>e.kind==='fleet-dispatched').at(-1)?.created;
       const delay=last==null||minimumDispatchIntervalMs===0?0:Math.max(0,last+minimumDispatchIntervalMs-now());
-      if(delay)await waitImpl(delay,{signal:fleetSignal});
-      const responseValue=await requestRole(task,{apiKey,model:assignment.model,context,signal:fleetSignal,verifiedRoster:roster,
+      if(delay)await waitImpl(delay,{signal:callSignal});
+      const responseValue=await requestRole(task,{apiKey,model:assignment.model,context,signal:callSignal,verifiedRoster:roster,timeoutMs:requestRuntimeMs,
         reserve:async({usd,allowance})=>{
           if(entry.billingTier==='free-allowance'&&(usd!==0||allowance?.reservedUnits!==textAllowanceReservationUnits(assignment.model,task.constraints.maxOutputTokens)))
             fail('ALLOWANCE_RESERVATION_MISSING','Free text requires its complete verified weighted allowance hold');
           const id=store.reserve(task.id,'fleet-worker',lease.fence,{usd,...actualLimits,...(allowance?{allowance,allowanceHeadroomUnits:allowanceReserveUnits}:{})});await checkpoint({phase:'reserved',taskId:task.id,model:assignment.model});return id;
         },
-        onDispatch:async id=>{if(timeout.aborted||now()+45000>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient remaining runtime before model dispatch');store.dispatch(id,'fleet-worker',lease.fence);dispatched=true;row.attempted=true;store.event(task.id,'fleet-dispatched',{model:assignment.model,planHash});await checkpoint({phase:'dispatched',taskId:task.id,model:assignment.model});},
+        onDispatch:async id=>{
+          if(timeout.aborted||now()+requestRuntimeMs>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient remaining runtime before model dispatch');
+          store.dispatch(id,'fleet-worker',lease.fence,{beforeDispatch:()=>{
+            if(isPlainClassifier(assignment.model)) {
+              const reason=circuitReason(assignment.model);if(reason)fail(reason,'The minimal protocol candidate cannot be dispatched again');
+              const qualified=store.events().some(e=>e.kind==='plain-protocol-qualified'&&e.detail?.model===assignment.model&&e.detail?.protocol===PLAIN_CLASSIFIER_PROTOCOL);
+              if(!qualified)store.event(task.id,'plain-protocol-probe-dispatched',{attemptId:id,model:assignment.model,protocol:PLAIN_CLASSIFIER_PROTOCOL,planHash});
+            }
+          }});
+          dispatched=true;row.attempted=true;store.event(task.id,'fleet-dispatched',{model:assignment.model,planHash,requestProtocol:isPlainClassifier(assignment.model)?PLAIN_CLASSIFIER_PROTOCOL:null});await checkpoint({phase:'dispatched',taskId:task.id,model:assignment.model});
+        },
         onUsage:async(id,usage)=>{store.settle(id,'fleet-worker',lease.fence,usage);await checkpoint({phase:'settled',taskId:task.id,model:assignment.model});},
         onResponse:record=>{rawArtifact=store.putArtifact(Buffer.from(JSON.stringify(record)));}});
       response=responseValue;
       const saved=store.putArtifact(Buffer.from(JSON.stringify(response)));row.resultHash=saved.hash;row.execution=response.execution||null;
       if(!dispatched)fail('DISPATCH_EVIDENCE_MISSING','An adapter response is not proof that a model request was dispatched');
       if(response.execution?.requestedModel!==assignment.model||response.execution?.returnedModel!==assignment.model)fail('MODEL_MISMATCH','Exact requested and returned model identity is required');
-      if(assignment.contributionKind==='typed-decision'){
+      if(assignment.contributionKind==='plain-classification') {
+        if(response.contributionKind!=='plain-classification'||response.protocol!==PLAIN_CLASSIFIER_PROTOCOL||response.validation?.valid!==true||!response.classification)
+          fail('INVALID_PLAIN_CONTRIBUTION','Minimal protocol did not return a validated original literal classification');
+        if(response.validation.agreesWithExpected!==true)fail('CLASSIFICATION_GROUNDING_MISMATCH','The original literal classification disagrees with trusted routing facts');
+        row.decision='pass';row.decisionBasis='Host comparison of the original literal routing response; no invented role JSON or peer review';
+      }else if(assignment.contributionKind==='typed-decision'){
         if(response.contributionKind!=='typed-decision'||response.validation?.valid!==true||!response.typedDecision)fail('INVALID_TYPED_CONTRIBUTION','Typed route did not return a validated original classification');
         if(response.validation.agreesWithExpected===false)fail('DECISION_GROUNDING_MISMATCH','Original typed classification disagrees with trusted routing facts');
         row.decision=response.validation.agreesWithExpected===true?'pass':'needs-human';
@@ -260,6 +299,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
       applyReview(row,response,target);responses.set(row.taskId,response);
       row.rawResponseHash=rawArtifact?.hash||null;
       store.finish(task.id,'fleet-worker',lease.fence,{status:row.status,result:{resultHash:row.resultHash,rawResponseHash:row.rawResponseHash,decision:row.decision,primaryValidated:true,code:null}});
+      if(isPlainClassifier(assignment.model))store.event(task.id,'plain-protocol-qualified',{model:assignment.model,protocol:PLAIN_CLASSIFIER_PROTOCOL,resultHash:row.resultHash});
       if(!closing)pending.push(row);
     }catch(error){
       row.code=error.code||'FLEET_REVIEW_FAILED';row.status='failed';row.primaryValidated=false;row.errorDetails=error.errorDetails||null;
@@ -269,10 +309,11 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         try{store.finish(task.id,'fleet-worker',lease.fence,{status:row.deferred?'needs-human':'failed',result:{resultHash:row.resultHash,rawResponseHash:rawArtifact?.hash||null,decision:row.decision,primaryValidated:false,code:row.code,errorDetails:row.errorDetails,deferred:row.deferred===true},error:row.code});}catch{row.code='LEASE_LOST_RECONCILIATION_REQUIRED';}
       }
       if(error.status===401){providerBlocked='PROVIDER_AUTH_RECONCILIATION_REQUIRED';store?.event(null,'fleet-provider-circuit-open',{code:row.code,status:401});}
-      else if([400,403].includes(error.status)||['MODEL_MISMATCH','MODEL_UNAVAILABLE','PRICING_UNKNOWN'].includes(row.code))store?.event(null,'fleet-model-circuit-open',{model:assignment.model,code:row.code,status:error.status||null});
+      else if([400,403].includes(error.status)||['MODEL_MISMATCH','MODEL_UNAVAILABLE','PRICING_UNKNOWN'].includes(row.code))store?.event(null,'fleet-model-circuit-open',{model:assignment.model,code:row.code,status:error.status||null,requestProtocol:isPlainClassifier(assignment.model)?PLAIN_CLASSIFIER_PROTOCOL:null});
       if(error.status===429){if(error.quotaScope==='free-allowance')freeCooldown=true;else providerCooldown=true;store?.event(null,'fleet-quota-cooldown',{scope:freeCooldown?'free-allowance':'provider',notBefore:now()+Math.max(60000,error.retryAfterMs||0)});}
       if(store&&store.ledger(task.id).unknownBillingRequests)store.event(null,'fleet-model-ambiguous-billing',{model:assignment.model,taskId:task.id});
     }finally{
+      if(heartbeat!==null)cancelHeartbeat(heartbeat);
       if(store){row.attempted=hasDispatched(store,row.taskId);Object.assign(row,cost(store,row.taskId));}
       await checkpoint({phase:'fleet-task-finished',taskId:task.id,model:assignment.model});
     }
