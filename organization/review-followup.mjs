@@ -282,7 +282,9 @@ export async function runReviewFollowup({stateDir,baselineDir,outputDir,sourceRe
     report.fleet.designReview={...visual,baselineSourceRevision:base.cycle.sourceRevision,baselineEvaluationHash:base.cycle.evaluationHash};
     if(visual.reviewCompleted){
       const hashes=new Set(visual.reviewedImages.map(image=>image.sha256));
-      const markReviewed=row=>row.artifact&&hashes.has(row.artifact.sha256)?{...row,reviewStatus:'complete',reviewerModel:visual.reviewerModel,designReviewDecision:visual.decision}:row;
+      const markReviewed=row=>row.artifact&&hashes.has(row.artifact.sha256)?{...row,
+        artifact:{...row.artifact,reviewStatus:'reviewed',reviewerModel:visual.reviewerModel},
+        reviewStatus:'complete',reviewerModel:visual.reviewerModel,designReviewDecision:visual.decision}:row;
       report.fleet.agents=report.fleet.agents.map(markReviewed);
       report.fleet.design.agents=report.fleet.design.agents.map(markReviewed);
       report.fleet.design.artifacts=report.fleet.design.artifacts.map(image=>hashes.has(image.sha256)?{...image,reviewStatus:'reviewed',reviewerModel:visual.reviewerModel}:image);

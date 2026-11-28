@@ -87,6 +87,7 @@ test('follow-up uses actual retained pixels and strict CEO facts with only two n
   const manifest=JSON.parse(readFileSync(join(f.output,'design/manifest.json')));
   assert.equal(manifest.agents.length,6);assert.equal(manifest.artifacts.length,3);assert.equal(manifest.galleryPath,'design/review-gallery.html');
   assert.ok(manifest.agents.filter(a=>a.artifact).every(a=>a.reviewStatus==='complete'&&a.reviewerModel==='gpt-6.1-terra'));
+  assert.ok(manifest.agents.filter(a=>a.artifact).every(a=>a.artifact.reviewStatus==='reviewed'&&a.artifact.reviewerModel==='gpt-6.1-terra'));
   assert.equal(report.fleet.agents.find(a=>a.model==='nano-banana-2').code,'ORIGINAL_IMAGE_FAILURE');
   assert.equal(report.budget.totalRequests,3);assert.equal(report.budget.unknownBillingRequests,1);assert.ok(report.budget.committedUsd>=1.8);
   assert.equal(report.decision.productionReleaseApproved,false);assert.equal(report.decision.fieldAccuracyValidated,false);
@@ -144,6 +145,8 @@ test('explicit qualification admits three distinct variants, retains all holds/h
   assert.equal(manifest.agents.length,6);assert.equal(manifest.artifacts.length,6);
   assert.deepEqual(manifest.artifacts.map(a=>a.sha256),report.fleet.design.artifacts.map(a=>a.sha256));
   assert.ok(manifest.agents.filter(a=>a.artifact).every(a=>a.reviewStatus==='complete'&&a.reviewerModel==='gpt-6.1-terra'));
+  assert.ok(manifest.agents.filter(a=>a.artifact).every(a=>a.artifact.reviewStatus==='reviewed'&&a.artifact.reviewerModel==='gpt-6.1-terra'));
+  assert.ok(report.fleet.agents.filter(a=>a.artifact).every(a=>a.artifact.reviewStatus==='reviewed'&&a.artifact.reviewerModel==='gpt-6.1-terra'));
   assert.ok(imageCalls.every(call=>call.prompt.includes('distinct, simplified qualification concept')&&call.task.sourceRevision===OLD&&call.task.workflowId==='fleet-retained'));
   for(const model of ['nano-banana-2','gpt-image-2.6-flare','gpt-image-2.6-sunburst']){
     const row=report.fleet.agents.find(r=>r.model===model);assert.equal(row.history.at(-1).code,'UPSTREAM_HTTP');
