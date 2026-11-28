@@ -36,6 +36,7 @@ const state = {
   address: '',
   location: null,          // {lat,lng}
   locationEpoch: 0, addressRequestEpoch: 0, solarRequestEpoch: 0,
+  solarIssue: null,        // failed lookup/recovery UI, never accepted roof data
   defaultPitch: 6,
   waste: 10,
   facets: [],              // {id, name, pitch, shape(Polygon), twoStory, twoLayer, excluded}
@@ -362,7 +363,18 @@ function archiveLocationJob() {
   } catch (_) { /* the in-memory snapshot remains available if browser storage is full */ }
 }
 function setLocation(loc, label) {
+  state.addressRequestEpoch++;
   const moved = state.location && (state.location.lat !== loc.lat || state.location.lng !== loc.lng);
+  const selectionChanged = state.location && (!!state.location.selectedByPin !== !!loc.selectedByPin || state.location.precision !== loc.precision || !!state.location.partial !== !!loc.partial);
+  if (!moved && selectionChanged) {
+    // Relocking the same point is a new selection intent. Cancel stale lookups
+    // without throwing away geometry the user has already drawn.
+    state.locationEpoch = locationGeneration() + 1;
+    if (state.solar) {
+      try { assertSolarSelection(state.solar, loc); }
+      catch (_) { state.solar = null; state.otherSolar = []; clearSolar(); $('#btnAuto').disabled = true; }
+    }
+  }
   if (moved) {
     archiveLocationJob();
     state.locationEpoch = locationGeneration() + 1;
@@ -374,11 +386,16 @@ function setLocation(loc, label) {
   }
 
   state.location = loc; state.address = label || `${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
+  if (typeof pin !== 'undefined' && pin.picking && typeof pinStopPicking === 'function') pinStopPicking();
+  state.solarIssue = null;
   $('#address').value = state.address;
   localStorage.setItem('rm.lastLoc', JSON.stringify(loc));
   map.setCenter(loc); map.setZoom(20);
   $('#btnSolar').disabled = false;
+  $('#btnSolar').textContent = 'Get roof data';
   $('#btnScan').disabled = false;
+  renderSolar();
+  recompute();
   $('#extLinks').hidden = false;
   $('#lnkStreet').href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${loc.lat},${loc.lng}`;
   $('#lnkEarth').href = `https://earth.google.com/web/@${loc.lat},${loc.lng},0a,120d,35y,0h,45t,0r`;
@@ -403,13 +420,44 @@ function assertSolarSelection(record, loc) {
   const north = Math.max(bb.sw.latitude - loc.lat, 0, loc.lat - bb.ne.latitude) * k.ky;
   // The 6 m ceiling is the existing building-selection review threshold. Do not
   // draw a different building when an explicit roof pin falls outside its box.
-  if (Math.hypot(east, north) > 6) throw new Error('Google returned a different building from the selected roof pin. Pick the intended roof or use another dated source; a neighbouring roof will not be traced.');
+  const distanceM = Math.hypot(east, north);
+  if (distanceM > 6) {
+    const error = new Error('Google returned a different building from the selected roof pin. Pick the intended roof or use another dated source; a neighbouring roof will not be traced.');
+    error.code = 'SOLAR_SELECTION_MISMATCH'; error.distanceM = distanceM;
+    throw error;
+  }
+}
+function renderSolarFailure(issue) {
+  const out = $('#solarOut'), mismatch = issue.code === 'SOLAR_SELECTION_MISMATCH';
+  out.innerHTML = `<div role="status"><b>${mismatch ? 'Roof model does not match your selection' : 'Roof data unavailable'}</b>
+    <p class="${mismatch ? 'muted' : 'err'}">${mismatch ? 'The address point may be off the roof, or Google may have returned another building. The mismatched model was not used.' : esc(issue.message)}</p>
+    <p class="small">Pick the intended roof to retry, or trace its facets manually without Solar data. Failed lookups do not remove your drawing.</p>
+    <div class="row wrap"><button id="btnSolarPickRetry" class="primary">Pick roof and retry</button><button id="btnSolarManual">Trace manually</button><button id="btnSolarRetry" class="small">Retry roof data</button></div></div>`;
+  $('#btnSolarPickRetry').onclick = () => {
+    if (typeof pinStartPicking !== 'function' || !map) { toast('Load the map before choosing the roof.', true); return; }
+    pinStartPicking({ afterLock: runSolar });
+    const auto = $('#panelAuto'); if (auto) auto.open = false;
+    toast('Click a visible surface of the intended roof. Roof data will retry once after the pin is locked.');
+  };
+  $('#btnSolarManual').onclick = () => {
+    if (typeof pinStopPicking === 'function') pinStopPicking();
+    state.solarRequestEpoch++;
+    $('#btnSolar').disabled = !state.location; $('#btnSolar').textContent = 'Get roof data';
+    const panel = $('#panelTrace'); if (panel) panel.open = true;
+    setTool('facet');
+    const hint = 'Manual tracing: click each roof corner, then press Enter or Finish. Set and verify pitch separately.';
+    setHint(hint); toast(hint);
+    panel?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  };
+  $('#btnSolarRetry').onclick = runSolar;
 }
 async function runSolar() {
   if (!state.location) return;
   const out = $('#solarOut');
   const epoch = locationGeneration(), loc = { ...state.location }, request = ++state.solarRequestEpoch;
   const current = () => epoch === locationGeneration() && request === state.solarRequestEpoch;
+  const button = $('#btnSolar'); button.disabled = true; button.textContent = 'Getting roof data...';
+  $('#btnAuto').disabled = true; state.solarIssue = null;
   out.innerHTML = '<span class="muted">Fetching roof model...</span>';
   try {
     const prev = (state.solar && state.solar.name) || (state.trace && state.trace.buildingName) || null;
@@ -417,13 +465,21 @@ async function runSolar() {
     if (!current()) return;
     assertSolarSelection(result, loc);
     state.solar = result;
+    state.solarIssue = null;
     // another building: what a reviewer approved, confirmed or looked at for the last one does not apply to this one
     if (prev && state.solar && state.solar.name !== prev) { state.altFusion = null; state.acceptedHidden = []; state.altViews = []; state.evidence = []; if (window.rmAltView) { if (window.rmAltView.state.isOpen) window.rmAltView.close(); window.rmAltView.reset(); } }
     drawSolar(); renderSolar(); recompute();
     $('#btnAuto').disabled = false;
   } catch (err) {
     if (!current()) return;
-    out.innerHTML = `<span class="err">${esc(err.message || err)}</span>`;
+    // Keep user-drawn geometry, but never leave rejected Solar quantities or
+    // overlays active after a failed lookup.
+    state.solar = null; state.otherSolar = []; clearSolar();
+    $('#btnAuto').disabled = true;
+    state.solarIssue = {code: err.code || 'SOLAR_LOOKUP_FAILED', message: String(err.message || err), status: err.status || null};
+    renderSolarFailure(state.solarIssue); recompute();
+  } finally {
+    if (current()) { button.disabled = !state.location; button.textContent = 'Get roof data'; }
   }
 }
 // Probe a ring of points around the pin and collect every distinct building Google knows about:
@@ -479,6 +535,7 @@ function solarSummaryOf(resp) {
 }
 function solarSummary() { return solarSummaryOf(state.solar); }
 function renderSolar() {
+  if (state.solarIssue) { renderSolarFailure(state.solarIssue); return; }
   const s = solarSummary();
   const out = $('#solarOut');
   if (!s && !state.otherSolar.length) { out.innerHTML = ''; return; }
@@ -709,6 +766,8 @@ function select(sel) {
   if (labels) labels.setItems(baseLabels());
 }
 function clearAll() {
+  state.solarIssue = null;
+  $('#btnSolar').textContent = 'Get roof data';
   if (draft) cancelDraft();
   for (const f of state.facets) f.shape.setMap(null);
   for (const e of state.edges) e.shape.setMap(null);

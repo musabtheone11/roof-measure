@@ -99,9 +99,12 @@ jobs:
           node tools/dev/ai-report-test.mjs
           node tools/dev/static-ai-test.mjs
           node tools/dev/estimate-text-test.mjs
+          node tools/dev/solar-selection-recovery-test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: synthetic-review-browser-artifacts
-          path: .devcache/ai-report-tests/
+          path: |
+            .devcache/ai-report-tests/
+            .devcache/solar-selection-recovery/
           if-no-files-found: ignore
