@@ -2,24 +2,24 @@
   "schemaVersion": 1,
   "repository": "musabtheone11/roof-measure",
   "workflow": "roof-cloud.yml",
-  "generatedAt": "2026-11-27T23:05:03.675Z",
+  "generatedAt": "2026-11-28T00:05:24.695Z",
   "sourceRevision": "1ed393399b72cb9ee413d18c1f3df6bbedd9e2a1",
   "run": {
-    "id": "46080329353",
+    "id": "46085806692",
     "attempt": 1,
-    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46080329353",
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46085806692",
     "pipelineResult": "success",
-    "startedAt": "2026-11-27T23:03:56.000Z"
+    "startedAt": "2026-11-28T00:03:15.000Z"
   },
   "reportArtifact": {
-    "name": "roof-cloud-reports-46080329353-1",
+    "name": "roof-cloud-reports-46085806692-1",
     "available": true,
-    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46080329353#artifacts"
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46085806692#artifacts"
   },
   "evaluation": {
     "status": "review-required",
     "attempted": 12,
-    "diagnosticPasses": 5,
+    "diagnosticPasses": 4,
     "traceFailures": 0,
     "generatedCustomerPDFs": 12,
     "pdfChecked": 12,
@@ -32,14 +32,14 @@
     {
       "role": "critique",
       "model": "gpt-6.2-astra",
-      "status": "disabled",
-      "decision": null
+      "status": "complete",
+      "decision": "needs-human"
     },
     {
       "role": "ceo",
       "model": "claude-opus-5.5",
-      "status": "disabled",
-      "decision": null
+      "status": "rejected",
+      "decision": "reject"
     }
   ],
   "scope": "Generated synthetic monitoring only; no field accuracy certification or production code promotion"
