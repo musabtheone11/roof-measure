@@ -98,6 +98,7 @@ jobs:
           node tools/dev/pdf-ui-test.mjs
           node tools/dev/ai-report-test.mjs
           node tools/dev/static-ai-test.mjs
+          node tools/dev/agents-dashboard-test.mjs
           node tools/dev/solar-selection-recovery-test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
@@ -106,4 +107,5 @@ jobs:
           path: |
             .devcache/ai-report-tests/
             .devcache/solar-selection-recovery/
+            .devcache/agents-dashboard/
           if-no-files-found: ignore

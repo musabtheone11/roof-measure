@@ -1,0 +1,176 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {chromium} from 'playwright';
+import {testServer} from './ui-test-server.mjs';
+
+const STATUS_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-status.json';
+const artifacts=path.resolve('.devcache/agents-dashboard');
+await fs.mkdir(artifacts,{recursive:true});
+const now=Date.now(),teams=['Roof measurement engineering','Sketch and document interpretation','Independent verification','Reports and visual layout','Reference data','Real-case testing','Operations'];
+const statuses=['complete','running','blocked','disabled','needs-human','queued'];
+const unavailableModels=['claude-fable-5.1','free/jev-1.13','gemini-3.1-pro','gpt-5.6-terra','gpt-6-astra','gpt-6-luna-decisions','gpt-6.1-sol','kimi-k3','subq-snap-preview'];
+const fixture={schemaVersion:1,repository:'musabtheone11/roof-measure',generatedAt:new Date(now).toISOString(),sourceRevision:'a'.repeat(40),
+  run:{id:'12345',attempt:2,url:'https://github.com/musabtheone11/roof-measure/actions/runs/12345',pipelineResult:'success',startedAt:new Date(now-60_000).toISOString()},
+  reportArtifact:{available:true,url:'https://github.com/musabtheone11/roof-measure/actions/runs/12345#artifacts'},
+  evaluation:{status:'review-required',attempted:12,diagnosticPasses:9,generatedCustomerPDFs:12,fieldAccuracyValidated:false},
+  fleet:{mode:'all-models',catalogCheckedAt:new Date(now-3600_000).toISOString(),catalogHash:'b'.repeat(64),rosterCount:45,assignedCount:45,attemptedCount:30,validCount:24,blockedCount:8,reviewedCount:12,unavailableModels},
+  scope:'SYNTHETIC DASHBOARD TEST FIXTURE — these are illustrative statuses, not live agent activity or field accuracy evidence.',
+  models:Array.from({length:45},(_,index)=>({model:`fixture/model-${String(index+1).padStart(2,'0')}${index===44?'-with-a-long-explicit-model-identifier-for-responsive-layout':''}`,team:teams[index%teams.length],role:index%teams.length===0?'geometry-engineer':'evidence-reviewer',
+    task:index%teams.length===0?'Confirm shared edges, closed facet polygons and independently calculated plan and sloped areas.':'Cross-check the recorded evidence, identify missing information and produce a traceable review for the next team.',
+    reviewerModel:`fixture/model-${String((index+1)%45+1).padStart(2,'0')}`,status:statuses[index%statuses.length],reviewStatus:index%3===0?'complete':'pending',
+    ...(index%statuses.length===2||index%statuses.length===3?{code:'CLOUD_SECRET_NOT_CONFIGURED'}:{}),decision:index%statuses.length===0?'revise':null,reportedUsd:index%statuses.length===0?.0007:null}))};
+const server=await testServer(process.argv[2]);
+let browser;
+try {
+  browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath()});
+  const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
+  const errors=[],unexpected=[],requests=[];
+  let response={status:200,body:fixture};
+  await context.route('**/*',async route=>{
+    const url=route.request().url();
+    if(url===STATUS_URL) {
+      requests.push({url,method:route.request().method(),headers:route.request().headers()});
+      await route.fulfill({status:response.status,contentType:'application/json',body:JSON.stringify(response.body)});
+    } else if(new URL(url).origin===new URL(server.baseURL).origin)await route.continue();
+    else {unexpected.push(url);await route.abort();}
+  });
+  async function open({clock=false}={}) {
+    const page=await context.newPage();page.setDefaultTimeout(10_000);page.on('pageerror',error=>errors.push(error.message));
+    if(clock) {
+      await page.clock.install({time:new Date(now)});
+      await page.addInitScript(()=>Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>window.__fixtureVisibility||'visible'}));
+    }
+    const document=await page.goto(server.baseURL+'/agents.html');
+    assert.equal(document.status(),200,'The actual app server must serve agents.html.');
+    return page;
+  }
+  async function loaded(page,count=45) {await page.waitForFunction(expected=>document.querySelectorAll('.agent-card').length===expected,count);}
+  async function refresh(page,next) {
+    response=next;
+    const network=page.waitForResponse(STATUS_URL);
+    await page.click('#refresh');await network;
+    await page.waitForFunction(()=>!document.querySelector('#refresh').disabled);
+  }
+  async function noClipping(page) {
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Dashboard must not scroll horizontally.');
+    const outside=await page.locator('.agent-card,.agent-card .badge').evaluateAll(elements=>elements.filter(element=>{
+      const box=element.getBoundingClientRect();return box.left<0||box.right>innerWidth;
+    }).length);
+    assert.equal(outside,0,'Cards and status labels must fit the viewport.');
+  }
+
+  const page=await open();await loaded(page);
+  assert.equal(await page.locator('h1').innerText(),'Roof agent activity');
+  assert.match(await page.locator('#scope').innerText(),/SYNTHETIC DASHBOARD TEST FIXTURE/);
+  assert.equal(await page.locator('.coverage-item').first().locator('strong').innerText(),'45');
+  assert.equal(await page.locator('.coverage-item[data-kind="running"] strong').innerText(),'8');
+  assert.match(await page.locator('#fleet-coverage').innerText(),/Assigned: 45 · Inference attempted: 30/);
+  assert.match(await page.locator('#fleet-coverage').innerText(),/do not establish roofing accuracy/);
+  assert.equal(await page.locator('#unavailable-count').innerText(),'(9)');
+  await page.click('#unavailable-models > summary');
+  assert.deepEqual(await page.locator('#unavailable-list li').allTextContents(),unavailableModels);
+  assert.match(await page.locator('#unavailable-models').innerText(),/They were not attempted; no substitute model was used/);
+  assert.equal(await page.locator('.agent-card').count(),45,'Documented unavailable IDs must remain separate from assigned models.');
+  assert.equal(await page.locator('.coverage-item').first().locator('strong').innerText(),'45');
+  assert.match(await page.locator('#fleet-coverage').innerText(),/Assigned: 45 · Inference attempted: 30/);
+  await page.locator('#unavailable-models').evaluate(element=>element.scrollIntoView({block:'start'}));
+  await page.screenshot({path:path.join(artifacts,'unavailable-catalog-models.png')});
+  await page.setViewportSize({width:390,height:844});await noClipping(page);
+  await page.setViewportSize({width:1440,height:1000});
+  await page.click('#unavailable-models > summary');await page.evaluate(()=>scrollTo(0,0));
+  assert.equal(await page.locator('#run-link').getAttribute('href'),fixture.run.url);
+  assert.equal(await page.locator('#evidence-link').getAttribute('href'),fixture.reportArtifact.url);
+  assert.match(await page.locator('.agent-card').first().innerText(),/Independent reviewer\nfixture\/model-02/);
+  assert.match(await page.locator('.agent-card').first().innerText(),/Recorded review status: Complete/);
+  await noClipping(page);
+  await page.screenshot({path:path.join(artifacts,'desktop-overview.png')});
+  await page.locator('#team-heading').evaluate(element=>element.scrollIntoView({block:'start'}));
+  await page.screenshot({path:path.join(artifacts,'desktop-teams.png')});
+  await page.setViewportSize({width:390,height:844});await noClipping(page);
+  await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(artifacts,'mobile-overview.png')});
+  await page.locator('.agent-card').first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(artifacts,'mobile-agent.png')});
+  await page.setViewportSize({width:1440,height:1000});
+
+  await page.fill('#search','fixture/model-14');await loaded(page,2);
+  // Search includes the reviewer assignment, so both author14 and author13 match.
+  assert.match(await page.locator('#shown').innerText(),/Showing 2 of 45/);
+  await page.fill('#search','');await page.selectOption('#team',teams[0]);await loaded(page,fixture.models.filter(model=>model.team===teams[0]).length);
+  await page.selectOption('#team','');await page.selectOption('#status','blocked');await loaded(page,8);
+  assert.equal(await page.locator('.agent-card:not([data-status="blocked"])').count(),0);
+  await page.selectOption('#status','');await loaded(page);
+
+  const legacy={...fixture,models:[{model:'gpt-6.2-astra',role:'critique',status:'complete',decision:'revise'},{model:'claude-opus-5.5',role:'ceo',status:'disabled'}]};delete legacy.fleet;
+  await refresh(page,{status:200,body:legacy});await loaded(page,2);
+  assert(await page.locator('#legacy').isVisible());
+  assert.match(await page.locator('#legacy').innerText(),/models absent from this record are not counted/);
+  assert.equal(await page.locator('.coverage-item').first().locator('strong').innerText(),'2');
+  assert.equal(await page.locator('#fleet-coverage').isVisible(),false);
+  assert.equal(await page.locator('#unavailable-models').isVisible(),false);
+  assert.equal(await page.locator('#unavailable-list li').count(),0);
+  assert.match(await page.locator('.agent-card').first().innerText(),/Independent reviewer\nNot recorded/);
+  assert.equal(await page.locator('.agent-card').first().getAttribute('data-status'),'complete');
+
+  const blocked={...fixture,fleet:{...fixture.fleet,attemptedCount:0,validCount:0,blockedCount:45,reviewedCount:0},models:fixture.models.map(model=>({...model,status:'blocked',code:'CLOUD_SECRET_NOT_CONFIGURED',decision:null,reportedUsd:null}))};
+  await refresh(page,{status:200,body:blocked});await loaded(page);
+  assert.match(await page.locator('#connection').innerText(),/No model is recorded as running\. 45 blocked/);
+  assert.equal(await page.locator('.coverage-item[data-kind="running"] strong').innerText(),'0');
+  assert.match(await page.locator('#fleet-coverage').innerText(),/Inference attempted: 0/);
+  assert.equal(await page.locator('.blocker code').count(),45);
+  await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(artifacts,'all-blocked.png')});
+  const deferred={...blocked,models:blocked.models.map((model,index)=>({...model,status:'deferred',code:index%2?'BUDGET_LIMIT':'CYCLE_REQUEST_LIMIT'}))};
+  await refresh(page,{status:200,body:deferred});await loaded(page);
+  assert.equal(await page.locator('.badge[data-state="deferred"]').count(),45);
+  assert.equal(await page.locator('.coverage-item[data-kind="running"] strong').innerText(),'0');
+  assert.match(await page.locator('#coverage-note').innerText(),/45 deferred \(not running\)/);
+  assert.match(await page.locator('.blocker').first().innerText(),/bounded request limit/);
+  await refresh(page,{status:503,body:{error:'Synthetic test outage'}});
+  assert.equal(await page.locator('#agents .agent-card').count(),45,'A refresh failure must retain and identify the last known record.');
+  assert.match(await page.locator('#connection').innerText(),/last successfully loaded record remains/);
+  assert.equal(await page.locator('#connection').getAttribute('data-kind'),'error');
+
+  const unavailable=await open();
+  await unavailable.waitForFunction(()=>document.querySelector('#connection').dataset.kind==='error');
+  assert.equal(await unavailable.locator('.agent-card').count(),0);
+  assert.equal(await unavailable.locator('.coverage-item').count(),0,'Unknown activity must not be represented by fabricated zeros.');
+  assert.match(await unavailable.locator('#empty').innerText(),/Agent status is unavailable/);
+  await unavailable.screenshot({path:path.join(artifacts,'unavailable.png')});await unavailable.close();
+
+  const stale={...fixture,generatedAt:new Date(now-4*24*3600_000).toISOString(),models:fixture.models.map(model=>({...model,status:'running'}))};
+  await refresh(page,{status:200,body:stale});
+  assert.match(await page.locator('#connection').innerText(),/Status freshness needs review/);
+  assert.match(await page.locator('#connection').innerText(),/not current activity/);
+  const unsafe={...fixture,run:{...fixture.run,url:'javascript:alert(1)'},reportArtifact:{available:true,url:'https://example.invalid/evidence'},models:[{...fixture.models[0],model:'fixture/<img src=x onerror="alert(1)">',team:'<script>not executable</script>',task:'<img src=x onerror="alert(1)">',reviewerModel:'fixture/<img src=x onerror="alert(1)">'}]};
+  await refresh(page,{status:200,body:unsafe});await loaded(page,1);
+  assert.equal(await page.locator('img,script:not([src="agents.js"])').count(),0,'Public strings must remain inert text.');
+  assert.match(await page.locator('.reviewer-note').innerText(),/independence is not established/);
+  assert.match(await page.locator('#run-link').getAttribute('href'),/actions\/workflows\/roof-cloud.yml$/);
+  assert.equal(await page.locator('#evidence-link').getAttribute('href'),null);
+  await noClipping(page);await page.close();
+
+  // Run the real browser timer under a virtual clock. Hidden tabs must not poll;
+  // visible polling is bounded to one request a minute, with manual refresh allowed.
+  response={status:200,body:fixture};
+  const polling=await open({clock:true});await loaded(polling);
+  let before=requests.length;
+  await polling.clock.runFor(59_000);assert.equal(requests.length,before);
+  const automatic=polling.waitForResponse(STATUS_URL);await polling.clock.runFor(1000);await automatic;
+  await polling.waitForFunction(()=>!document.querySelector('#refresh').disabled);
+  assert.equal(requests.length,before+1);
+  await refresh(polling,response);before=requests.length;
+  await polling.evaluate(()=>{window.__fixtureVisibility='hidden';document.dispatchEvent(new Event('visibilitychange'));});
+  await polling.clock.runFor(180_000);assert.equal(requests.length,before,'Hidden pages must not poll.');
+  const resumed=polling.waitForResponse(STATUS_URL);
+  await polling.evaluate(()=>{window.__fixtureVisibility='visible';document.dispatchEvent(new Event('visibilitychange'));});
+  await polling.clock.runFor(1);await resumed;
+  await polling.waitForFunction(()=>!document.querySelector('#refresh').disabled);
+  assert.equal(requests.length,before+1);
+  await polling.clock.runFor(59_000);assert.equal(requests.length,before+1,'Visibility changes must not create duplicate polling loops.');
+  await polling.close();
+
+  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
+  assert(requests.every(request=>request.method==='GET'&&!request.headers.authorization),'Dashboard must only read public status without credentials.');
+  await fs.writeFile(path.join(artifacts,'dashboard-check.json'),JSON.stringify({fixture:'Synthetic offline dashboard responses; not live model activity',models:45,documentedUnavailableModels:9,unavailableNotCountedAsAssignedOrAttempted:true,legacyTwoModelRecord:true,blockedAndDisabledExplicit:true,inferenceVersusAssignmentCounts:true,fetchFailurePreservesPriorRecord:true,initialFailureDoesNotInventCounts:true,staleSnapshotWarning:true,inertPublicStringsAndProjectOnlyLinks:true,desktopAndMobileInspected:true,visibleOnlyMinutePolling:true,modelInferenceCalls:0,browserErrors:errors},null,2));
+  console.log('Chromium:45model assignments, legacy schema, blocked/disabled state, inference coverage, refresh failure, stale data, inert strings, desktop/mobile layout and visible-only60s polling passed.');
+  console.log('Synthetic dashboard screenshots: '+artifacts);
+} finally {await browser?.close();await server.close();}
