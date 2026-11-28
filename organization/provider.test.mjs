@@ -21,6 +21,9 @@ test('design visual review binds bounded image bytes to task hashes and refuses 
   await requestOrganizationRole(t,{...f.options,images:[{mimeType:'image/png',data:png}]});
   const user=JSON.parse(f.calls.find(c=>c.url.endsWith('/chat/completions')).init.body).messages[1].content;
   assert.equal(user[1].type,'image_url');assert.match(user[1].image_url.url,/^data:image\/png;base64,/);
+  await requestOrganizationRole(t,{...f.options,images:Array.from({length:6},()=>({mimeType:'image/png',data:png}))});
+  const fullReview=JSON.parse(f.calls.filter(c=>c.url.endsWith('/chat/completions')).at(-1).init.body);
+  assert.match(fullReview.messages[0].content,/at most 6 findings/,'Six-image review must allow one separate finding per image.');
   const before=f.calls.length;
   await assert.rejects(requestOrganizationRole(task,{...f.options,images:[{mimeType:'image/png',data:png}]}),{code:'INVALID_DESIGN_IMAGES'});
   await assert.rejects(requestOrganizationRole(t,{...f.options,model:'free/glm-5.3',images:[{mimeType:'image/png',data:png}]}),{code:'VISION_UNSUPPORTED'});
