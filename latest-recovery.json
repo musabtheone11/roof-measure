@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "repository": "musabtheone11/roof-measure",
+  "workflow": "roof-cloud.yml",
+  "executionProfile": "allowance-recovery",
+  "generatedAt": "2026-11-28T16:19:43.534Z",
+  "sourceRevision": "3eff070d1b7ab8230e8bc0ecb941499caf199b14",
+  "run": {
+    "id": "46164311066",
+    "attempt": 1,
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46164311066",
+    "pipelineResult": "success",
+    "startedAt": "2026-11-28T16:17:00.000Z"
+  },
+  "reportArtifact": {
+    "name": "roof-cloud-reports-46164311066-1",
+    "available": true,
+    "url": "https://github.com/musabtheone11/roof-measure/actions/runs/46164311066#artifacts"
+  },
+  "models": [
+    {
+      "model": "free/drex-v2.0",
+      "status": "complete",
+      "attempted": true,
+      "contributionValidated": true,
+      "reviewStatus": "blocked",
+      "code": null
+    },
+    {
+      "model": "free/gemini-4-hydrogen",
+      "status": "complete",
+      "attempted": true,
+      "contributionValidated": true,
+      "reviewStatus": "blocked",
+      "code": null
+    },
+    {
+      "model": "free/hy4-flash",
+      "status": "needs-human",
+      "attempted": true,
+      "contributionValidated": true,
+      "reviewStatus": "blocked",
+      "code": null
+    }
+  ],
+  "summary": {
+    "selectedCount": 3,
+    "attemptedCount": 3,
+    "validCount": 3,
+    "reviewedCount": 0
+  },
+  "scope": "Recovery journal for three selected subscription routes; counts cover only the model records published by this run. Broad subscription, full-roster and productive-work journals remain separately dated. No field accuracy or production approval."
+}
