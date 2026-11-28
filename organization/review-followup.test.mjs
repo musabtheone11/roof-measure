@@ -37,7 +37,7 @@ function fixture(t){
     attempted:m.id!=='claude-opus-5.5',status:m.id==='claude-opus-5.5'?'blocked':m.id==='gpt-6.1-terra'?'failed':'complete',
     primaryValidated:!['claude-opus-5.5','gpt-6.1-terra'].includes(m.id),code:m.id==='claude-opus-5.5'?'BUDGET_LIMIT':m.id==='gpt-6.1-terra'?'ORIGINAL_FAILURE':null,
     reviewStatus:'pending',decision:null,reportedUsd:0}));
-  agents.push(...DESIGN_CATALOG.map(m=>({model:m.id,role:'reporting',taskId:'old-design-'+hash(m.id).slice(0,20),attempted:true,
+  agents.push(...DESIGN_CATALOG.map(m=>({model:m.id,role:'reporting',taskId:artifacts.find(a=>a.model===m.id)?.taskId||'old-design-'+hash(m.id).slice(0,20),attempted:true,
     status:artifacts.some(a=>a.model===m.id)?'complete':'failed',code:artifacts.some(a=>a.model===m.id)?null:'ORIGINAL_IMAGE_FAILURE',
     primaryValidated:artifacts.some(a=>a.model===m.id),artifact:artifacts.find(a=>a.model===m.id)||null,reviewStatus:'pending'})));
   const metrics={attempted:12,diagnosticPasses:6,reviewRequired:6,generatedCustomerPDFs:12,traceFailures:0,excludedCases:0,misclassifiedEdges:0,
@@ -46,7 +46,9 @@ function fixture(t){
     engineSourceHashes:summary.engineSourceHashes,metricsHash:hash(metrics),verificationPolicyHash:hash(summary.policy)};
   const evaluationHash=hash(identity),cycle={schemaVersion:1,protocol:identity.protocol,sourceRevision:OLD,seed:123,count:12,evaluationHash,metrics,pdfReview:{checked:12,failed:0},browserStatus:'passed',
     budget:{totalRequests:1,reportedUsd:0,committedUsd:1.8,unknownBillingRequests:1},fleet:{planHash:'9'.repeat(64),agents,coverage:{},
-      design:{workflowId:'fleet-retained',evaluationHash,sourceRevision:OLD,artifacts,agents:agents.filter(a=>a.role==='reporting'),galleryPath:'design/gallery.html'},
+      // Real generator manifests omit primaryValidated; the trusted top-level
+      // fleet rows carry that derived flag for retained raster validation.
+      design:{workflowId:'fleet-retained',evaluationHash,sourceRevision:OLD,artifacts,agents:agents.filter(a=>a.role==='reporting').map(({primaryValidated,...row})=>row),galleryPath:'design/gallery.html'},
       designReview:{attempted:false,status:'failed',reviewCompleted:false,code:'BUDGET_LIMIT'}},reviews:agents,
     decision:{status:'review-required',fieldAccuracyValidated:false,productionReleaseApproved:false}};
   file('cycle.json',cycle);file('design-review.json',cycle.fleet.designReview);
@@ -80,6 +82,11 @@ test('follow-up uses actual retained pixels and strict CEO facts with only two n
   assert.equal(report.fleet.agents.find(a=>a.model==='gpt-6.1-terra').code,'ORIGINAL_FAILURE');
   assert.equal(report.fleet.agents.find(a=>a.model==='gpt-6.1-terra').additionalReviews.length,1);
   assert.equal(report.fleet.designReview.reviewCompleted,true);assert.equal(report.fleet.agents.filter(a=>a.artifact&&a.reviewStatus==='complete').length,3);
+  assert.equal(report.fleet.agents.filter(a=>a.artifact&&a.primaryValidated).length,3);
+  assert.equal(report.fleet.coverage.validContributions,report.fleet.agents.filter(a=>a.primaryValidated).length);
+  const manifest=JSON.parse(readFileSync(join(f.output,'design/manifest.json')));
+  assert.equal(manifest.agents.length,6);assert.equal(manifest.artifacts.length,3);assert.equal(manifest.galleryPath,'design/review-gallery.html');
+  assert.ok(manifest.agents.filter(a=>a.artifact).every(a=>a.reviewStatus==='complete'&&a.reviewerModel==='gpt-6.1-terra'));
   assert.equal(report.fleet.agents.find(a=>a.model==='nano-banana-2').code,'ORIGINAL_IMAGE_FAILURE');
   assert.equal(report.budget.totalRequests,3);assert.equal(report.budget.unknownBillingRequests,1);assert.ok(report.budget.committedUsd>=1.8);
   assert.equal(report.decision.productionReleaseApproved,false);assert.equal(report.decision.fieldAccuracyValidated,false);
@@ -112,7 +119,7 @@ test('unsupported CEO approval is retained as a failed contribution and never pr
 });
 function qualificationOptions(f,imageCalls,{failModel}={}){
   for(const row of f.cycle.fleet.design.agents)if(!row.artifact)row.code='UPSTREAM_HTTP';
-  // Fixture rows share references, as do the real baseline's distinct copies by model identity.
+  for(const row of f.cycle.fleet.agents)if(row.role==='reporting'&&!row.artifact)row.code='UPSTREAM_HTTP';
   f.file('cycle.json',f.cycle);
   return {...f.options,generateMissingDesigns:true,minimumDispatchIntervalMs:0,
     auditCatalog:async()=>({readyIds:DESIGN_CATALOG.map(m=>m.id),blocked:[],hash:'8'.repeat(64),checkedAt:new Date().toISOString()}),
@@ -131,6 +138,12 @@ test('explicit qualification admits three distinct variants, retains all holds/h
   assert.equal(report.newlyGeneratedConcepts,3);assert.equal(report.followup.allowedAdditionalRequests,5);assert.equal(report.budget.totalRequests,6);
   assert.equal(report.budget.unknownBillingRequests,1);assert.ok(report.budget.committedUsd>=1.8);
   assert.equal(report.fleet.agents.length,51);assert.equal(report.fleet.design.artifacts.length,6);assert.equal(report.fleet.design.coverage.generated,6);
+  assert.equal(report.fleet.agents.filter(a=>a.artifact&&a.primaryValidated).length,6);
+  assert.equal(report.fleet.coverage.validContributions,report.fleet.agents.filter(a=>a.primaryValidated).length);
+  const manifest=JSON.parse(readFileSync(join(f.output,'design/manifest.json')));
+  assert.equal(manifest.agents.length,6);assert.equal(manifest.artifacts.length,6);
+  assert.deepEqual(manifest.artifacts.map(a=>a.sha256),report.fleet.design.artifacts.map(a=>a.sha256));
+  assert.ok(manifest.agents.filter(a=>a.artifact).every(a=>a.reviewStatus==='complete'&&a.reviewerModel==='gpt-6.1-terra'));
   assert.ok(imageCalls.every(call=>call.prompt.includes('distinct, simplified qualification concept')&&call.task.sourceRevision===OLD&&call.task.workflowId==='fleet-retained'));
   for(const model of ['nano-banana-2','gpt-image-2.6-flare','gpt-image-2.6-sunburst']){
     const row=report.fleet.agents.find(r=>r.model===model);assert.equal(row.history.at(-1).code,'UPSTREAM_HTTP');

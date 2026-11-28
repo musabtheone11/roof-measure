@@ -267,6 +267,14 @@ export async function runReviewFollowup({stateDir,baselineDir,outputDir,sourceRe
       copiedFiles,originalFileInventory:base.files,omittedOriginalArchives:base.files.filter(file=>file.path.endsWith('.zip')),
       allowedAdditionalRequests:additionalLimit,visionTaskId:visionId,ceoTaskId:ceoId,baselineWorkflowId:workflowId};
     report.fleet.design=combinedDesign;
+    // Generator manifests omit the fleet's derived validation flag. Recover it
+    // from the verified original fleet row rather than losing retained images.
+    combinedDesign.agents=combinedDesign.agents.map(row=>{
+      const prior=base.cycle.fleet.agents.find(item=>item.model===row.model);
+      const artifact=combinedDesign.artifacts.find(item=>item.model===row.model&&item.taskId===row.taskId&&item.sha256===row.artifact?.sha256);
+      return {...row,primaryValidated:!!artifact&&row.status==='complete'&&
+        (row.primaryValidated===true||(prior?.taskId===row.taskId&&prior.primaryValidated===true))};
+    });
     report.fleet.agents=report.fleet.agents.map(row=>row.model==='claude-opus-5.5'&&row.role==='ceo'?ceo:
       combinedDesign.agents.find(d=>d.model===row.model)||row);
     const terra=report.fleet.agents.find(row=>row.model==='gpt-6.1-terra');
@@ -274,7 +282,9 @@ export async function runReviewFollowup({stateDir,baselineDir,outputDir,sourceRe
     report.fleet.designReview={...visual,baselineSourceRevision:base.cycle.sourceRevision,baselineEvaluationHash:base.cycle.evaluationHash};
     if(visual.reviewCompleted){
       const hashes=new Set(visual.reviewedImages.map(image=>image.sha256));
-      report.fleet.agents=report.fleet.agents.map(row=>row.artifact&&hashes.has(row.artifact.sha256)?{...row,reviewStatus:'complete',reviewerModel:visual.reviewerModel,designReviewDecision:visual.decision}:row);
+      const markReviewed=row=>row.artifact&&hashes.has(row.artifact.sha256)?{...row,reviewStatus:'complete',reviewerModel:visual.reviewerModel,designReviewDecision:visual.decision}:row;
+      report.fleet.agents=report.fleet.agents.map(markReviewed);
+      report.fleet.design.agents=report.fleet.design.agents.map(markReviewed);
       report.fleet.design.artifacts=report.fleet.design.artifacts.map(image=>hashes.has(image.sha256)?{...image,reviewStatus:'reviewed',reviewerModel:visual.reviewerModel}:image);
       report.fleet.design.reviewStatus='reviewed';
       report.fleet.design.coverage={...report.fleet.design.coverage,reviewPending:0};
@@ -295,6 +305,7 @@ export async function runReviewFollowup({stateDir,baselineDir,outputDir,sourceRe
     writeFileSync(join(output,'design','review-gallery.html'),`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';img-src 'self';style-src 'unsafe-inline';base-uri 'none'"><title>Retained concept reviews</title><style>body{font:16px system-ui;max-width:1100px;margin:auto;padding:20px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:20px}article{border:1px solid #bbb;padding:18px}img{width:100%;height:auto}</style><h1>Retained design concepts</h1><p>Original source ${escape(base.cycle.sourceRevision)}. New visual review: ${escape(visual.status)}. Concepts remain unimplemented and are not roof measurements or approved application changes.</p><main>${cards}</main>`,{mode:0o600});
     report.fleet.design.generationGalleryPath=generateMissingDesigns===true?'baseline-evidence/design/gallery.html':report.fleet.design.galleryPath;
     report.fleet.design.galleryPath='design/review-gallery.html';
+    writeJSON(join(output,'design','manifest.json'),report.fleet.design);
     writeJSON(join(output,'cycle.json'),report);writeJSON(join(output,'followup.json'),report.followup);
     for(const [name,hash]of [['followup-ceo.json',ceo.resultHash],['followup-design-review.json',visual.resultHash]])if(hash)writeFileSync(join(output,name),store.readArtifact(hash),{mode:0o600});
     writeFileSync(join(output,'index.html'),`<!doctype html><meta charset="utf-8"><title>Retained roof evidence review</title><h1>Retained evidence review</h1><p>Original measurement source: ${escape(base.cycle.sourceRevision)}. Review operator: ${escape(sourceRevision)}.</p><p>No cases, measurements or customer reports were regenerated. ${newlyGeneratedConcepts} new qualification concepts. All original attempts and spending holds remain.</p><p><a href="roof-reports.zip">Download retained reports and new reviews</a> · <a href="design/review-gallery.html">Concept gallery and visual review</a></p><pre>${escape(JSON.stringify({baseline:report.baseline,metrics:report.metrics,visual:{status:visual.status,reviewCompleted:visual.reviewCompleted},ceo:{status:ceo.status,attempted:ceo.attempted,decision:ceo.decision},decision:report.decision,budget:report.budget},null,2))}</pre>`,{mode:0o600});
