@@ -119,9 +119,10 @@ function minimalAgent(row){return {model:row.model,team:row.team,role:row.role,s
 export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,sourceRevision,inputHash,
   developmentContext={},aggregateContext={},paidAllowed=false,apiKey=process.env.APINEX_API_KEY,
   requestRole=requestOrganizationRole,verifyModels=verifyRoster,checkpoint=async()=>{},limits={},now=Date.now,signal,
-  minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=40*60000,catalogAudit,selectedModelIds=null}={}) {
+  minimumDispatchIntervalMs=4200,waitImpl=(ms,options)=>wait(ms,null,options),runtimeMs=40*60000,catalogAudit,selectedModelIds=null,allowanceReserveUnits=0}={}) {
   if(!text(evaluationHash,200)||!text(sourceRevision,200)||!/^([a-f0-9]{64})$/.test(inputHash||''))fail('INVALID_FLEET_INPUT','Frozen evaluation/source/input bindings are required');
   if(!Number.isInteger(runtimeMs)||runtimeMs<0||runtimeMs>40*60000)fail('INVALID_FLEET_LIMIT','Fleet runtime must be 0..40minutes');
+  if(!Number.isSafeInteger(allowanceReserveUnits)||allowanceReserveUnits<0||allowanceReserveUnits>100000000)fail('INVALID_FLEET_LIMIT','Allowance design headroom must be a bounded host policy');
   const deadline=now()+runtimeMs,timeout=AbortSignal.timeout(Math.max(1,runtimeMs));
   const fleetSignal=signal?AbortSignal.any([signal,timeout]):timeout;
   validateDevelopmentContext(developmentContext);const devFacts=buildMetricFacts(developmentContext),aggregateFacts=buildMetricFacts(aggregateContext);
@@ -139,6 +140,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
   let all=buildFleetAssignments(completeEntries,{events:store?.events()||[]});
   const actualLimits=limitsOf(limits,all.length),planBinding={protocol:FLEET_PROTOCOL,evaluationHash,sourceRevision,inputHash,
     selectedModelIds,
+    ...(allowanceReserveUnits?{allowanceReserveUnits}:{}),
     catalogHash:catalogData.catalogHash,catalogAuditHash:catalogAudit?.hash||null,developmentContextHash:hash(developmentContext),aggregateContextHash:hash(aggregateContext),
     assignmentHash:hash([...all].sort((a,b)=>a.model.localeCompare(b.model)).map(({lastDispatched,...a})=>a))};
   const planHash=hash(planBinding),workflowId='fleet-'+planHash.slice(0,32),pending=[],responses=new Map(),agents=[],closingReviews=[];
@@ -203,7 +205,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         }
         return;
       }
-      if(old.status!=='pending'||row.attempted){row.status=old.status;row.code=row.attempted?'DISPATCHED_OUTCOME_NOT_REPLAYED':'EARLIER_TERMINAL_TASK';row.reused=true;return;}
+      if(old.status!=='pending'||row.attempted){row.status=old.result?.deferred?'deferred':old.status;row.code=old.result?.deferred?old.result.code:row.attempted?'DISPATCHED_OUTCOME_NOT_REPLAYED':'EARLIER_TERMINAL_TASK';row.deferred=old.result?.deferred===true;row.reused=true;return;}
     }
     if(!paidAllowed||!apiKey||!store){row.status='disabled';row.code=!paidAllowed?'CHECKPOINT_LINEAGE_BLOCKED':!apiKey?'CLOUD_SECRET_NOT_CONFIGURED':'DURABLE_STORE_UNAVAILABLE';return;}
     if(signal?.aborted){row.code='CANCELLED';return;}
@@ -235,7 +237,7 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
         reserve:async({usd,allowance})=>{
           if(entry.billingTier==='free-allowance'&&(usd!==0||allowance?.reservedUnits!==textAllowanceReservationUnits(assignment.model,task.constraints.maxOutputTokens)))
             fail('ALLOWANCE_RESERVATION_MISSING','Free text requires its complete verified weighted allowance hold');
-          const id=store.reserve(task.id,'fleet-worker',lease.fence,{usd,...actualLimits,...(allowance?{allowance}:{})});await checkpoint({phase:'reserved',taskId:task.id,model:assignment.model});return id;
+          const id=store.reserve(task.id,'fleet-worker',lease.fence,{usd,...actualLimits,...(allowance?{allowance,allowanceHeadroomUnits:allowanceReserveUnits}:{})});await checkpoint({phase:'reserved',taskId:task.id,model:assignment.model});return id;
         },
         onDispatch:async id=>{if(timeout.aborted||now()+45000>deadline)fail('FLEET_RUNTIME_LIMIT','Insufficient remaining runtime before model dispatch');store.dispatch(id,'fleet-worker',lease.fence);dispatched=true;row.attempted=true;store.event(task.id,'fleet-dispatched',{model:assignment.model,planHash});await checkpoint({phase:'dispatched',taskId:task.id,model:assignment.model});},
         onUsage:async(id,usage)=>{store.settle(id,'fleet-worker',lease.fence,usage);await checkpoint({phase:'settled',taskId:task.id,model:assignment.model});},
@@ -262,9 +264,9 @@ export async function runModelFleet({store,catalog=MODEL_CATALOG,evaluationHash,
     }catch(error){
       row.code=error.code||'FLEET_REVIEW_FAILED';row.status='failed';row.primaryValidated=false;row.errorDetails=error.errorDetails||null;
       row.rawResponseHash=rawArtifact?.hash||null;
-      if(row.code==='FLEET_RUNTIME_LIMIT'&&!dispatched){row.status='blocked';row.deferred=true;}
+      if(['FLEET_RUNTIME_LIMIT','ALLOWANCE_DESIGN_CAPACITY_RESERVED'].includes(row.code)&&!dispatched){row.status=row.code==='ALLOWANCE_DESIGN_CAPACITY_RESERVED'?'deferred':'blocked';row.deferred=true;}
       if(store&&lease?.id===task.id){
-        try{store.finish(task.id,'fleet-worker',lease.fence,{status:row.deferred?'needs-human':'failed',result:{resultHash:row.resultHash,rawResponseHash:rawArtifact?.hash||null,decision:row.decision,primaryValidated:false,code:row.code,errorDetails:row.errorDetails},error:row.code});}catch{row.code='LEASE_LOST_RECONCILIATION_REQUIRED';}
+        try{store.finish(task.id,'fleet-worker',lease.fence,{status:row.deferred?'needs-human':'failed',result:{resultHash:row.resultHash,rawResponseHash:rawArtifact?.hash||null,decision:row.decision,primaryValidated:false,code:row.code,errorDetails:row.errorDetails,deferred:row.deferred===true},error:row.code});}catch{row.code='LEASE_LOST_RECONCILIATION_REQUIRED';}
       }
       if(error.status===401){providerBlocked='PROVIDER_AUTH_RECONCILIATION_REQUIRED';store?.event(null,'fleet-provider-circuit-open',{code:row.code,status:401});}
       else if([400,403].includes(error.status)||['MODEL_MISMATCH','MODEL_UNAVAILABLE','PRICING_UNKNOWN'].includes(row.code))store?.event(null,'fleet-model-circuit-open',{model:assignment.model,code:row.code,status:error.status||null});

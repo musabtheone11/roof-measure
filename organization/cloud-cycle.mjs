@@ -114,6 +114,7 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       fleet=await fleetRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
         developmentContext:{...contextBase,metrics:developmentMetrics,pdfReview:{checked:developmentPDFs.length,failed:developmentPDFs.filter(p=>!p.ok).length},developmentCases:development},
         aggregateContext:contextBase,paidAllowed,apiKey,requestRole,checkpoint,now,catalogAudit,
+        allowanceReserveUnits:designMode?5000000:0,
         ...(allowanceQualification?{selectedModelIds:[...ALLOWANCE_QUALIFICATION_MODELS]}:{}),
         limits:allowanceQualification?{requestLimit:6,maxUsd:0}:{requestLimit:designMode?57:64}});
       if(designMode) {

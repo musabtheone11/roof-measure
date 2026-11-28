@@ -281,9 +281,11 @@ export class OrgStore {
       return rows.length;
     });
   }
-  reserve(taskId, workerId, fence, { usd = 0, requestLimit = 0, maxUsd = 0, hourUsd = 0, dayUsd = 0, weekUsd = 0, monthUsd = 0, allowance = null } = {}) {
+  reserve(taskId, workerId, fence, { usd = 0, requestLimit = 0, maxUsd = 0, hourUsd = 0, dayUsd = 0, weekUsd = 0, monthUsd = 0, allowance = null, allowanceHeadroomUnits = 0 } = {}) {
     for (const [name, value] of Object.entries({ usd, requestLimit, maxUsd, hourUsd, dayUsd, weekUsd, monthUsd })) finite(value, name);
     if (!Number.isInteger(requestLimit)) fail('INVALID_LIMIT', 'Request limit must be an integer');
+    units(allowanceHeadroomUnits,'allowanceHeadroomUnits');
+    if(allowanceHeadroomUnits>ALLOWANCE_LIMITS.workflowUnits||(allowance===null&&allowanceHeadroomUnits!==0))fail('INVALID_ALLOWANCE','Allowance headroom requires a bounded allowance reservation');
     return this.transaction(() => {
       const row = this.requireLease(taskId, workerId, fence);
       if (this.getControl() !== 'running') fail('PAUSED', 'Admission is paused or stopped');
@@ -299,6 +301,10 @@ export class OrgStore {
       const month = this.db.prepare('SELECT coalesce(sum(charged_usd),0) AS usd FROM attempts WHERE created>=?').get(monthStart).usd;
       if (workflow.requests + 1 > requestLimit || stage.requests >= stageLimit(row) || workflow.usd + usd > maxUsd || hour + usd > hourUsd || day + usd > dayUsd || week + usd > weekUsd || month + usd > monthUsd) fail('BUDGET_LIMIT', 'A persisted workflow, stage, hourly, daily, rolling-seven-day, or UTC-calendar-month ceiling prevents dispatch');
       if(snapshot)this.checkAllowance(row,snapshot);
+      if(snapshot&&allowanceHeadroomUnits>0) {
+        try{this.checkAllowance(row,{...snapshot,reservedUnits:snapshot.reservedUnits+allowanceHeadroomUnits});}
+        catch(error){if(['ALLOWANCE_LIMIT','ALLOWANCE_EXHAUSTED'].includes(error.code))fail('ALLOWANCE_DESIGN_CAPACITY_RESERVED','Allowance capacity is protected for the design phase');throw error;}
+      }
       const attemptId = randomUUID();
       this.db.prepare("INSERT INTO attempts(id,task_id,workflow_id,worker,fence,state,reserve_usd,charged_usd,created,updated) VALUES (?,?,?,?,?,'reserved',?,?,?,?)").run(attemptId, taskId, row.workflow_id, workerId, fence, usd, usd, this.now(), this.now());
       if(snapshot){

@@ -51,6 +51,13 @@ image generation. It runs the actual synthetic-report evaluation and independent
 specialist handoffs. Its scoped artifact does not replace the public journal's
 full-roster status. Scheduled full-roster cycles keep their existing mode.
 
+Full-roster text work protects five million units for its later free-image task.
+The store checks this headroom atomically against workflow, daily, weekly and
+provider availability limits, without creating an imaginary charge. Only an
+actual image dispatch reserves those units. Routine protected-capacity deferrals
+remain visibly deferred on cached replay. Qualification/text-only work protects
+zero image units.
+
 Deployment uses the existing reviewed runtime source pin and shared checkpoint.
 Rollback preserves both ledgers and pauses new allowance-funded dispatch until a
 compatible accounting implementation is active.
