@@ -6,6 +6,7 @@ import {testServer} from './ui-test-server.mjs';
 
 const STATUS_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-status.json';
 const QUALIFICATION_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-qualification.json';
+const WORK_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-work.json';
 const artifacts=path.resolve('.devcache/agents-dashboard');
 await fs.mkdir(artifacts,{recursive:true});
 const now=Date.now(),teams=['Roof measurement engineering','Sketch and document interpretation','Independent verification','Reports and visual layout','Reference data','Real-case testing','Operations'];
@@ -26,8 +27,8 @@ let browser;
 try {
   browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath()});
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
-  const errors=[],unexpected=[],requests=[],qualificationRequests=[];
-  let response={status:200,body:fixture},qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}};
+  const errors=[],unexpected=[],requests=[],qualificationRequests=[],workRequests=[];
+  let response={status:200,body:fixture},qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}},workResponse={status:404,body:{error:'No synthetic work journal'}};
   await context.route('**/*',async route=>{
     const url=route.request().url();
     if(url===STATUS_URL) {
@@ -37,6 +38,9 @@ try {
       qualificationRequests.push({url,method:route.request().method(),headers:route.request().headers()});
       const next=typeof qualificationResponse==='function'?await qualificationResponse():qualificationResponse;
       await route.fulfill({status:next.status,contentType:'application/json',body:JSON.stringify(next.body)});
+    } else if(url===WORK_URL) {
+      workRequests.push({url,method:route.request().method(),headers:route.request().headers()});
+      await route.fulfill({status:workResponse.status,contentType:'application/json',body:JSON.stringify(workResponse.body)});
     } else if(new URL(url).origin===new URL(server.baseURL).origin)await route.continue();
     else {unexpected.push(url);await route.abort();}
   });
@@ -75,6 +79,8 @@ try {
   assert.match(await page.locator('#fleet-coverage').innerText(),/Assigned: 45 · Inference attempted: 30/);
   assert.match(await page.locator('#fleet-coverage').innerText(),/do not establish roofing accuracy/);
   assert.match(await page.locator('#qualification-notice').innerText(),/No subscription run journal has been published/);
+  assert.match(await page.locator('#work-notice').innerText(),/No productive engineering work journal has been published/);
+  assert.equal(await page.locator('#work-content').isVisible(),false,'Missing work records must not invent task or fix counts.');
   assert.equal(await page.locator('#unavailable-count').innerText(),'(9)');
   await page.click('#unavailable-models > summary');
   assert.deepEqual(await page.locator('#unavailable-list li').allTextContents(),unavailableModels);
@@ -226,33 +232,78 @@ try {
   qualificationResponse={status:200,body:{...noResults,run:{...noResults.run,pipelineResult:'success'}}};await refresh(page,{status:200,body:fullRoster});
   assert.match(await page.locator('#qualification-notice').innerText(),/Could not refresh this scoped run/);
   assert.match(await page.locator('#qualification-run').innerText(),/pipeline Failure/,'An invalid empty-success record must not replace the last honest failure.');
+
+  // Productive work is a third journal: questions, models and task outputs are
+  // separate counts, and none of those imply implemented or released fixes.
+  const work={schemaVersion:1,repository:'musabtheone11/roof-measure',executionProfile:'allowance-work',generatedAt:new Date(now).toISOString(),sourceRevision:'d'.repeat(40),
+    run:{id:'99999',attempt:1,url:'https://github.com/musabtheone11/roof-measure/actions/runs/99999',pipelineResult:'success'},
+    reportArtifact:{available:true,url:'https://github.com/musabtheone11/roof-measure/actions/runs/99999#artifacts'},
+    summary:{uniqueModels:3,workItems:4,authorTasks:4,reviewTasks:4,dispatchedTasks:7,validatedTasks:6,independentlyReviewed:2,awaitingIndependentReview:2,failed:1,completedFixes:0},
+    models:[{model:'free/gpt-6-luna',taskCount:3,validatedTaskCount:3},{model:'free/qwen-3.8-max',taskCount:2,validatedTaskCount:2},{model:'free/minimax-m3.1-flash',taskCount:2,validatedTaskCount:1}],
+    scope:'SYNTHETIC PRODUCTIVE WORK FIXTURE — accepted proposals and review outputs; zero implemented or released fixes.',
+    caseWork:{workItems:[{prompt:'SYNTHETIC_PRIVATE_PACKET_SENTINEL'}]},allowance:{remainingUnits:987654321},budget:{walletBalance:'SYNTHETIC_PRIVATE_BALANCE'}};
+  qualificationResponse={status:200,body:broad};workResponse={status:200,body:work};await refresh(page,{status:200,body:fullRoster});
+  assert.equal(await page.locator('#work-counts [data-metric="workItems"] dd').innerText(),'4');
+  assert.equal(await page.locator('#work-counts [data-metric="uniqueModels"] dd').innerText(),'3');
+  assert.equal(await page.locator('#work-counts [data-metric="validatedTasks"] dd').innerText(),'6');
+  assert.equal(await page.locator('#work-counts [data-metric="completedFixes"] dd').innerText(),'0');
+  assert.match(await page.locator('#work-task-counts').innerText(),/Author tasks: 4 · Review tasks: 4 · Awaiting independent review: 2 · Failed tasks: 1/);
+  assert.equal(await page.locator('#work-models li').count(),3);
+  assert.match(await page.locator('#work-source').innerText(),new RegExp('d'.repeat(40)));
+  assert.match(await page.locator('#work-run').innerText(),/Run #99999/);
+  assert.equal(await page.locator('#work-evidence').getAttribute('href'),work.reportArtifact.url);
+  assert.equal(await page.locator('.agent-card').count(),51);
+  assert.equal(await page.locator('#qualification-models li').count(),23);
+  assert.doesNotMatch(await page.locator('body').innerText(),/SYNTHETIC_PRIVATE_PACKET_SENTINEL|987654321|SYNTHETIC_PRIVATE_BALANCE/);
+  await page.locator('#productive-work').evaluate(element=>element.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(artifacts,'productive-work-desktop.png')});
+  await page.setViewportSize({width:390,height:844});await noClipping(page);await page.locator('#productive-work').evaluate(element=>element.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(artifacts,'productive-work-mobile.png')});
+  await page.setViewportSize({width:1440,height:1000});
+  workResponse={status:503,body:{error:'Synthetic work outage'}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#work-notice').innerText(),/last loaded record remains/);
+  assert.equal(await page.locator('#work-counts [data-metric="workItems"] dd').innerText(),'4');
+  assert.equal(await page.locator('.agent-card').count(),51);assert.equal(await page.locator('#qualification-models li').count(),23);
+  workResponse={status:200,body:{...work,summary:{...work.summary,completedFixes:6}}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#work-notice').innerText(),/Could not refresh/);
+  assert.equal(await page.locator('#work-counts [data-metric="completedFixes"] dd').innerText(),'0','Validated outputs must not turn into fictitious completed fixes.');
+  const failedWork={...work,run:{...work.run,pipelineResult:'failure'},models:[],summary:Object.fromEntries(Object.keys(work.summary).map(key=>[key,0]))};
+  workResponse={status:200,body:failedWork};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#work-notice').innerText(),/No productive work questions were recorded/);
+  assert.equal(await page.locator('#work-models li').count(),0);assert.equal(await page.locator('.agent-card').count(),51);assert.equal(await page.locator('#qualification-models li').count(),23);
+  workResponse={status:200,body:{...failedWork,run:{...failedWork.run,pipelineResult:'success'}}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#work-notice').innerText(),/No productive work questions were recorded/);assert.match(await page.locator('#work-run').innerText(),/pipeline Success/);
+  workResponse={status:200,body:{...failedWork,run:{...failedWork.run,pipelineResult:'success'},summary:{...failedWork.summary,workItems:4}}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#work-notice').innerText(),/Questions were recorded, but no model task was dispatched/);
+  assert.equal(await page.locator('#work-counts [data-metric="workItems"] dd').innerText(),'4');assert.equal(await page.locator('#work-counts [data-metric="uniqueModels"] dd').innerText(),'0');
+  assert.equal(await page.locator('.agent-card').count(),51);assert.equal(await page.locator('#qualification-models li').count(),23);
   await page.close();
 
   // Run the real browser timer under a virtual clock. Hidden tabs must not poll;
   // visible polling is bounded to one request a minute, with manual refresh allowed.
-  response={status:200,body:fixture};qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}};
+  response={status:200,body:fixture};qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}};workResponse={status:404,body:{error:'No synthetic work journal'}};
   const polling=await open({clock:true});await loaded(polling);
-  let before=requests.length,beforeQualification=qualificationRequests.length;
-  await polling.clock.runFor(59_000);assert.equal(requests.length,before);assert.equal(qualificationRequests.length,beforeQualification);
+  let before=requests.length,beforeQualification=qualificationRequests.length,beforeWork=workRequests.length;
+  await polling.clock.runFor(59_000);assert.equal(requests.length,before);assert.equal(qualificationRequests.length,beforeQualification);assert.equal(workRequests.length,beforeWork);
   const automatic=polling.waitForResponse(STATUS_URL);await polling.clock.runFor(1000);await automatic;
   await polling.waitForFunction(()=>!document.querySelector('#refresh').disabled);
   assert.equal(requests.length,before+1);
   assert.equal(qualificationRequests.length,beforeQualification+1);
-  await refresh(polling,response);before=requests.length;beforeQualification=qualificationRequests.length;
+  assert.equal(workRequests.length,beforeWork+1);
+  await refresh(polling,response);before=requests.length;beforeQualification=qualificationRequests.length;beforeWork=workRequests.length;
   await polling.evaluate(()=>{window.__fixtureVisibility='hidden';document.dispatchEvent(new Event('visibilitychange'));});
-  await polling.clock.runFor(180_000);assert.equal(requests.length,before,'Hidden pages must not poll.');assert.equal(qualificationRequests.length,beforeQualification);
+  await polling.clock.runFor(180_000);assert.equal(requests.length,before,'Hidden pages must not poll.');assert.equal(qualificationRequests.length,beforeQualification);assert.equal(workRequests.length,beforeWork);
   const resumed=polling.waitForResponse(STATUS_URL);
   await polling.evaluate(()=>{window.__fixtureVisibility='visible';document.dispatchEvent(new Event('visibilitychange'));});
   await polling.clock.runFor(1);await resumed;
   await polling.waitForFunction(()=>!document.querySelector('#refresh').disabled);
   assert.equal(requests.length,before+1);
   assert.equal(qualificationRequests.length,beforeQualification+1);
+  assert.equal(workRequests.length,beforeWork+1);
   await polling.clock.runFor(59_000);assert.equal(requests.length,before+1,'Visibility changes must not create duplicate polling loops.');
   await polling.close();
 
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
-  assert([...requests,...qualificationRequests].every(request=>request.method==='GET'&&!request.headers.authorization),'Dashboard must only read public status without credentials.');
+  assert([...requests,...qualificationRequests,...workRequests].every(request=>request.method==='GET'&&!request.headers.authorization),'Dashboard must only read public status without credentials.');
   await fs.writeFile(path.join(artifacts,'dashboard-check.json'),JSON.stringify({fixture:'Synthetic offline dashboard responses; not live model activity',models:45,fullRosterClarity:{models:51,validContributions:18,recordedComplete:7,needsReview:11,executionFailed:6,blocked:27},subscriptionJournalIndependent:true,subscriptionScopeSizes:[3,23],documentedUnavailableModels:9,unavailableNotCountedAsAssignedOrAttempted:true,legacyTwoModelRecord:true,blockedAndDisabledExplicit:true,inferenceVersusAssignmentCounts:true,fetchFailurePreservesPriorRecord:true,initialFailureDoesNotInventCounts:true,staleSnapshotWarning:true,inertPublicStringsAndProjectOnlyLinks:true,desktopAndMobileInspected:true,visibleOnlyMinutePolling:true,modelInferenceCalls:0,browserErrors:errors},null,2));
-  console.log('Chromium:45model legacy fixtures,51model contribution/review/failure clarity, separate3/23model subscription journals and failed empty runs, refresh isolation, stale data, inert strings, responsive layout and visible-only60s polling passed.');
+  console.log('Chromium:51model contribution clarity, independent3/23model subscription and productive question/task journals, zero completed-fix claims, privacy, failed-empty scopes, refresh isolation, responsive layout and visible-only60s polling passed.');
   console.log('Synthetic dashboard screenshots: '+artifacts);
 } finally {await browser?.close();await server.close();}

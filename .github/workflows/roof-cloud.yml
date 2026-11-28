@@ -3,12 +3,13 @@ name: Self-contained roof laboratory
 on:
   schedule:
     - cron: '17 3 * * *'
+    - cron: '17 4 * * 0'
   workflow_dispatch:
     inputs:
       operation:
-        description: Generate a cycle, review retained results, or evaluate subscription models
+        description: Generate a cycle, review retained results, evaluate subscription models, or run productive subscription work
         type: choice
-        options: [cycle, review-existing, allowance-qualification, allowance-roster]
+        options: [cycle, review-existing, allowance-qualification, allowance-roster, allowance-work]
         default: cycle
       review_run_id:
         description: Completed laboratory run to review (review-existing only)
@@ -39,6 +40,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       source_revision: ${{ steps.source.outputs.revision }}
+      operation: ${{ steps.operation.outputs.operation }}
       browser_status: ${{ steps.browser.outcome }}
       report_artifact_id: ${{ steps.reports.outputs.artifact-id }}
     env:
@@ -47,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ef1155c4d750eecef4777b5b63038e82ab602b14
+          ref: 052a370812b966f3f44113a98c1ac08395fc5ff1
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -57,6 +59,16 @@ jobs:
         run: |
           echo "ROOF_SOURCE_REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Resolve bounded cloud operation
+        id: operation
+        env:
+          SELECTED_OPERATION: ${{ inputs.operation || (github.event_name == 'schedule' && (github.event.schedule == '17 4 * * 0' && 'allowance-roster' || 'allowance-work')) || 'cycle' }}
+        run: |
+          case "$SELECTED_OPERATION" in
+            cycle|review-existing|allowance-qualification|allowance-roster|allowance-work) ;;
+            *) echo "Unsupported cloud operation" >&2; exit 1 ;;
+          esac
+          echo "operation=$SELECTED_OPERATION" >> "$GITHUB_OUTPUT"
       - name: Restore shared budget and workflow checkpoint
         id: bootstrap
         env:
@@ -80,7 +92,7 @@ jobs:
         continue-on-error: true
         run: node tools/dev/source-review-delivery-test.mjs
       - name: Download retained baseline for targeted review
-        if: inputs.operation == 'review-existing'
+        if: steps.operation.outputs.operation == 'review-existing'
         uses: actions/download-artifact@v4
         with:
           name: roof-cloud-reports-${{ inputs.review_run_id }}-${{ inputs.review_run_attempt }}
@@ -94,8 +106,8 @@ jobs:
           APINEX_API_KEY: ${{ secrets.ROOF_ORG_APINEX_API_KEY || secrets.APINEX_API_KEY }}
           ROOF_CLOUD_PAID_ALLOWED: ${{ steps.bootstrap.outputs.paid_allowed }}
           ROOF_CLOUD_BROWSER_STATUS: ${{ steps.browser.outcome }}
-          ROOF_CLOUD_MODEL_MODE: ${{ inputs.operation == 'allowance-roster' && 'allowance-roster' || inputs.operation == 'allowance-qualification' && 'allowance-qualification' || 'all-models' }}
-          ROOF_CLOUD_OPERATION: ${{ inputs.operation || 'cycle' }}
+          ROOF_CLOUD_MODEL_MODE: ${{ steps.operation.outputs.operation == 'allowance-work' && 'allowance-work' || steps.operation.outputs.operation == 'allowance-roster' && 'allowance-roster' || steps.operation.outputs.operation == 'allowance-qualification' && 'allowance-qualification' || 'all-models' }}
+          ROOF_CLOUD_OPERATION: ${{ steps.operation.outputs.operation }}
           ROOF_REVIEW_RUN_ID: ${{ inputs.review_run_id }}
           ROOF_GENERATE_MISSING_DESIGNS: ${{ inputs.generate_missing_designs }}
         run: |
@@ -140,7 +152,7 @@ jobs:
   publish-status:
     needs: generate-review-and-retain
     # The runtime routes subscription results to their separate scoped journal.
-    if: always() && needs.generate-review-and-retain.outputs.source_revision != ''
+    if: always() && needs.generate-review-and-retain.outputs.source_revision != '' && needs.generate-review-and-retain.outputs.operation != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -167,5 +179,5 @@ jobs:
           ROOF_CLOUD_GENERATION_RESULT: ${{ needs.generate-review-and-retain.result }}
           ROOF_CLOUD_BROWSER_STATUS: ${{ needs.generate-review-and-retain.outputs.browser_status }}
           ROOF_CLOUD_ARTIFACT_AVAILABLE: ${{ needs.generate-review-and-retain.outputs.report_artifact_id != '' }}
-          ROOF_CLOUD_PUBLIC_PROFILE: ${{ inputs.operation || 'cycle' }}
+          ROOF_CLOUD_PUBLIC_PROFILE: ${{ needs.generate-review-and-retain.outputs.operation }}
         run: node --use-env-proxy organization/cloud-operations.mjs publish-status --cycle publish-input/cloud-output/cycle.json
