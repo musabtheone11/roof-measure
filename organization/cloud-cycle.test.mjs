@@ -59,6 +59,9 @@ test('image studio and visual critique share the text workflow and produce51 uni
  assert.equal(r.reviews.length,51);assert.equal(new Set(r.reviews.map(row=>row.model)).size,51);
  assert.equal(r.fleet.catalog.textRosterCount,45);assert.equal(r.fleet.catalog.designModelCount,6);assert.equal(r.fleet.catalog.rosterCount,51);
  assert.equal(r.fleet.designReview.reviewCompleted,true);assert.equal(r.budget.requestLimit,64);
+ assert.equal(r.fleet.coverage.assigned,51);assert.equal(r.fleet.coverage.independentlyReviewed,51);
+ assert.equal(r.fleet.coverage.notAttempted,0);assert.equal(r.fleet.coverage.failed,0);assert.equal(r.fleet.coverage.complete,true);
+ assert.equal(r.fleet.budget.totalRequests,r.budget.totalRequests);assert.equal(r.fleet.budget.reportedUsd,r.budget.reportedUsd);
  assert.ok(r.reviews.filter(row=>row.contributionKind==='design-concept').every(row=>row.reviewerModel==='gpt-6.1-terra'&&row.reviewStatus==='complete'));
  assert.equal(r.decision.productionReleaseApproved,false);
 });

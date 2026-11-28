@@ -184,6 +184,17 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
       }finally {if(!settled)store.recover();}
     }
     const ledger=store?store.ledger():{requests:null,reportedUsd:null,reservedUsd:null,unknownBillingRequests:null};
+    if(fleet) {
+      fleet.coverage={...fleet.coverage,assigned:fleet.agents.length,attempted:fleet.agents.filter(a=>a.attempted).length,
+        validContributions:fleet.agents.filter(a=>a.primaryValidated).length,
+        independentlyReviewed:fleet.agents.filter(a=>a.reviewStatus==='complete').length,
+        notAttempted:fleet.agents.filter(a=>!a.attempted).length,
+        blocked:fleet.agents.filter(a=>['blocked','disabled','deferred'].includes(a.status)).length,
+        failed:fleet.agents.filter(a=>a.status==='failed').length,
+        complete:fleet.agents.length>0&&fleet.agents.every(a=>a.attempted&&a.primaryValidated&&a.reviewStatus==='complete')};
+      fleet.budget={...fleet.budget,totalRequests:ledger.requests,reportedUsd:ledger.reportedUsd,
+        committedUsd:ledger.reservedUsd,unknownBillingRequests:ledger.unknownBillingRequests};
+    }
     const report={schemaVersion:1,protocol:CLOUD_PROTOCOL,sourceRevision,seed,count,evaluationHash,
       generatedAt:new Date(now()).toISOString(),metrics:generated.metrics,reviews,stateWarning,
       browserStatus,pdfReview:{checked:pdfReview.checked,failed:pdfReview.failed},fleet,
