@@ -111,6 +111,19 @@ test('allowance qualification rejects paid or malformed selections before roster
     await assert.rejects(runModelFleet(options(store,MODEL_CATALOG,{selectedModelIds,verifyModels:async()=>{calls++;}})),{code:'INVALID_ALLOWANCE_SELECTION'});
   assert.equal(calls,0);
 });
+test('design headroom defers free text and cached replay preserves its reason without new work',async t=>{
+  const store=fixture(t),catalog=MODEL_CATALOG.filter(m=>m.id==='free/gpt-6-luna');let calls=0;
+  const base=options(store,catalog,{allowanceReserveUnits:5000000,requestRole:async(task,opts)=>{
+    calls++;await opts.reserve({usd:0,allowance:freeHold(opts.model)});
+  }});
+  const planned=await runModelFleet({...base,paidAllowed:false});
+  store.enqueue({id:'prime-design-capacity',workflowId:'fleet-'+planned.planHash.slice(0,32)});const lease=store.claim('prime-worker');
+  const id=store.reserve(lease.id,'prime-worker',lease.fence,{usd:0,requestLimit:64,maxUsd:3,hourUsd:3,dayUsd:3,weekUsd:20,monthUsd:80,allowance:{...freeHold(catalog[0].id),reservedUnits:90000000}});
+  store.dispatch(id,'prime-worker',lease.fence);store.settle(id,'prime-worker',lease.fence,{reportedUsd:0});store.finish(lease.id,'prime-worker',lease.fence,{status:'complete'});
+  const first=await runModelFleet(base),again=await runModelFleet(base);
+  for(const result of [first,again]){assert.equal(result.agents[0].status,'deferred',JSON.stringify(result.agents[0]));assert.equal(result.agents[0].code,'ALLOWANCE_DESIGN_CAPACITY_RESERVED');assert.equal(result.agents[0].attempted,false);}
+  assert.equal(calls,1);assert.equal(store.allowanceLedger().reservedUnits,90000000);assert.equal(store.ledger().requests,1);
+});
 test('all45 models can contribute, typed routes and fallback alias do not perform peer review',async t=>{
   const store=fixture(t),base=options(store,MODEL_CATALOG);const primary=[];
   const result=await runModelFleet({...base,requestRole:async(task,opts)=>{

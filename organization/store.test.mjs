@@ -366,3 +366,14 @@ test('old unknown holds age out of the rolling week cap without refunding any hi
   assert.ok(reserveFree(store,next,snapshot(clock,1,{remainingUnits:1000000001,periodKey:'renewed-subscription'})));
   assert.equal(store.allowanceLedger().unknownUnits,1000000000);assert.equal(store.allowanceLedger().requests,11);
 });
+
+test('text headroom protects a real image reservation atomically without recording a phantom hold',t=>{
+  const {store,clock}=setup(t),prime=freeTask(store,'prime-design','shared-design');
+  const old=reserveFree(store,prime,snapshot(clock,90000000));completeFree(store,prime,old);
+  const text=freeTask(store,'text-before-image','shared-design'),before=JSON.stringify(store.ledger());
+  assert.throws(()=>store.reserve(text.id,'allowance-worker',text.fence,{...freeLimits,allowance:snapshot(clock,6291456),allowanceHeadroomUnits:5000000}),{code:'ALLOWANCE_DESIGN_CAPACITY_RESERVED'});
+  assert.equal(JSON.stringify(store.ledger()),before);assert.equal(store.allowanceLedger().reservedUnits,90000000);
+  store.finish(text.id,'allowance-worker',text.fence,{status:'needs-human'});
+  const image=freeTask(store,'real-image','shared-design');assert.ok(reserveFree(store,image,snapshot(clock,5000000)));
+  assert.equal(store.allowanceLedger().reservedUnits,95000000);
+});
