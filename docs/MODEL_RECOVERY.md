@@ -49,3 +49,37 @@ wallet cap. All outstanding allowance holds reduce provider availability. The
 500-million-unit workflow and one-billion-unit day/week limits permit a broad
 bounded wave; idle model calls, paid substitutions and automatic purchases are
 not part of this recovery.
+
+## Hosted recovery result — 2026-11-28
+
+[Run 46159095870](https://github.com/musabtheone11/roof-measure/actions/runs/46159095870)
+checked source `ef1155c4d750eecef4777b5b63038e82ab602b14`:
+23 selected subscription IDs, 23 attempted, 20 validated primary contributions,
+19 completed independent reviews. The three failures remain explicit:
+
+- `free/drex-v2.0`: HTTP 400 specifically directs this ID to `/v1/decisions`,
+  contradicting its plain-chat datasheet. The one-shot chat protocol is not
+  qualified and must not be replayed. A separately bound typed-decision route
+  would require a new capability test; no engineering/review credit follows.
+- `free/gemini-4-hydrogen`: terminal `length` after 8,000 completion tokens;
+  visible JSON is incomplete despite a complete SSE transport.
+- `free/hy4-flash`: finished JSON placed long draft instructions into the
+  bounded `reportArtifact` reference field. The strict report contract rejected it.
+
+There were 26 new inference dispatches including closing reviews, zero additional
+wallet dollars recorded, and 149,166,080 additional conservative allowance units
+held. These holds are not a claim of consumed units. Every prior 85 dollar-ledger
+row and 31 allowance-ledger row remained byte-for-byte unchanged. No old unknown
+request was refunded, replayed or relabeled successful.
+
+The earlier full snapshot's 18 validated model IDs and this wave's 20 IDs have
+no overlap: 38 unique models have contributed across those separately dated runs.
+This historical union is not a simultaneous service-health or field-accuracy claim.
+
+Productive follow-up work is described in [CLOUD_CASE_WORK.md](CLOUD_CASE_WORK.md).
+
+The reporting prompt now explicitly requires an existing supplied artifact
+reference (at most 200 characters) or null, keeps draft wording in summary and
+findings, and forbids inventing UI control names. This clarifies the observed
+HY4 failure without weakening validation. It is not a successful HY4 recovery
+claim; a later distinct qualification must demonstrate compliance.

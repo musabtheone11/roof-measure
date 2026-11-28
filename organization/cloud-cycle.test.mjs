@@ -89,10 +89,10 @@ test('allowance qualification forces the selected three-model zero-USD fleet and
  assert.equal(r.decision.productionReleaseApproved,false);assert.match(r.scope,/Three selected free models only/);
 });
 test('CLI model-mode mapping isolates allowance qualification without changing the all-model profile',()=>{
- assert.deepEqual(cloudModelProfile('allowance-qualification'),{allowanceQualification:true,allowanceRoster:false,fleetMode:true,designMode:false});
- assert.deepEqual(cloudModelProfile('all-models'),{allowanceQualification:false,allowanceRoster:false,fleetMode:true,designMode:true});
- assert.deepEqual(cloudModelProfile(undefined),{allowanceQualification:false,allowanceRoster:false,fleetMode:false,designMode:false});
- assert.deepEqual(cloudModelProfile('allowance-roster'),{allowanceQualification:false,allowanceRoster:true,fleetMode:true,designMode:false});
+ assert.deepEqual(cloudModelProfile('allowance-qualification'),{allowanceQualification:true,allowanceRoster:false,allowanceWork:false,fleetMode:true,designMode:false});
+ assert.deepEqual(cloudModelProfile('all-models'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,fleetMode:true,designMode:true});
+ assert.deepEqual(cloudModelProfile(undefined),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,fleetMode:false,designMode:false});
+ assert.deepEqual(cloudModelProfile('allowance-roster'),{allowanceQualification:false,allowanceRoster:true,allowanceWork:false,fleetMode:true,designMode:false});
 });
 test('allowance roster selects every verified free model within zero USD,48requests and60minutes without image calls',async t=>{
  const opts=setup(t);let received,images=0;
@@ -110,4 +110,16 @@ test('allowance roster selects every verified free model within zero USD,48reque
  assert.equal(r.fleet.agents.length,23);assert.equal(r.fleet.design,undefined);assert.match(r.scope,/All 23 verified free-allowance text models selected/);
  assert.equal(r.allowance.attempts,undefined);assert.doesNotMatch(JSON.stringify(r.allowance),/remaining|observed|expires|period/i);
  assert.equal(r.decision.productionReleaseApproved,false);assert.equal(r.decision.fieldAccuracyValidated,false);
+});
+
+test('productive case mode uses restored store, dev packets, zeroUSD and no qualification or paid fallback',async t=>{
+ const opts=setup(t);let received;
+ const r=await runCloudCycle({...opts,casesRunner,apiKey:'test',paidAllowed:true,allowanceWork:true,designMode:true,
+   casePacketBuilder:({generated,pdfResults})=>{assert.equal(pdfResults.length,3);return generated.cases.filter(c=>c.split==='development');},
+   casePlanBuilder:({store,measurementIdentity,casePackets,maxItems})=>{assert.ok(store);assert.equal(casePackets.length,1);assert.equal(maxItems,8);assert.equal(measurementIdentity.generatorSourceSha256,'b'.repeat(64));return{planHash:'e'.repeat(64)};},
+   caseWorkRunner:async input=>{received=input;return{planHash:input.plan.planHash,workItems:[],models:[],counts:{uniqueModels:0,workItems:0},productionReleaseApproved:false};},
+   fleetRunner:async()=>{throw new Error('No fleet rerun');},requestRole:async()=>{throw new Error('No paid fallback');},designRunner:async()=>{throw new Error('No designs');}});
+ assert.equal(r.executionProfile,'allowance-work');assert.equal(r.fleet,null);assert.deepEqual(received.limits,{requestLimit:48,maxUsd:0});assert.equal(received.runtimeMs,3600000);
+ assert.equal(r.budget.maxUsd,0);assert.equal(r.budget.requestLimit,48);assert.equal(r.caseWork.planHash,'e'.repeat(64));assert.ok(r.decision.reasons.includes('CASE_WORK_IS_ADVISORY_NO_IMPLEMENTED_FIX'));assert.equal(r.decision.productionReleaseApproved,false);
+ assert.deepEqual(cloudModelProfile('allowance-work'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:true,fleetMode:false,designMode:false});
 });

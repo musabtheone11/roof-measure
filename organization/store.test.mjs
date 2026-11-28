@@ -426,3 +426,19 @@ test('dispatch hooks reject asynchronous/nonfunction callbacks and roll back the
   assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,{beforeDispatch:()=>{store.event(lease.id,'async-marker');return {then(){}};}}),{code:'INVALID_DISPATCH_HOOK'});
   assert.equal(store.events().some(e=>e.kind==='async-marker'),false);assert.equal(store.ledger().attempts[0].state,'reserved');
 });
+
+test('undispatched pending quarantine atomically rejects another connection’s acquired or dispatched task', t => {
+  const {store,root,clock}=setup(t);store.enqueue(task('quarantine-safe'));
+  assert.equal(store.cancel('quarantine-safe',{onlyUndispatchedPending:true}).status,'cancelled');
+  store.enqueue(task('quarantine-race'));store.setControl('running');
+  const other=new OrgStore(join(root,'state'),{now:clock});
+  try {
+    const lease=other.claim('other');
+    assert.equal(store.cancel(lease.id,{onlyUndispatchedPending:true}),null);assert.equal(other.getTask(lease.id).status,'leased');
+    const attempt=other.reserve(lease.id,'other',lease.fence,limits);other.dispatch(attempt,'other',lease.fence);
+    const before=other.ledger();assert.equal(store.cancel(lease.id,{onlyUndispatchedPending:true}),null);
+    assert.deepEqual(other.ledger(),before);assert.equal(other.getTask(lease.id).fence,lease.fence);
+    other.finish(lease.id,'other',lease.fence,{status:'needs-human'});
+    assert.equal(store.cancel(lease.id,{onlyUndispatchedPending:true}),null);assert.equal(other.getTask(lease.id).status,'needs-human');
+  } finally {other.close();}
+});
