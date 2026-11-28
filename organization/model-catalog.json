@@ -1,0 +1,1977 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-28T00:13:43.435Z",
+  "authenticatedRosterSha256": "5a84dbcd2c29bcabe8a1023a61f925188dae4350f34bdbce0cd67ca64a8a9c51",
+  "publicCatalogSha256": "968befd092957ac9b5b2eaf52f8c0b122f7ef1be63efd88e386db7d8df9125a6",
+  "sources": [
+    {
+      "name": "authenticated-models.json",
+      "url": "https://api.apinex.bond/v1/models",
+      "status": 200,
+      "sha256": "5a84dbcd2c29bcabe8a1023a61f925188dae4350f34bdbce0cd67ca64a8a9c51",
+      "bytes": 3795
+    },
+    {
+      "name": "public-models.json",
+      "url": "https://apinex.bond/api/public/models",
+      "status": 200,
+      "sha256": "968befd092957ac9b5b2eaf52f8c0b122f7ef1be63efd88e386db7d8df9125a6",
+      "bytes": 13055
+    },
+    {
+      "name": "pricing.md",
+      "url": "https://apinex.bond/pricing.md",
+      "status": 200,
+      "sha256": "743469cca95fdbfcd448daeae80a8eb9d12e140ca57a5d46fd93fea7fe1615fa",
+      "bytes": 4652
+    },
+    {
+      "name": "models.md",
+      "url": "https://apinex.bond/developers/models.md",
+      "status": 200,
+      "sha256": "2f388fd2dad34c3611e56e69e3316b9a2648cb724b25082024baaafd418321b1",
+      "bytes": 12349
+    },
+    {
+      "name": "billing.md",
+      "url": "https://apinex.bond/developers/models/billing.md",
+      "status": 200,
+      "sha256": "dc475aa8b904365aaf50afb7c812d8e7fc64740f31871f135de04b9097295dc9",
+      "bytes": 6164
+    }
+  ],
+  "modelCount": 45,
+  "models": [
+    {
+      "id": "claude-fable-5.2",
+      "name": "Claude Fable 5.2",
+      "provider": "Claude",
+      "family": "claude",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 1,
+      "outputPerMillion": 1,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/claude-fable-5-2/llms.txt",
+        "datasheetSha256": "d8f195b792bc9f265f83d24b14ff72421ff3f8463a832755828b10d06cc43abf"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 1,
+        "publicOutputPerMillion": 1,
+        "datasheetInputPerMillion": 1.0,
+        "datasheetOutputPerMillion": 1.0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "claude-opus-5.5",
+      "name": "Claude Opus 5.5",
+      "provider": "Claude",
+      "family": "claude",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 0.5,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/claude-opus-5-5/llms.txt",
+        "datasheetSha256": "77c5879ae3e67aa33bdc54ece277e7f3cc8e4379f77eac34cd8b575d10ee99db"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.5,
+        "publicOutputPerMillion": 0.5,
+        "datasheetInputPerMillion": 0.5,
+        "datasheetOutputPerMillion": 0.5,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "claude-sonnet-5.5",
+      "name": "Claude Sonnet 5.5",
+      "provider": "Claude",
+      "family": "claude",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 0.4,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/claude-sonnet-5-5/llms.txt",
+        "datasheetSha256": "bda8fbb1b141464f6343077b11ffb9e3974fe9d91bd607dad3c0997733123388"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.4,
+        "publicOutputPerMillion": 0.4,
+        "datasheetInputPerMillion": 0.4,
+        "datasheetOutputPerMillion": 0.4,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "name": "Deepseek V4 Flash",
+      "provider": "DeepSeek",
+      "family": "deepseek",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.05,
+      "outputPerMillion": 0.05,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/deepseek-v4-flash/llms.txt",
+        "datasheetSha256": "7d9d3a8bf5649f0a4795df4a3920db53de61dd0be533c94dc8da3826b4c5ca7a"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.05,
+        "publicOutputPerMillion": 0.05,
+        "datasheetInputPerMillion": 0.05,
+        "datasheetOutputPerMillion": 0.05,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "name": "Deepseek V4 Pro",
+      "provider": "DeepSeek",
+      "family": "deepseek",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.07,
+      "outputPerMillion": 0.07,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/deepseek-v4-pro/llms.txt",
+        "datasheetSha256": "2b3ba7094a56540b4ff05e2d8838709e7d7adf8b83e74347ce9bb78a6f333d63"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.07,
+        "publicOutputPerMillion": 0.07,
+        "datasheetInputPerMillion": 0.07,
+        "datasheetOutputPerMillion": 0.07,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "deepseek-v4.1-flash",
+      "name": "Deepseek V4.1 Flash 1017",
+      "provider": "DeepSeek",
+      "family": "deepseek",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.06,
+      "outputPerMillion": 0.06,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/deepseek-v4-1-flash/llms.txt",
+        "datasheetSha256": "d64713791f99e94981b7d26670c3c0a2415f977522b2507ed62d3d3e787c1a32"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.06,
+        "publicOutputPerMillion": 0.06,
+        "datasheetInputPerMillion": 0.06,
+        "datasheetOutputPerMillion": 0.06,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "drex-v2.0",
+      "name": "Drex 2.0",
+      "provider": "Jev Group",
+      "family": "jev-group",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "131K",
+      "contextTokens": 134144,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.04,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": false,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [
+        "decision",
+        "fast"
+      ],
+      "routeClaim": "decisions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/drex-v2-0/llms.txt",
+        "datasheetSha256": "afcddaf3297a7e143e42691b778b50f317f01e15054505ac5ff78540cfba15a9",
+        "routeURL": "https://apinex.bond/developers/models/decisions.md",
+        "routeSha256": "5a7742c9f7ef618b4ae5e20107d4f85aeaf56ef01340cb458c871063c57e0b52"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.04,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0.04,
+        "datasheetOutputPerMillion": 0.0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": [
+        "Provider metadata tags retained; aliases are not independent upstream attestations.",
+        "Use the verified typed Decisions route for classification. Do not fabricate free-form role outputs from a typed answer."
+      ]
+    },
+    {
+      "id": "free/claude-opus-4.6",
+      "name": "Claude 4.6 Opus",
+      "provider": "Free",
+      "family": "claude",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-claude-opus-4-6/llms.txt",
+        "datasheetSha256": "79f3913c91e58d06d44ed02141e629a5fbf2b62b513e61d26d23268ff211dfa8"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/claude-sonnet-4.6",
+      "name": "Claude 4.6 Sonnet",
+      "provider": "Free",
+      "family": "claude",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-claude-sonnet-4-6/llms.txt",
+        "datasheetSha256": "02880436eda50c30e42b287499dd706a19139fcb1469b095b02acfc3e97b0dd4"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/deepseek-v4-flash-0731",
+      "name": "Deepseek V4 Flash",
+      "provider": "Free",
+      "family": "deepseek",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-deepseek-v4-flash-0731/llms.txt",
+        "datasheetSha256": "aa8fcec2f8b3b495345aa7bcb3c31610a545b924a97eac295c30991da998b97f"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/deepseek-v4-pro-0813",
+      "name": "Deepseek V4 Pro",
+      "provider": "Free",
+      "family": "deepseek",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-deepseek-v4-pro-0813/llms.txt",
+        "datasheetSha256": "90612bad81c614c4afce568b5b0bfe623b465ee32b36a2779b9982dd888b83bf"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/deepseek-v4.1-flash",
+      "name": "Deepseek V4.1 Flash 1017",
+      "provider": "Free",
+      "family": "deepseek",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-deepseek-v4-1-flash/llms.txt",
+        "datasheetSha256": "164e52d650269bee41a799dd1d51dcb11da090787a80bc61b1dcbc336c2ad1ca"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/drex-v2.0",
+      "name": "Drex 2.0",
+      "provider": "Free",
+      "family": "jev-group",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "131K",
+      "contextTokens": 134144,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 1,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": false,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-drex-v2-0/llms.txt",
+        "datasheetSha256": "3cc6cab92a47095ea184d5a921c1eeb15dd97ae17bca55ed215ee4704a8021f8"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/gemini-3.1-pro",
+      "name": "Gemini 3.1 Pro",
+      "provider": "Free",
+      "family": "gemini",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 2,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-gemini-3-1-pro/llms.txt",
+        "datasheetSha256": "e623b17194f010f52b7f1efb614e165c22f7008d2962dba1f54d38dc5cc93fb7"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/gemini-3.8-flash",
+      "name": "Gemini 3.8 Flash",
+      "provider": "Free",
+      "family": "gemini",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-gemini-3-8-flash/llms.txt",
+        "datasheetSha256": "187372bba6a873a3981ddd0202ab9892ffbdf944e030b8271c2a327ad5ee5fb0"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/gemini-4-hydrogen",
+      "name": "Gemini 4 Hydrogen",
+      "provider": "Free",
+      "family": "gemini",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 5,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-gemini-4-hydrogen/llms.txt",
+        "datasheetSha256": "6070318ac7cd140cd9755ad3f35c82f82ef71a1a115f9ae9dc7604563cd652d1"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/glm-5.3",
+      "name": "GLM 5.3",
+      "provider": "Free",
+      "family": "glm",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 4,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-glm-5-3/llms.txt",
+        "datasheetSha256": "bd841e5b173ea8a917a2333dd589afbf9c7d78bc66f58664a6144496d48e4cf9"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/glm-5.3-flash",
+      "name": "GLM-5.3 Flash",
+      "provider": "Free",
+      "family": "glm",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-glm-5-3-flash/llms.txt",
+        "datasheetSha256": "9a8bee176e53eee66820d0c2e4e831257aa136816fe2520c1eac90642973fab4"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/glm-5.3-flashx",
+      "name": "GLM 5.3 FlashX",
+      "provider": "Free",
+      "family": "glm",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-glm-5-3-flashx/llms.txt",
+        "datasheetSha256": "d2d95cb47fc61f6b1673a5f1d29c5382500d509e8cdb1c4c282ecaf728407665"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/gpt-6-luna",
+      "name": "Gpt 6 Luna",
+      "provider": "Free",
+      "family": "gpt",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-gpt-6-luna/llms.txt",
+        "datasheetSha256": "8c7fbceb1dabbed91f38e923f7986d3f5c38fcf401d994e967db950294294a4c"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/hy4",
+      "name": "HY 4",
+      "provider": "Free",
+      "family": "tencent",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 2,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-hy4/llms.txt",
+        "datasheetSha256": "0719341710c31a597d8005203a19d3d683690baaec1b3cec12289c9feaed8d01"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/hy4-flash",
+      "name": "HY4 Flash",
+      "provider": "Free",
+      "family": "tencent",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 2,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [
+        "fallback-alias",
+        "hy4-upstream-unverified"
+      ],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-hy4-flash/llms.txt",
+        "datasheetSha256": "a29a43f01f1424242936234e8def926fb2345340cae6ea9934e0c27ebe90aef5"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": [
+        "Provider metadata tags retained; aliases are not independent upstream attestations."
+      ]
+    },
+    {
+      "id": "free/kimi-k2.8",
+      "name": "Kimi K2.8",
+      "provider": "Free",
+      "family": "kimi",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 2,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-kimi-k2-8/llms.txt",
+        "datasheetSha256": "4e829a7d53f709c5821180278b473a32bc967b7e8df8af397357d2cd6d95b215"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/kimi-k3",
+      "name": "Kimi K3",
+      "provider": "Free",
+      "family": "kimi",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-kimi-k3/llms.txt",
+        "datasheetSha256": "13c2a361db0e434204dec093c44bcd424c4e4a81d4d2ff0950413c9dea3b7f2f"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/mimo-v2.6-flash",
+      "name": "Mimo V2.6 Flash",
+      "provider": "Free",
+      "family": "mimo",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 2,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-mimo-v2-6-flash/llms.txt",
+        "datasheetSha256": "41918bd56f6670b0da94e20f230b917b30c24a8a046eeb6da24d34291767e7eb"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/mimo-v2.6-pro",
+      "name": "Mimo V2.6 Pro",
+      "provider": "Free",
+      "family": "mimo",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 2,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-mimo-v2-6-pro/llms.txt",
+        "datasheetSha256": "71d6b45210a8af413c27268d08f6b4eea18f63076387fea3ab406eae721aaa4a"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/minimax-m3",
+      "name": "MiniMax M3",
+      "provider": "Free",
+      "family": "minimax",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 2,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "partial",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-minimax-m3/llms.txt",
+        "datasheetSha256": "d3171a55994c382fde6a2cc7d732c1ef9ef3c5bbdf370d6ed2dcb57170ad2534"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": [
+        "Public health is partial; availability must be established by a bounded request."
+      ]
+    },
+    {
+      "id": "free/minimax-m3.1-flash",
+      "name": "MiniMax M3.1 Flash",
+      "provider": "Free",
+      "family": "minimax",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-minimax-m3-1-flash/llms.txt",
+        "datasheetSha256": "100500870f0ee7ce0335597bc89299090e94bacb2998263144ae73625760e659"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/muse-spark-1.3",
+      "name": "Muse Spark 1.3",
+      "provider": "Free",
+      "family": "muse",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": false,
+      "requiresSubscription": true,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-muse-spark-1-3/llms.txt",
+        "datasheetSha256": "a8e1a59bf2f48f38acf9f802489055e2136d28fecfc19f3350a030942bf59a95"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "free/qwen-3.8-max",
+      "name": "Qwen 3.8 MAX",
+      "provider": "Free",
+      "family": "qwen",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "free-allowance",
+      "allowanceWeight": 3,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/free-qwen-3-8-max/llms.txt",
+        "datasheetSha256": "4cb9c243a24bb4203ac2ebae1ff30e24a8ddf6335d09b88771d043c84fa9fae2"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0,
+        "datasheetOutputPerMillion": 0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "name": "Gemini 3.8 Flash",
+      "provider": "Gemini",
+      "family": "gemini",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.1,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gemini-3-8-flash/llms.txt",
+        "datasheetSha256": "303881081722d469030df9177423142acce55c8f2022202a10b6f0fd6cf1211f"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.1,
+        "publicOutputPerMillion": 0.1,
+        "datasheetInputPerMillion": 0.1,
+        "datasheetOutputPerMillion": 0.1,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gemini-4-argon",
+      "name": "Gemini 4 Argon",
+      "provider": "Gemini",
+      "family": "gemini",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 0.5,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gemini-4-argon/llms.txt",
+        "datasheetSha256": "8a4908ee938e2139e96a6944034f1ea5b92063e4f78d21f2f8b0d89eb297aa6c"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.5,
+        "publicOutputPerMillion": 0.5,
+        "datasheetInputPerMillion": 0.5,
+        "datasheetOutputPerMillion": 0.5,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gemini-4-carbon",
+      "name": "Gemini 4 Carbon",
+      "provider": "Gemini",
+      "family": "gemini",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 0.5,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gemini-4-carbon/llms.txt",
+        "datasheetSha256": "64e8d4714d48206b5b4efbd1fd3ce6bafc1db398f88c93fd8be08b61e444a65c"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.5,
+        "publicOutputPerMillion": 0.5,
+        "datasheetInputPerMillion": 0.5,
+        "datasheetOutputPerMillion": 0.5,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gemini-4-hydrogen",
+      "name": "Gemini 4 Hydrogen",
+      "provider": "Gemini",
+      "family": "gemini",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 0.3,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gemini-4-hydrogen/llms.txt",
+        "datasheetSha256": "379ee820bb50c6257cb1175babc4f841fd2b0d697b9f079299a28d5e1540763b"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.3,
+        "publicOutputPerMillion": 0.3,
+        "datasheetInputPerMillion": 0.3,
+        "datasheetOutputPerMillion": 0.3,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "glm-5.3",
+      "name": "GLM 5.3",
+      "provider": "GLM",
+      "family": "glm",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.15,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/glm-5-3/llms.txt",
+        "datasheetSha256": "0915ee97136499950826d76045a82d48683ca86c785f5c5127ad475e3bdd0e21"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.15,
+        "publicOutputPerMillion": 0.15,
+        "datasheetInputPerMillion": 0.15,
+        "datasheetOutputPerMillion": 0.15,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "glm-5.3-flash",
+      "name": "GLM-5.3 Flash",
+      "provider": "GLM",
+      "family": "glm",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.05,
+      "outputPerMillion": 0.05,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/glm-5-3-flash/llms.txt",
+        "datasheetSha256": "e7e1a4d70d993e7e8262b165f9a1454ebcba31c0dbe7a302cc188be71b9cece2"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.05,
+        "publicOutputPerMillion": 0.05,
+        "datasheetInputPerMillion": 0.05,
+        "datasheetOutputPerMillion": 0.05,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gpt-6-luna",
+      "name": "Gpt 6 Luna",
+      "provider": "GPT",
+      "family": "gpt",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.075,
+      "outputPerMillion": 0.075,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gpt-6-luna/llms.txt",
+        "datasheetSha256": "a11c34649adffcb91b4b466224cbe5321a0512decbac6a74fc6d953a9a552bfe"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.075,
+        "publicOutputPerMillion": 0.075,
+        "datasheetInputPerMillion": 0.075,
+        "datasheetOutputPerMillion": 0.075,
+        "discountInputPerMillion": 0.04,
+        "discountOutputPerMillion": 0.04,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gpt-6.1-terra",
+      "name": "Gpt 6.1 Terra",
+      "provider": "GPT",
+      "family": "gpt",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.17,
+      "outputPerMillion": 0.17,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gpt-6-1-terra/llms.txt",
+        "datasheetSha256": "d78974091a2d51dd57abb7e238f50467b830c14d3a2be3f4e2738988fe4f03ed"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.17,
+        "publicOutputPerMillion": 0.17,
+        "datasheetInputPerMillion": 0.17,
+        "datasheetOutputPerMillion": 0.17,
+        "discountInputPerMillion": 0.08,
+        "discountOutputPerMillion": 0.08,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gpt-6.2-astra",
+      "name": "Gpt 6.2 Astra",
+      "provider": "GPT",
+      "family": "gpt",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 0.5,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gpt-6-2-astra/llms.txt",
+        "datasheetSha256": "bddcc7aa15c8fd7f3d34bc42eff17405a21c6561143044d31e174fefdf2328cb"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.5,
+        "publicOutputPerMillion": 0.5,
+        "datasheetInputPerMillion": 0.5,
+        "datasheetOutputPerMillion": 0.5,
+        "discountInputPerMillion": 0.25,
+        "discountOutputPerMillion": 0.25,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "gpt-6.2-sol",
+      "name": "Gpt 6.2 Sol",
+      "provider": "GPT",
+      "family": "gpt",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 0.3,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/gpt-6-2-sol/llms.txt",
+        "datasheetSha256": "d6c9545ee026d532d8ac265a064a0a768057cb70711a773ee58849ee42b204e0"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.3,
+        "publicOutputPerMillion": 0.3,
+        "datasheetInputPerMillion": 0.3,
+        "datasheetOutputPerMillion": 0.3,
+        "discountInputPerMillion": 0.15,
+        "discountOutputPerMillion": 0.15,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "grok-4.7",
+      "name": "grok-4.7",
+      "provider": "Grok",
+      "family": "grok",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "500K",
+      "contextTokens": 512000,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 0.3,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/grok-4-7/llms.txt",
+        "datasheetSha256": "0dc833b1ebabef24fa05b212803111a1c15e277d028edcb30c180b7528b9b23c"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.3,
+        "publicOutputPerMillion": 0.3,
+        "datasheetInputPerMillion": 0.3,
+        "datasheetOutputPerMillion": 0.3,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "hy4-preview",
+      "name": "Tencent Hy4",
+      "provider": "Tencent",
+      "family": "tencent",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 0.3,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/hy4-preview/llms.txt",
+        "datasheetSha256": "ead4d093c5bb1e2579705bb15991942067d597f163648905465d124ff16f02b1"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.3,
+        "publicOutputPerMillion": 0.3,
+        "datasheetInputPerMillion": 0.3,
+        "datasheetOutputPerMillion": 0.3,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "jev-1.13",
+      "name": "Jev 1.13",
+      "provider": "Jev Group",
+      "family": "jev-group",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "64K",
+      "contextTokens": 65536,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.042,
+      "outputPerMillion": 0,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": false,
+        "toolsClaim": false,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [
+        "decision",
+        "fast"
+      ],
+      "routeClaim": "decisions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/jev-1-13/llms.txt",
+        "datasheetSha256": "11918515c1b702230a18b5eb44f80da5187e2b4064db34441b488026be2928e0",
+        "routeURL": "https://apinex.bond/developers/models/decisions.md",
+        "routeSha256": "5a7742c9f7ef618b4ae5e20107d4f85aeaf56ef01340cb458c871063c57e0b52"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.042,
+        "publicOutputPerMillion": 0,
+        "datasheetInputPerMillion": 0.042,
+        "datasheetOutputPerMillion": 0.0,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": [
+        "Provider metadata tags retained; aliases are not independent upstream attestations.",
+        "Use the verified typed Decisions route for classification. Do not fabricate free-form role outputs from a typed answer."
+      ]
+    },
+    {
+      "id": "kimi-k3.1-pro",
+      "name": "Kimi K3.1 Pro",
+      "provider": "Kimi",
+      "family": "kimi",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 0.3,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/kimi-k3-1-pro/llms.txt",
+        "datasheetSha256": "8091a1c9821da32795697f02a4e7677c0b9e62c64bb90d0d8a3ee15d7d664627"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.3,
+        "publicOutputPerMillion": 0.3,
+        "datasheetInputPerMillion": 0.3,
+        "datasheetOutputPerMillion": 0.3,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    },
+    {
+      "id": "muse-spark-1.3",
+      "name": "Muse Spark 1.3",
+      "provider": "Muse",
+      "family": "muse",
+      "familySource": "catalog-name-grouping-not-upstream-attestation",
+      "contextWindowClaim": "1M",
+      "contextTokens": 1048576,
+      "contextReservationBasis": "Binary upper bound of published display context; reserve entire capacity at maximum verified base rate.",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 0.3,
+      "pricingStatus": "verified-published",
+      "billingTier": "paid",
+      "allowanceWeight": null,
+      "allowWithoutSubscription": true,
+      "requiresSubscription": false,
+      "accessStatus": "roster-listed; runtime entitlement and quota still apply",
+      "capabilities": {
+        "visionClaim": true,
+        "toolsClaim": true,
+        "streamingClaim": true,
+        "qualification": "Published claims, not empirical task qualification"
+      },
+      "health": "live",
+      "tags": [],
+      "routeClaim": "chat-completions",
+      "sources": {
+        "catalogURL": "https://apinex.bond/api/public/models",
+        "datasheetURL": "https://apinex.bond/models/muse-spark-1-3/llms.txt",
+        "datasheetSha256": "86ff2ec6269739f8498bb897226840ae8b749461367142c0cdc3e368d4ee28fb"
+      },
+      "publishedRates": {
+        "publicInputPerMillion": 0.3,
+        "publicOutputPerMillion": 0.3,
+        "datasheetInputPerMillion": 0.3,
+        "datasheetOutputPerMillion": 0.3,
+        "discountInputPerMillion": 0,
+        "discountOutputPerMillion": 0,
+        "reservationUsesDiscount": false
+      },
+      "notes": []
+    }
+  ],
+  "limitations": [
+    "Roster listing is not entitlement or empirical accuracy.",
+    "Subscription and allowance status are account-specific and excluded from this public snapshot.",
+    "Zero discount fields are not zero paid rates.",
+    "Unknown/new roster IDs require verified catalog metadata before dispatch.",
+    "Full context reservations are conservative USD capacity, not estimated actual bill."
+  ],
+  "documentedUnavailableModels": [
+    "claude-fable-5.1",
+    "free/jev-1.13",
+    "gemini-3.1-pro",
+    "gpt-5.6-terra",
+    "gpt-6-astra",
+    "gpt-6-luna-decisions",
+    "gpt-6.1-sol",
+    "kimi-k3",
+    "subq-snap-preview"
+  ]
+}

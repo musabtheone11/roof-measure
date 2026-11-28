@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Agent activity · Roof Measure</title>
+  <link rel="stylesheet" href="agents.css">
+  <script src="agents.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to agent activity</a>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Roof Measure home"><span class="brand-mark" aria-hidden="true">⌂</span><span>Roof Measure<small>Diversity Contracting</small></span></a>
+    <nav aria-label="Project"><a href="index.html">Open roof app</a><a href="https://github.com/musabtheone11/roof-measure/actions/workflows/roof-cloud.yml" target="_blank" rel="noopener noreferrer">Cloud workflow</a></nav>
+  </header>
+  <main id="main">
+    <div class="heading-row">
+      <div><p class="eyebrow">APINEX · Engineering teams</p><h1>Roof agent activity</h1><p class="intro">See each model’s assignment, reviewer and recorded result.</p></div>
+      <div class="heading-actions"><a href="#team-heading">View model teams</a><button id="refresh" type="button">Refresh status</button></div>
+    </div>
+    <div id="connection" class="notice" role="status" aria-live="polite">Loading the latest published cycle…</div>
+    <section class="snapshot panel" aria-labelledby="cycle-heading">
+      <div class="snapshot-top"><div><p class="eyebrow">Published evidence</p><h2 id="cycle-heading">Latest recorded cycle</h2></div><span id="cycle-state" class="badge">Awaiting status</span></div>
+      <dl class="cycle-details">
+        <div><dt>Last published</dt><dd><time id="published">Not loaded</time><span id="age" class="secondary"></span></dd></div>
+        <div><dt>Cloud execution</dt><dd><a id="run-link" href="https://github.com/musabtheone11/roof-measure/actions/workflows/roof-cloud.yml" target="_blank" rel="noopener noreferrer">Open workflow</a><span id="run-result" class="secondary">No execution loaded</span></dd></div>
+        <div><dt>Reports and verification</dt><dd><a id="evidence-link" aria-disabled="true">Evidence not loaded</a><span id="evaluation" class="secondary">No evaluation loaded</span></dd></div>
+      </dl>
+      <p id="scope" class="scope">This page reads public status only. It does not start agents or make model requests.</p>
+      <p id="legacy" class="legacy" hidden></p>
+    </section>
+    <section aria-label="Recorded model coverage"><div id="coverage" class="coverage"></div><p id="fleet-coverage" class="fleet-coverage" hidden></p><p id="coverage-note" class="secondary coverage-note">Model coverage will appear when a status record is available.</p></section>
+    <details id="unavailable-models" class="panel unavailable" hidden>
+      <summary>Documented models unavailable in live catalog <span id="unavailable-count"></span></summary>
+      <p>These documented model IDs were unavailable in the live catalog recorded for this cycle. They were not attempted; no substitute model was used for them. They are excluded from assignment and inference counts.</p>
+      <ul id="unavailable-list"></ul>
+    </details>
+    <section class="team-section" aria-labelledby="team-heading">
+      <div class="section-heading"><div><p class="eyebrow">Assignments and handoffs</p><h2 id="team-heading">The model teams</h2></div><p id="shown" class="secondary" role="status" aria-live="polite">No record loaded</p></div>
+      <form id="filters" class="filters" role="search" autocomplete="off">
+        <label class="search-label">Search models, teams or tasks<input id="search" type="search" placeholder="Find a model or assignment"></label>
+        <label>Team<select id="team"><option value="">All teams</option></select></label>
+        <label>Recorded status<select id="status"><option value="">All statuses</option><option value="complete">Completed</option><option value="running">Running</option><option value="blocked">Blocked, deferred or failed</option><option value="disabled">Disabled</option><option value="review">Review required or rejected</option><option value="queued">Queued or pending</option><option value="other">Other / not reported</option></select></label>
+      </form>
+      <p class="review-note">Reviewer names show assignments. A different model name alone does not prove that independent verification was completed.</p>
+      <div id="agents" class="agent-grid" aria-busy="true"></div>
+      <div id="empty" class="empty panel" hidden><h3 id="empty-title">No matching assignments</h3><p id="empty-detail">Try a different search or filter.</p></div>
+    </section>
+    <footer class="page-footer"><p>Status refreshes once a minute while this page is visible. Published results describe a recorded cycle; agents are not claimed to be running continuously.</p><a href="https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-status.json" target="_blank" rel="noopener noreferrer">View public status JSON</a></footer>
+  </main>
+</body>
+</html>

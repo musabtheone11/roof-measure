@@ -9,9 +9,14 @@ import {AUTHORIZED_BUDGET} from './config.mjs';
 import {requestOrganizationRole} from './provider.mjs';
 import {runCloudCases} from './cloud-cases.mjs';
 import {verifyCloudPDF} from './cloud-pdf.mjs';
+import {runModelFleet} from './model-fleet.mjs';
+import {auditModelCatalog} from './catalog-audit.mjs';
+import {runDesignFleet} from './design-fleet.mjs';
+import {reviewDesignConcepts,DESIGN_REVIEW_MODEL} from './design-review.mjs';
+import {pruneDesignImageCache} from './design-cache.mjs';
 
 export const CLOUD_PROTOCOL='cloud-evaluation-v1';
-export function monitoringDecision(metrics,reviews,pdfReview,browserStatus='not-run') {
+export function monitoringDecision(metrics,reviews,pdfReview,browserStatus='not-run',fleet=null) {
   const reasons=[];
   if(!metrics || !Number.isInteger(metrics.attempted) || metrics.attempted<1)reasons.push('NO_CASES');
   if(metrics?.traceFailures)reasons.push('TRACE_FAILURES');
@@ -22,7 +27,10 @@ export function monitoringDecision(metrics,reviews,pdfReview,browserStatus='not-
   if(browserStatus!=='passed')reasons.push('APP_BROWSER_CHECK_FAILED_OR_MISSING');
   if(reviews.some(r=>r.status!=='complete'))reasons.push('MODEL_REVIEW_INCOMPLETE');
   if(reviews.some(r=>r.decision!=='pass'))reasons.push('MODEL_REVIEW_NOT_PASS');
-  if(reviews.length!==2)reasons.push('TWO_INDEPENDENT_ROLES_REQUIRED');
+  if(fleet) {
+    if(!fleet.agents?.length||fleet.agents.some(a=>!a.attempted)||fleet.agents.some(a=>a.primaryValidated!==true))reasons.push('FLEET_COVERAGE_INCOMPLETE');
+    if(fleet.agents.some(a=>a.reviewStatus!=='complete'))reasons.push('INDEPENDENT_FLEET_REVIEW_INCOMPLETE');
+  } else if(reviews.length!==2)reasons.push('TWO_INDEPENDENT_ROLES_REQUIRED');
   return {status:reasons.length?'review-required':'synthetic-monitoring-pass',reasons,
     productionReleaseApproved:false,fieldAccuracyValidated:false,
     meaning:'Monitoring of generated cases only; no application code is promoted by this decision'};
@@ -34,16 +42,25 @@ function directoryZip(directory) {
     if(entry.isDirectory())visit(p);else if(entry.isFile()) {
       const name=relative(directory,p).replaceAll('\\','/');
       if(name.endsWith('.zip'))continue;
-      const bytes=readFileSync(p);total+=bytes.length;if(total>32*1024*1024)throw new Error('Cloud report archive exceeds32MiB limit');files[name]=new Uint8Array(bytes);
+      const bytes=readFileSync(p);total+=bytes.length;if(total>64*1024*1024)throw new Error('Cloud report archive exceeds64MiB limit');files[name]=new Uint8Array(bytes);
     }
   }}
   visit(directory);return Buffer.from(zipSync(files,{level:6}));
 }
 export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevision,apiKey=process.env.APINEX_API_KEY,paidAllowed=false,browserStatus='not-run',
-  casesRunner=runCloudCases,requestRole=requestOrganizationRole,checkpoint=async()=>{},now=Date.now}={}) {
+  casesRunner=runCloudCases,requestRole=requestOrganizationRole,checkpoint=async()=>{},now=Date.now,
+  fleetMode=false,fleetRunner=runModelFleet,catalogAuditor=auditModelCatalog,
+  designMode=false,designRunner=runDesignFleet,designReviewer=reviewDesignConcepts}={}) {
   if(!stateDir||!outputDir||!sourceRevision||!Number.isSafeInteger(seed))throw new Error('Explicit cloud state/output/seed/revision required');
   outputDir=resolve(outputDir);stateDir=resolve(stateDir);mkdirSync(outputDir,{recursive:true,mode:0o700});
   const generated=await casesRunner({outputDir,seed,count,sourceRevision});
+  // Build split pass counts from independently verified case records, never
+  // model prose. The CEO's fact set can then reject invented holdout claims.
+  generated.metrics={...generated.metrics,reviewRequired:(generated.cases||[]).filter(c=>!c.verification?.diagnosticPass).length,
+    splits:Object.fromEntries(['development','validation','holdout'].map(split=>{
+      const rows=(generated.cases||[]).filter(c=>c.split===split),passed=rows.filter(c=>c.verification?.diagnosticPass).length;
+      return [split,{...generated.metrics?.splits?.[split],cases:rows.length,diagnosticPasses:passed,reviewRequired:rows.length-passed}];
+    }))};
   const pdfResults=[];
   for(const item of generated.cases||[]) {
     try {
@@ -57,23 +74,75 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
     generatorSourceSha256:generated.generatorSourceSha256,engineSourceHashes:generated.engineSourceHashes,
     metricsHash:digest(generated.metrics),verificationPolicyHash:digest(generated.policy||{})};
   const evaluationHash=digest(identity),workflowId=`cloud-${evaluationHash.slice(0,32)}`;
-  let store;const reviews=[];let stateWarning=null;
+  let store;const reviews=[];let stateWarning=null,fleet=null;
   try {store=new OrgStore(stateDir,{now});}catch(error){if(paidAllowed&&apiKey)throw error;stateWarning='Prior state is unreadable; deterministic reports continue without resetting paid history';}
   try {
     store?.recover();store?.setControl('running');
     // Development detail only. CEO sees aggregate evaluation and critique, never held-out oracle rows.
     const allDevelopment=(generated.cases||[]).filter(c=>c.split==='development');
-    const development=allDevelopment.slice(0,6).map(c=>({id:c.id,verification:c.verification,actual:c.actual,propertyGroup:c.propertyGroup}));
+    const development=allDevelopment.slice(0,6).map(c=>{
+      let reportObservation=null;
+      try {
+        const bytes=readFileSync(join(outputDir,c.artifacts.customerData.path));
+        if(bytes.length<=65536) {
+          const report=JSON.parse(bytes);
+          reportObservation={source:'Generated customer report artifact; output under test, not reference truth',sha256:digest(bytes),
+            status:report.status,quantities:report.quantities,notes:report.notes};
+        }
+      } catch { /* Missing report evidence remains explicit; never synthesize source observations. */ }
+      return {id:c.id,verification:c.verification,actual:c.actual,propertyGroup:c.propertyGroup,reportObservation};
+    });
     const developmentIds=new Set(allDevelopment.map(c=>c.id)),developmentPDFs=pdfResults.filter(r=>developmentIds.has(r.id));
     const developmentMetrics={scope:'development-only',attempted:allDevelopment.length,
-      diagnosticPasses:allDevelopment.filter(c=>c.verification?.diagnosticPass).length,traceFailures:allDevelopment.filter(c=>c.error).length};
+      diagnosticPasses:allDevelopment.filter(c=>c.verification?.diagnosticPass).length,
+      reviewRequired:allDevelopment.filter(c=>!c.verification?.diagnosticPass).length,traceFailures:allDevelopment.filter(c=>c.error).length};
     const contextBase={protocol:CLOUD_PROTOCOL,sourceRevision,seed,metrics:generated.metrics,policy:generated.policy,
       oracleMethod:generated.oracle,execution:generated.execution,fixtureHash:generated.fixtureHash,engineSourceHashes:generated.engineSourceHashes,
       pdfReview:{checked:pdfReview.checked,failed:pdfReview.failed,method:'Independent PDF.js readback: quantity rows, metadata, Letter, text bounds/contrast, no images or vector paths'},scope:generated.scope,
       warning:'Generated synthetic roofs, not field accuracy. These PDFs are outputs, not reference truth. No code was changed.'};
     const inputBytes=Buffer.from(JSON.stringify({identity,metrics:generated.metrics}));
     const inputArtifact=store?store.putArtifact(inputBytes):{hash:digest(inputBytes)};
-    for(const [role,model,actorId] of [['critique','gpt-6.2-astra','cloud-independent-critic'],['ceo','claude-opus-5.5','cloud-ceo']]) {
+    if(fleetMode) {
+      const catalogAudit=paidAllowed&&apiKey?await catalogAuditor():null;
+      fleet=await fleetRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
+        developmentContext:{...contextBase,metrics:developmentMetrics,pdfReview:{checked:developmentPDFs.length,failed:developmentPDFs.filter(p=>!p.ok).length},developmentCases:development},
+        aggregateContext:contextBase,paidAllowed,apiKey,requestRole,checkpoint,now,catalogAudit,
+        limits:{requestLimit:designMode?57:64}});
+      if(designMode) {
+        const workflowId='fleet-'+fleet.planHash.slice(0,32);
+        const design=await designRunner({store,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
+          paidAllowed,apiKey,checkpoint,outputDir,now,workflowId});
+        const designReview=await designReviewer({store,designFleet:design,evaluationHash,sourceRevision,inputHash:inputArtifact.hash,
+          paidAllowed,apiKey,checkpoint,outputDir,now,workflowId});
+        writeFileSync(join(outputDir,'design-review.json'),JSON.stringify(designReview,null,2));
+        fleet.design=design;fleet.designReview=designReview;
+        const imageAgents=design.agents.map(row=>({...row,role:'reporting',contributionKind:'design-concept',
+          primaryValidated:row.status==='complete'&&!!row.artifact,decision:designReview.decision||'needs-human',
+          reviewerModel:DESIGN_REVIEW_MODEL,reviewStatus:row.artifact&&designReview.reviewCompleted?'complete':'pending'}));
+        fleet.agents.push(...imageAgents);
+        fleet.catalog.textRosterCount=fleet.catalog.rosterCount;
+        fleet.catalog.designModelCount=design.agents.length;
+        fleet.catalog.rosterCount=(fleet.catalog.rosterCount??fleet.catalog.catalogCount)+design.agents.length;
+        fleet.coverage.rosterCount=fleet.catalog.rosterCount;
+        fleet.coverage.assigned=fleet.agents.length;
+        fleet.coverage.attempted=fleet.agents.filter(row=>row.attempted).length;
+        fleet.coverage.validContributions=fleet.agents.filter(row=>row.primaryValidated).length;
+        fleet.budget.requestLimit=64;
+        fleet.cacheMaintenance=pruneDesignImageCache(store,{keepHashes:design.artifacts.map(image=>image.sha256),verifiedPreviousCheckpoint:paidAllowed&&design.artifacts.length>0});
+      }
+      reviews.push(...fleet.agents);
+      // Make the actual proposals and original replies reviewable in the report
+      // artifact, rather than exposing only opaque state-store hashes.
+      mkdirSync(join(outputDir,'model-reviews'),{recursive:true});
+      for(const row of [...fleet.agents,...(fleet.closingReviews||[])]) {
+        const prefix=digest(row.taskId||row.model).slice(0,24);
+        for(const [label,hash] of [['result',row.resultHash],['original',row.rawResponseHash]]) {
+          if(!hash||!store)continue;
+          try { writeFileSync(join(outputDir,'model-reviews',`${prefix}-${label}.json`),store.readArtifact(hash)); }
+          catch { /* Missing audit artifacts remain visible in their task record. */ }
+        }
+      }
+    } else for(const [role,model,actorId] of [['critique','gpt-6.2-astra','cloud-independent-critic'],['ceo','claude-opus-5.5','cloud-ceo']]) {
       const id=`${workflowId}-${role}`;
       const task={schemaVersion:1,id,workflowId,maxAttempts:1,role,actorId,sourceRevision,datasetRevision:CLOUD_PROTOCOL,
         candidateHash:evaluationHash,policyVersion:CLOUD_PROTOCOL,inputHashes:[inputArtifact.hash],stage:role,
@@ -117,8 +186,9 @@ export async function runCloudCycle({stateDir,outputDir,seed,count=12,sourceRevi
     const ledger=store?store.ledger():{requests:null,reportedUsd:null,reservedUsd:null,unknownBillingRequests:null};
     const report={schemaVersion:1,protocol:CLOUD_PROTOCOL,sourceRevision,seed,count,evaluationHash,
       generatedAt:new Date(now()).toISOString(),metrics:generated.metrics,reviews,stateWarning,
-      browserStatus,pdfReview:{checked:pdfReview.checked,failed:pdfReview.failed},decision:monitoringDecision(generated.metrics,reviews,pdfReview,browserStatus),
-      budget:{requestLimit:2,maxUsd:AUTHORIZED_BUDGET.maxUsd,dayUsd:AUTHORIZED_BUDGET.dayUsd,weekUsd:20,monthUsd:80,
+      browserStatus,pdfReview:{checked:pdfReview.checked,failed:pdfReview.failed},fleet,
+      decision:monitoringDecision(generated.metrics,reviews,pdfReview,browserStatus,fleet),
+      budget:{requestLimit:fleet?.budget?.requestLimit??2,maxUsd:fleet?.budget?.maxUsd??AUTHORIZED_BUDGET.maxUsd,dayUsd:AUTHORIZED_BUDGET.dayUsd,weekUsd:20,monthUsd:80,
         totalRequests:ledger.requests,reportedUsd:ledger.reportedUsd,committedUsd:ledger.reservedUsd,unknownBillingRequests:ledger.unknownBillingRequests},
       windowsDownloadsRequired:false,scope:'Cloud-generated monitoring; synthetic cases are not real-property accuracy evidence'};
     writeFileSync(join(outputDir,'cycle.json'),JSON.stringify(report,null,2));
@@ -135,7 +205,9 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const sourceRevision=execFileSync('git',['rev-parse','HEAD'],{cwd:fileURLToPath(new URL('..',import.meta.url)),encoding:'utf8'}).trim();
   const seed=Number(arg('--seed',new Date().toISOString().slice(0,10).replaceAll('-','')));
   runCloudCycle({stateDir:arg('--state','.devcache/cloud-state'),outputDir:arg('--output','.devcache/cloud-output'),
-    count:Number(arg('--count','12')),seed,sourceRevision,browserStatus:process.env.ROOF_CLOUD_BROWSER_STATUS==='success'?'passed':'not-run',paidAllowed:process.env.ROOF_CLOUD_PAID_ALLOWED==='true',apiKey:process.env.ROOF_CLOUD_PAID_ALLOWED==='true'?process.env.APINEX_API_KEY:null}).then(r=>{
+    count:Number(arg('--count','12')),seed,sourceRevision,browserStatus:process.env.ROOF_CLOUD_BROWSER_STATUS==='success'?'passed':'not-run',paidAllowed:process.env.ROOF_CLOUD_PAID_ALLOWED==='true',apiKey:process.env.ROOF_CLOUD_PAID_ALLOWED==='true'?process.env.APINEX_API_KEY:null,
+    fleetMode:process.env.ROOF_CLOUD_MODEL_MODE==='all-models',designMode:process.env.ROOF_CLOUD_MODEL_MODE==='all-models',
+    checkpoint:async event=>{if(event.model&&event.phase)console.log(JSON.stringify({event:'model-task',phase:event.phase,model:event.model}));}}).then(r=>{
       console.log(JSON.stringify({status:r.decision.status,metrics:r.metrics,reviews:r.reviews.map(x=>({role:x.role,status:x.status})),budget:r.budget}));
       if(process.env.GITHUB_STEP_SUMMARY)writeFileSync(process.env.GITHUB_STEP_SUMMARY,
         `# Roof cloud evaluation\n\nDecision: **${r.decision.status}**\n\nGenerated reports: ${r.metrics.generatedCustomerPDFs}; numerical diagnostic passes: ${r.metrics.diagnosticPasses}/${r.metrics.attempted}; PDF failures: ${r.pdfReview.failed}.\n\nModel review: ${r.reviews.map(x=>x.role+'='+x.status).join(', ')}.\n\nReported cumulative debit: ${r.budget.reportedUsd==null?'unknown':'$'+r.budget.reportedUsd}; unknown billing requests: ${r.budget.unknownBillingRequests}.\n\nDownload the report artifact attached to this run, extract it and open index.html or the individual PDFs.\n\nSynthetic monitoring only. No field accuracy certification or code promotion. Windows Downloads are not required.\n`,{flag:'a'});

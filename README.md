@@ -25,6 +25,12 @@ A self-contained roof measurement and takeoff tool, like Roofr Measurements or E
 
 The [self-contained cloud laboratory](docs/CLOUD_ROOF_LAB.md) generates cases, checks actual app outputs and retains downloadable reports without Windows Downloads. Optional local intake is described in the [organization design](docs/APINEX_ORGANIZATION_DESIGN.md) and [local runbook](docs/APINEX_ORGANIZATION_OPERATIONS.md). Generated diagnostics do not certify real roof accuracy.
 
+The [agent status page](agents.html) shows each model's assigned task, reviewer,
+actual dispatch and recorded result. The [every-model fleet design](docs/APINEX_MODEL_FLEET.md)
+documents catalog verification, bounded execution, independent review and the
+shared $20 rolling-week limit. Models propose improvements; trusted checks remain
+authoritative and no model response releases application changes.
+
 Preview, Print and Download use the same signature-cached PDF. A model edit during generation rejects the result; saved preview actions and delayed downloads also check the signature. Direct vector PDF generation checks the model revision across asynchronous image loading.
 
 Jobs now save as version 4 with persistent `modelId` values and optional per-quantity `measurementEvidence`. `RM.auditEvidence` requires dated source, basis, measured status and an `RM.evidenceRevision(item, quantity)` binding for facet geometry/pitch/area and edge geometry/type/length. The review panel records each quantity separately and captures dated structure/scale confirmation in `trace.scopeEvidence`, bound to the current scope geometry. Changing that scope invalidates the confirmation. Missing/stale evidence triggers REVIEW REQUIRED; unsupported real-job quantities print blank. Legacy job flags alone do not establish provenance. Illustrative fixtures remain explicitly illustrative. See [validation and coverage](docs/PLAN_FIRST_VALIDATION.md).

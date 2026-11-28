@@ -105,7 +105,7 @@ export async function startRuntime({port=3000,host='127.0.0.1',runAgents,measure
   const parts=relative.split(/[\\/]+/);if(parts.some(p=>p.startsWith('.')||['server','tools','bench','attachments','node_modules'].includes(p.toLowerCase())))return send(403,{error:'Private path.'});
   const segments=parts.filter(Boolean);
   const publicFolders=['assets','vendor','cash','permits','examples'];
-  if(segments.length && !(segments.length===1 && /^(?:index\.html|pdf-import\.mjs|[\w-]+\.(?:js|css))$/.test(segments[0]))
+  if(segments.length && !(segments.length===1 && /^(?:(?:index|agents)\.html|pdf-import\.mjs|[\w-]+\.(?:js|css))$/.test(segments[0]))
        && !publicFolders.includes(segments[0]))return send(403,{error:'Private path.'});
   const file=path.resolve(root,'.'+(relative==='/'?'/index.html':relative));if(!file.startsWith(root+path.sep))return send(403,{error:'Private path.'});
   if(!fs.existsSync(file)||!fs.statSync(file).isFile())return send(404,{error:'File not found.'});

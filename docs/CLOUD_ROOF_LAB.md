@@ -49,8 +49,11 @@ does not establish geometry accuracy.
 
 ## Model reviews and decisions
 
-Actual API NEX text requests use `gpt-6.2-astra` for independent critique and
-`claude-opus-5.5` for CEO prioritization. Exact IDs are roster-checked before calls.
+The scheduled service uses the [every-model fleet](APINEX_MODEL_FLEET.md): every
+verified catalog ID has a specialist task and recorded dispatch/access status.
+The original two-role mode remains available for compatibility. Exact IDs are
+roster-checked before calls; paid Drex and Jev use the documented typed Decisions
+route. A listed/assigned model is not reported as an executed contribution.
 Critic inputs contain development-only case details and metrics; CEO receives
 full aggregate results and the validated critique, without held-out oracle rows.
 Tasks bind source/generator/engine/policy/fixture hashes and preserve original
@@ -58,10 +61,13 @@ replies, local schema validation, prompt version, request IDs and reported costs
 One complete single JSON code fence can be removed as compatible formatting;
 prose/multiple blocks and invalid role contracts still reject.
 
-There are at most2 requests/cycle,1 per role; same evaluation identity reuses
-recorded decisions rather than paying again. Unknown costs retain reservations.
-Permanent provider faults open a persisted circuit instead of spending every day. Clearing such a circuit requires a trusted, ledger-preserving reconciliation; no automatic credential repair or circuit-reset command is claimed.
-The existing$1/workflow,$3/rolling day,$20/rolling7days,$80/UTC-month ceilings apply.
+Fleet mode admits at most64 requests/cycle, one primary task/model and bounded
+closing reviews within the same total request limit. Same evaluation identity reuses recorded decisions rather than
+paying again. Unknown costs retain reservations. Model-specific permanent faults
+block that model; authentication failures stop the provider and quota failures
+defer further affected work. No silent substitute or permanent-error retry.
+Fleet limits are $2/workflow/hour, $3/rolling day, $20/rolling7days and $80/UTC month;
+the original two-role mode retains its smaller request/workflow defaults.
 Other account activity outside this ledger is not an account-wide spending cap.
 
 The CEO cannot turn a failed numeric/PDF/browser check into a pass. Routine

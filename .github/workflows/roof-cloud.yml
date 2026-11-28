@@ -18,7 +18,7 @@ concurrency:
 jobs:
   generate-review-and-retain:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 70
     outputs:
       source_revision: ${{ steps.source.outputs.revision }}
       browser_status: ${{ steps.browser.outcome }}
@@ -67,6 +67,7 @@ jobs:
           APINEX_API_KEY: ${{ secrets.ROOF_ORG_APINEX_API_KEY || secrets.APINEX_API_KEY }}
           ROOF_CLOUD_PAID_ALLOWED: ${{ steps.bootstrap.outputs.paid_allowed }}
           ROOF_CLOUD_BROWSER_STATUS: ${{ steps.browser.outcome }}
+          ROOF_CLOUD_MODEL_MODE: all-models
         run: node --use-env-proxy organization/cloud-cycle.mjs --state "$STATE_DIR" --output "$OUTPUT_DIR" --count 12 --seed "${{ github.run_number }}"
       - name: Close and fingerprint cloud state
         if: always() && steps.bootstrap.outcome == 'success'

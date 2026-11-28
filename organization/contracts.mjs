@@ -38,7 +38,7 @@ export function validateTask(task) {
   if(task.artifacts!==undefined)strings(task.artifacts,100,200);
   if(task.priorFindings!==undefined)strings(task.priorFindings,100,2000);
   if(task.constraints!==undefined) {
-    keys(task.constraints,[],['maxAttempts','maxRuntimeMs','maxOutputTokens','maxRevisions','extension','actors','externalProcessingAuthorized','cycles','stageCount','previousTaskId','sourceHashes']);
+    keys(task.constraints,[],['maxAttempts','maxRuntimeMs','maxOutputTokens','maxRevisions','extension','actors','externalProcessingAuthorized','cycles','stageCount','previousTaskId','sourceHashes','requireMetricClaims','reviewTaskId']);
     const maxima={maxAttempts:2,maxRuntimeMs:120000,maxOutputTokens:2000,maxRevisions:2};
     for(const [k,v]of Object.entries(task.constraints))if(Object.hasOwn(maxima,k)&&(!Number.isInteger(v)||v<0||v>maxima[k]))fail('Invalid explicit task constraint');
     const c=task.constraints;
@@ -52,6 +52,8 @@ export function validateTask(task) {
     if(c.stageCount!==undefined&&(!Number.isInteger(c.stageCount)||c.stageCount<1||c.stageCount>16))fail('Invalid stage count');
     if(c.previousTaskId!==undefined&&!text(c.previousTaskId,160))fail('Invalid previous task reference');
     if(c.sourceHashes!==undefined)hashes(c.sourceHashes);
+    if(c.requireMetricClaims!==undefined&&typeof c.requireMetricClaims!=='boolean')fail('Invalid metric claim requirement');
+    if(c.reviewTaskId!==undefined&&(!text(c.reviewTaskId,160)||c.reviewTaskId===task.id))fail('Invalid independent review target');
   }
   if(Buffer.byteLength(JSON.stringify(task))>65536)fail('Task exceeds 64 KiB');
   return structuredClone(task);
@@ -103,7 +105,7 @@ function payload(role,p) {
 }
 export function validateResult(result,task) {
   validateTask(task);
-  keys(result,['schemaVersion','taskId','role',...BINDING_KEYS,'decision','findings','artifactRefs','summary','payload']);
+  keys(result,['schemaVersion','taskId','role',...BINDING_KEYS,'decision','findings','artifactRefs','summary','payload'],['metricClaims','peerReview']);
   if(Buffer.byteLength(JSON.stringify(result))>65536)fail('Result exceeds 64 KiB');
   binding(result);
   if(result.schemaVersion!==1||result.taskId!==task.id||result.role!==task.role||!sameBinding(result,task))fail('Result is not bound to the assigned task');
@@ -117,6 +119,17 @@ export function validateResult(result,task) {
   if(result.decision==='pass'&&result.findings.some(f=>f.severity==='critical'))fail('Critical findings cannot pass');
   strings(result.artifactRefs,100,200);payload(result.role,result.payload);
   if(result.role==='ceo'&&result.payload.requestedDecision!==({pass:'approve',revise:'revise',reject:'reject','needs-human':'needs-human'})[result.decision])fail('CEO envelope and requested decision disagree');
+  if(task.constraints?.requireMetricClaims&&result.metricClaims===undefined)fail('Evidence-bound metric claims are required');
+  if(result.metricClaims!==undefined) {
+    if(!object(result.metricClaims)||Object.keys(result.metricClaims).length>100||Object.entries(result.metricClaims).some(([id,value])=>!/^[-a-zA-Z0-9_.]{1,160}$/.test(id)||!finite(value)))fail('Invalid typed metric claims');
+  }
+  if(task.constraints?.reviewTaskId&&result.peerReview===undefined)fail('Independent peer review is required');
+  if(result.peerReview!==undefined) {
+    keys(result.peerReview,['taskId','decision','findings']);
+    if(!text(result.peerReview.taskId,160)||result.peerReview.taskId===task.id||result.peerReview.taskId!==task.constraints?.reviewTaskId||!['pass','revise','reject','needs-human'].includes(result.peerReview.decision))fail('Peer review must bind the assigned independent task');
+    strings(result.peerReview.findings,20,2000);
+    if(task.constraints?.reviewTaskId&&!result.peerReview.findings.length)fail('Peer review requires at least one evidence-based finding or confirmation');
+  }
   // No response actor field is accepted; identity comes exclusively from assignment.
   return {...structuredClone(result),actorId:task.actorId};
 }
