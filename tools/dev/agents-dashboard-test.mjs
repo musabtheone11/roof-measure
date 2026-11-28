@@ -5,6 +5,7 @@ import {chromium} from 'playwright';
 import {testServer} from './ui-test-server.mjs';
 
 const STATUS_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-status.json';
+const QUALIFICATION_URL='https://raw.githubusercontent.com/musabtheone11/roof-measure/roof-cloud-status/latest-qualification.json';
 const artifacts=path.resolve('.devcache/agents-dashboard');
 await fs.mkdir(artifacts,{recursive:true});
 const now=Date.now(),teams=['Roof measurement engineering','Sketch and document interpretation','Independent verification','Reports and visual layout','Reference data','Real-case testing','Operations'];
@@ -14,24 +15,28 @@ const fixture={schemaVersion:1,repository:'musabtheone11/roof-measure',generated
   run:{id:'12345',attempt:2,url:'https://github.com/musabtheone11/roof-measure/actions/runs/12345',pipelineResult:'success',startedAt:new Date(now-60_000).toISOString()},
   reportArtifact:{available:true,url:'https://github.com/musabtheone11/roof-measure/actions/runs/12345#artifacts'},
   evaluation:{status:'review-required',attempted:12,diagnosticPasses:9,generatedCustomerPDFs:12,fieldAccuracyValidated:false},
-  fleet:{mode:'all-models',catalogCheckedAt:new Date(now-3600_000).toISOString(),catalogHash:'b'.repeat(64),rosterCount:45,assignedCount:45,attemptedCount:30,validCount:24,blockedCount:8,reviewedCount:12,unavailableModels},
+  fleet:{mode:'all-models',catalogCheckedAt:new Date(now-3600_000).toISOString(),catalogHash:'b'.repeat(64),rosterCount:45,assignedCount:45,attemptedCount:30,validCount:15,blockedCount:8,reviewedCount:12,unavailableModels},
   scope:'SYNTHETIC DASHBOARD TEST FIXTURE — these are illustrative statuses, not live agent activity or field accuracy evidence.',
   models:Array.from({length:45},(_,index)=>({model:`fixture/model-${String(index+1).padStart(2,'0')}${index===44?'-with-a-long-explicit-model-identifier-for-responsive-layout':''}`,team:teams[index%teams.length],role:index%teams.length===0?'geometry-engineer':'evidence-reviewer',
     task:index%teams.length===0?'Confirm shared edges, closed facet polygons and independently calculated plan and sloped areas.':'Cross-check the recorded evidence, identify missing information and produce a traceable review for the next team.',
-    reviewerModel:`fixture/model-${String((index+1)%45+1).padStart(2,'0')}`,status:statuses[index%statuses.length],reviewStatus:index%3===0?'complete':'pending',
+    reviewerModel:`fixture/model-${String((index+1)%45+1).padStart(2,'0')}`,status:statuses[index%statuses.length],contributionValidated:[0,4].includes(index%statuses.length),reviewStatus:index%3===0?'complete':'pending',
     ...(index%statuses.length===2||index%statuses.length===3?{code:'CLOUD_SECRET_NOT_CONFIGURED'}:{}),decision:index%statuses.length===0?'revise':null,reportedUsd:index%statuses.length===0?.0007:null}))};
 const server=await testServer(process.argv[2]);
 let browser;
 try {
   browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath()});
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
-  const errors=[],unexpected=[],requests=[];
-  let response={status:200,body:fixture};
+  const errors=[],unexpected=[],requests=[],qualificationRequests=[];
+  let response={status:200,body:fixture},qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}};
   await context.route('**/*',async route=>{
     const url=route.request().url();
     if(url===STATUS_URL) {
       requests.push({url,method:route.request().method(),headers:route.request().headers()});
       await route.fulfill({status:response.status,contentType:'application/json',body:JSON.stringify(response.body)});
+    } else if(url===QUALIFICATION_URL) {
+      qualificationRequests.push({url,method:route.request().method(),headers:route.request().headers()});
+      const next=typeof qualificationResponse==='function'?await qualificationResponse():qualificationResponse;
+      await route.fulfill({status:next.status,contentType:'application/json',body:JSON.stringify(next.body)});
     } else if(new URL(url).origin===new URL(server.baseURL).origin)await route.continue();
     else {unexpected.push(url);await route.abort();}
   });
@@ -65,8 +70,11 @@ try {
   assert.match(await page.locator('#scope').innerText(),/SYNTHETIC DASHBOARD TEST FIXTURE/);
   assert.equal(await page.locator('.coverage-item').first().locator('strong').innerText(),'45');
   assert.equal(await page.locator('.coverage-item[data-kind="running"] strong').innerText(),'8');
+  assert.equal(await page.locator('.coverage-item[data-kind="valid"] strong').innerText(),'15');
+  assert.equal(await page.locator('.coverage-item[data-kind="failed"] strong').innerText(),'0');
   assert.match(await page.locator('#fleet-coverage').innerText(),/Assigned: 45 · Inference attempted: 30/);
   assert.match(await page.locator('#fleet-coverage').innerText(),/do not establish roofing accuracy/);
+  assert.match(await page.locator('#qualification-notice').innerText(),/No subscription run journal has been published/);
   assert.equal(await page.locator('#unavailable-count').innerText(),'(9)');
   await page.click('#unavailable-models > summary');
   assert.deepEqual(await page.locator('#unavailable-list li').allTextContents(),unavailableModels);
@@ -114,7 +122,7 @@ try {
   assert.match(await page.locator('.agent-card').first().innerText(),/Independent reviewer\nNot recorded/);
   assert.equal(await page.locator('.agent-card').first().getAttribute('data-status'),'complete');
 
-  const blocked={...fixture,fleet:{...fixture.fleet,attemptedCount:0,validCount:0,blockedCount:45,reviewedCount:0},models:fixture.models.map(model=>({...model,status:'blocked',code:'CLOUD_SECRET_NOT_CONFIGURED',decision:null,reportedUsd:null}))};
+  const blocked={...fixture,fleet:{...fixture.fleet,attemptedCount:0,validCount:0,blockedCount:45,reviewedCount:0},models:fixture.models.map(model=>({...model,status:'blocked',contributionValidated:false,code:'CLOUD_SECRET_NOT_CONFIGURED',decision:null,reportedUsd:null}))};
   await refresh(page,{status:200,body:blocked});await loaded(page);
   assert.match(await page.locator('#connection').innerText(),/No model is recorded as running\. 45 blocked/);
   assert.equal(await page.locator('.coverage-item[data-kind="running"] strong').innerText(),'0');
@@ -149,31 +157,102 @@ try {
   assert.match(await page.locator('.reviewer-note').innerText(),/independence is not established/);
   assert.match(await page.locator('#run-link').getAttribute('href'),/actions\/workflows\/roof-cloud.yml$/);
   assert.equal(await page.locator('#evidence-link').getAttribute('href'),null);
-  await noClipping(page);await page.close();
+  await noClipping(page);
+
+  // Reproduce the misleading seven-complete/eighteen-valid snapshot. Accepted
+  // proposals that still need review must never appear as execution failures.
+  const fullRoster={...fixture,generatedAt:new Date(now-2*3600_000).toISOString(),sourceRevision:'b'.repeat(40),
+    run:{...fixture.run,id:'77777',url:'https://github.com/musabtheone11/roof-measure/actions/runs/77777',startedAt:new Date(now-2*3600_000-60_000).toISOString()},
+    fleet:{...fixture.fleet,rosterCount:51,assignedCount:51,attemptedCount:24,validCount:18,blockedCount:27,reviewedCount:13},
+    models:Array.from({length:51},(_,index)=>({...fixture.models[index%45],model:`fixture/full-roster-${String(index+1).padStart(2,'0')}`,
+      status:index<7?'complete':index<18?'needs-human':index<24?'failed':'blocked',contributionValidated:index<18,
+      reviewStatus:index<13?'complete':'pending',decision:index<7?'pass':index<18?'needs-human':null,
+      code:index<18?null:index<24?'INVALID_AGENT_OUTPUT':'MODEL_RECONCILIATION_REQUIRED'}))};
+  const pilot={schemaVersion:1,repository:'musabtheone11/roof-measure',executionProfile:'allowance-qualification',generatedAt:new Date(now).toISOString(),sourceRevision:'c'.repeat(40),
+    run:{id:'88888',attempt:1,url:'https://github.com/musabtheone11/roof-measure/actions/runs/88888',pipelineResult:'success'},
+    summary:{selectedCount:3,attemptedCount:3,validCount:3,reviewedCount:2},scope:'SYNTHETIC SUBSCRIPTION TEST FIXTURE — three selected models; no full-roster or field-accuracy claim.',
+    models:['free/gpt-6-luna','free/qwen-3.8-max','free/minimax-m3.1-flash'].map((model,index)=>({model,status:index===2?'needs-human':'complete',attempted:true,contributionValidated:true,reviewStatus:index===2?'pending':'complete'}))};
+  let releaseQualification;
+  qualificationResponse=()=>new Promise(resolve=>{releaseQualification=()=>resolve({status:200,body:pilot});});
+  response={status:200,body:fullRoster};await page.click('#refresh');await loaded(page,51);
+  assert(await page.locator('#refresh').isDisabled(),'The full roster must render even while its optional journal is still loading.');
+  releaseQualification();await page.waitForFunction(()=>!document.querySelector('#refresh').disabled);
+  assert.equal(await page.locator('.coverage-item[data-kind="valid"] strong').innerText(),'18');
+  assert.equal(await page.locator('.coverage-item[data-kind="review"] strong').innerText(),'11');
+  assert.equal(await page.locator('.coverage-item[data-kind="failed"] strong').innerText(),'6');
+  assert.equal(await page.locator('.coverage-item[data-kind="blocked"] strong').innerText(),'27');
+  assert.match(await page.locator('#coverage-note').innerText(),/7 with lifecycle “complete”/);
+  assert.equal(await page.locator('.agent-card[data-valid="true"]').count(),18);
+  const needsHuman=page.locator('.agent-card[data-status="review"]');
+  assert.equal(await needsHuman.count(),11);
+  assert.equal(await needsHuman.locator('.badge[data-kind="valid"]').count(),11);
+  assert.equal(await needsHuman.locator('.badge[data-kind="failed"]').count(),0);
+  assert.equal(await page.locator('#source-link').innerText(),'Source '+'b'.repeat(40));
+  assert.equal(await page.locator('#source-link').getAttribute('href'),'https://github.com/musabtheone11/roof-measure/commit/'+'b'.repeat(40));
+  assert.match(await page.locator('#run-link').innerText(),/Run #77777/);
+  assert.match(await page.locator('#age').innerText(),/2 hours/);
+  assert.match(await page.locator('#qualification-counts').innerText(),/Selected: 3 · Inference attempted: 3 · Valid contributions: 3 · Reviews completed: 2/);
+  assert.equal(await page.locator('#qualification-models li').count(),3);
+  assert.equal(await page.locator('.agent-card').count(),51,'The scoped subscription pilot must not replace the full roster.');
+  await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(artifacts,'contribution-clarity-desktop.png')});
+  await page.setViewportSize({width:390,height:844});await noClipping(page);
+  await page.locator('#coverage').evaluate(element=>element.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(artifacts,'contribution-clarity-mobile.png')});
+  await page.setViewportSize({width:1440,height:1000});
+  await page.locator('.agent-card[data-status="review"]').first().evaluate(element=>element.scrollIntoView({block:'start'}));
+  await page.screenshot({path:path.join(artifacts,'valid-contribution-review-needed.png')});
+  await page.selectOption('#status','valid');await loaded(page,18);
+  await page.selectOption('#status','review');await loaded(page,11);
+  await page.selectOption('#status','failed');await loaded(page,6);
+  await page.selectOption('#status','blocked');await loaded(page,27);
+  await page.selectOption('#status','');await loaded(page,51);
+  const broad={...pilot,executionProfile:'allowance-roster',summary:{selectedCount:23,attemptedCount:23,validCount:20,reviewedCount:18},
+    scope:'SYNTHETIC SUBSCRIPTION ROSTER TEST FIXTURE — twenty-three selected subscription models only.',
+    models:Array.from({length:23},(_,index)=>({model:`fixture/free-model-${index+1}`,status:index<20?'needs-human':'failed',attempted:true,contributionValidated:index<20,reviewStatus:index<18?'complete':'pending'}))};
+  qualificationResponse={status:200,body:broad};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#qualification-profile').innerText(),/Subscription roster/);
+  assert.match(await page.locator('#qualification-counts').innerText(),/Selected: 23.*Valid contributions: 20/);
+  assert.equal(await page.locator('#qualification-models li').count(),23);
+  assert.equal(await page.locator('.agent-card').count(),51);
+  qualificationResponse={status:503,body:{error:'Synthetic subscription outage'}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#qualification-notice').innerText(),/last loaded record remains/);
+  assert.match(await page.locator('#qualification-counts').innerText(),/Selected: 23/);
+  assert.equal(await page.locator('.agent-card').count(),51);
+  assert.notEqual(await page.locator('#connection').getAttribute('data-kind'),'error','An optional journal failure must not fail the full-roster journal.');
+  const noResults={...broad,run:{...broad.run,pipelineResult:'failure'},summary:{selectedCount:0,attemptedCount:0,validCount:0,reviewedCount:0},models:[]};
+  qualificationResponse={status:200,body:noResults};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#qualification-notice').innerText(),/No model results published/);
+  assert.match(await page.locator('#qualification-counts').innerText(),/Selected: 0/);
+  assert.equal(await page.locator('.agent-card').count(),51);
+  qualificationResponse={status:200,body:{...noResults,run:{...noResults.run,pipelineResult:'success'}}};await refresh(page,{status:200,body:fullRoster});
+  assert.match(await page.locator('#qualification-notice').innerText(),/Could not refresh this scoped run/);
+  assert.match(await page.locator('#qualification-run').innerText(),/pipeline Failure/,'An invalid empty-success record must not replace the last honest failure.');
+  await page.close();
 
   // Run the real browser timer under a virtual clock. Hidden tabs must not poll;
   // visible polling is bounded to one request a minute, with manual refresh allowed.
-  response={status:200,body:fixture};
+  response={status:200,body:fixture};qualificationResponse={status:404,body:{error:'No synthetic subscription journal'}};
   const polling=await open({clock:true});await loaded(polling);
-  let before=requests.length;
-  await polling.clock.runFor(59_000);assert.equal(requests.length,before);
+  let before=requests.length,beforeQualification=qualificationRequests.length;
+  await polling.clock.runFor(59_000);assert.equal(requests.length,before);assert.equal(qualificationRequests.length,beforeQualification);
   const automatic=polling.waitForResponse(STATUS_URL);await polling.clock.runFor(1000);await automatic;
   await polling.waitForFunction(()=>!document.querySelector('#refresh').disabled);
   assert.equal(requests.length,before+1);
-  await refresh(polling,response);before=requests.length;
+  assert.equal(qualificationRequests.length,beforeQualification+1);
+  await refresh(polling,response);before=requests.length;beforeQualification=qualificationRequests.length;
   await polling.evaluate(()=>{window.__fixtureVisibility='hidden';document.dispatchEvent(new Event('visibilitychange'));});
-  await polling.clock.runFor(180_000);assert.equal(requests.length,before,'Hidden pages must not poll.');
+  await polling.clock.runFor(180_000);assert.equal(requests.length,before,'Hidden pages must not poll.');assert.equal(qualificationRequests.length,beforeQualification);
   const resumed=polling.waitForResponse(STATUS_URL);
   await polling.evaluate(()=>{window.__fixtureVisibility='visible';document.dispatchEvent(new Event('visibilitychange'));});
   await polling.clock.runFor(1);await resumed;
   await polling.waitForFunction(()=>!document.querySelector('#refresh').disabled);
   assert.equal(requests.length,before+1);
+  assert.equal(qualificationRequests.length,beforeQualification+1);
   await polling.clock.runFor(59_000);assert.equal(requests.length,before+1,'Visibility changes must not create duplicate polling loops.');
   await polling.close();
 
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
-  assert(requests.every(request=>request.method==='GET'&&!request.headers.authorization),'Dashboard must only read public status without credentials.');
-  await fs.writeFile(path.join(artifacts,'dashboard-check.json'),JSON.stringify({fixture:'Synthetic offline dashboard responses; not live model activity',models:45,documentedUnavailableModels:9,unavailableNotCountedAsAssignedOrAttempted:true,legacyTwoModelRecord:true,blockedAndDisabledExplicit:true,inferenceVersusAssignmentCounts:true,fetchFailurePreservesPriorRecord:true,initialFailureDoesNotInventCounts:true,staleSnapshotWarning:true,inertPublicStringsAndProjectOnlyLinks:true,desktopAndMobileInspected:true,visibleOnlyMinutePolling:true,modelInferenceCalls:0,browserErrors:errors},null,2));
-  console.log('Chromium:45model assignments, legacy schema, blocked/disabled state, inference coverage, refresh failure, stale data, inert strings, desktop/mobile layout and visible-only60s polling passed.');
+  assert([...requests,...qualificationRequests].every(request=>request.method==='GET'&&!request.headers.authorization),'Dashboard must only read public status without credentials.');
+  await fs.writeFile(path.join(artifacts,'dashboard-check.json'),JSON.stringify({fixture:'Synthetic offline dashboard responses; not live model activity',models:45,fullRosterClarity:{models:51,validContributions:18,recordedComplete:7,needsReview:11,executionFailed:6,blocked:27},subscriptionJournalIndependent:true,subscriptionScopeSizes:[3,23],documentedUnavailableModels:9,unavailableNotCountedAsAssignedOrAttempted:true,legacyTwoModelRecord:true,blockedAndDisabledExplicit:true,inferenceVersusAssignmentCounts:true,fetchFailurePreservesPriorRecord:true,initialFailureDoesNotInventCounts:true,staleSnapshotWarning:true,inertPublicStringsAndProjectOnlyLinks:true,desktopAndMobileInspected:true,visibleOnlyMinutePolling:true,modelInferenceCalls:0,browserErrors:errors},null,2));
+  console.log('Chromium:45model legacy fixtures,51model contribution/review/failure clarity, separate3/23model subscription journals and failed empty runs, refresh isolation, stale data, inert strings, responsive layout and visible-only60s polling passed.');
   console.log('Synthetic dashboard screenshots: '+artifacts);
 } finally {await browser?.close();await server.close();}
