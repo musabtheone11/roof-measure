@@ -321,14 +321,14 @@ test('legacy free backfill is idempotent, uses original chronology and preserves
 
 test('fixed rolling day and week allowance ceilings remain independent of provider unlimited metadata',t=>{
   const {store,clock,advance}=setup(t);
-  for(let i=0;i<10;i++){
-    if(i>0&&i%2===0)advance(86400001);
-    const lease=freeTask(store,'fixed-'+i),attempt=reserveFree(store,lease,snapshot(clock,100000000,{unlimited:true,remainingUnits:null}));
-    completeFree(store,lease,attempt,{reportedUsd:0,reportedAllowanceUnits:100000000});
-    if(i===1){const third=freeTask(store,'day-limit');assert.throws(()=>reserveFree(store,third,snapshot(clock,60000000,{unlimited:true,remainingUnits:null})),{code:'ALLOWANCE_LIMIT'});store.finish(third.id,'allowance-worker',third.fence,{status:'complete'});}
+  const amount=ALLOWANCE_LIMITS.workflowUnits,calls=ALLOWANCE_LIMITS.weekUnits/amount;
+  for(let i=0;i<calls;i++){
+    const lease=freeTask(store,'fixed-'+i),attempt=reserveFree(store,lease,snapshot(clock,amount,{unlimited:true,remainingUnits:null}));
+    completeFree(store,lease,attempt,{reportedUsd:0,reportedAllowanceUnits:amount});
   }
+  const day=freeTask(store,'day-limit');assert.throws(()=>reserveFree(store,day,snapshot(clock,1,{unlimited:true,remainingUnits:null})),{code:'ALLOWANCE_LIMIT'});store.finish(day.id,'allowance-worker',day.fence,{status:'complete'});
   advance(86400001);const last=freeTask(store,'week-limit');assert.throws(()=>reserveFree(store,last,snapshot(clock,1,{unlimited:true,remainingUnits:null})),{code:'ALLOWANCE_LIMIT'});
-  assert.equal(store.allowanceLedger().reportedUnits,1000000000);
+  assert.equal(store.allowanceLedger().reportedUnits,ALLOWANCE_LIMITS.weekUnits);
 });
 
 test('an oversized usage estimate cannot lower the hold and quarantines further admission',t=>{
@@ -339,41 +339,90 @@ test('an oversized usage estimate cannot lower the hold and quarantines further 
   const next=freeTask(store,'estimate-blocked');assert.throws(()=>reserveFree(store,next,snapshot(clock,1)),{code:'ALLOWANCE_INCIDENT'});
 });
 
-test('old unknown holds age out of the rolling day cap while still reducing provider availability',t=>{
+test('old unknown holds age out of daily telemetry while the weekly cap and provider holds remain binding',t=>{
   const {store,clock,advance}=setup(t);
-  for(const [i,amount]of[100000000,100000000,50000000].entries()){
+  const amount=ALLOWANCE_LIMITS.workflowUnits,calls=ALLOWANCE_LIMITS.dayUnits/amount;
+  for(let i=0;i<calls;i++){
     const lease=freeTask(store,'unknown-day-'+i),attempt=reserveFree(store,lease,snapshot(clock,amount));completeFree(store,lease,attempt);
   }
+  assert.equal(store.allowanceLedger().rollingDayUnits,ALLOWANCE_LIMITS.dayUnits);
   const blocked=freeTask(store,'day-still-full');assert.throws(()=>reserveFree(store,blocked,snapshot(clock,1)),{code:'ALLOWANCE_LIMIT'});
   store.finish(blocked.id,'allowance-worker',blocked.fence,{status:'complete'});advance(86400001);
   const next=freeTask(store,'after-day');
-  assert.throws(()=>reserveFree(store,next,snapshot(clock,1,{remainingUnits:250000000,periodKey:'new-provider-day'})),{code:'ALLOWANCE_EXHAUSTED'});
-  assert.ok(reserveFree(store,next,snapshot(clock,1,{remainingUnits:250000001,periodKey:'new-provider-day'})));
-  assert.equal(store.allowanceLedger().unknownUnits,250000000);assert.equal(store.allowanceLedger().reservedUnits,250000001);
+  assert.equal(store.allowanceLedger().rollingDayUnits,0);assert.equal(store.allowanceLedger().rollingWeekUnits,ALLOWANCE_LIMITS.dayUnits);
+  // Equal daily and weekly caps make the weekly cap remain binding after24h.
+  assert.throws(()=>reserveFree(store,next,snapshot(clock,1)),{code:'ALLOWANCE_LIMIT'});
+  assert.equal(store.allowanceLedger().unknownUnits,ALLOWANCE_LIMITS.dayUnits);
 });
 
 test('old unknown holds age out of the rolling week cap without refunding any historical provider hold',t=>{
   const {store,clock,advance}=setup(t);
-  for(let i=0;i<10;i++){
-    if(i>0&&i%2===0)advance(86400001);
-    const lease=freeTask(store,'unknown-week-'+i),attempt=reserveFree(store,lease,snapshot(clock,100000000));completeFree(store,lease,attempt);
+  const amount=ALLOWANCE_LIMITS.workflowUnits,calls=ALLOWANCE_LIMITS.weekUnits/amount;
+  for(let i=0;i<calls;i++){
+    const lease=freeTask(store,'unknown-week-'+i),attempt=reserveFree(store,lease,snapshot(clock,amount));completeFree(store,lease,attempt);
   }
   advance(86400001);
   const blocked=freeTask(store,'week-still-full');assert.throws(()=>reserveFree(store,blocked,snapshot(clock,1)),{code:'ALLOWANCE_LIMIT'});
-  store.finish(blocked.id,'allowance-worker',blocked.fence,{status:'complete'});advance(3*86400000);
+  store.finish(blocked.id,'allowance-worker',blocked.fence,{status:'complete'});advance(7*86400000);
   const next=freeTask(store,'after-week');
-  assert.throws(()=>reserveFree(store,next,snapshot(clock,1,{remainingUnits:1000000000,periodKey:'renewed-subscription'})),{code:'ALLOWANCE_EXHAUSTED'});
-  assert.ok(reserveFree(store,next,snapshot(clock,1,{remainingUnits:1000000001,periodKey:'renewed-subscription'})));
-  assert.equal(store.allowanceLedger().unknownUnits,1000000000);assert.equal(store.allowanceLedger().requests,11);
+  assert.equal(store.allowanceLedger().rollingWeekUnits,0);
+  assert.throws(()=>reserveFree(store,next,snapshot(clock,1,{remainingUnits:ALLOWANCE_LIMITS.weekUnits,periodKey:'renewed-subscription'})),{code:'ALLOWANCE_EXHAUSTED'});
+  assert.ok(reserveFree(store,next,snapshot(clock,1,{remainingUnits:ALLOWANCE_LIMITS.weekUnits+1,periodKey:'renewed-subscription'})));
+  assert.equal(store.allowanceLedger().unknownUnits,ALLOWANCE_LIMITS.weekUnits);assert.equal(store.allowanceLedger().requests,calls+1);
 });
 
 test('text headroom protects a real image reservation atomically without recording a phantom hold',t=>{
   const {store,clock}=setup(t),prime=freeTask(store,'prime-design','shared-design');
-  const old=reserveFree(store,prime,snapshot(clock,90000000));completeFree(store,prime,old);
+  const initial=ALLOWANCE_LIMITS.workflowUnits-10000000,old=reserveFree(store,prime,snapshot(clock,initial));completeFree(store,prime,old);
   const text=freeTask(store,'text-before-image','shared-design'),before=JSON.stringify(store.ledger());
   assert.throws(()=>store.reserve(text.id,'allowance-worker',text.fence,{...freeLimits,allowance:snapshot(clock,6291456),allowanceHeadroomUnits:5000000}),{code:'ALLOWANCE_DESIGN_CAPACITY_RESERVED'});
-  assert.equal(JSON.stringify(store.ledger()),before);assert.equal(store.allowanceLedger().reservedUnits,90000000);
+  assert.equal(JSON.stringify(store.ledger()),before);assert.equal(store.allowanceLedger().reservedUnits,initial);
   store.finish(text.id,'allowance-worker',text.fence,{status:'needs-human'});
   const image=freeTask(store,'real-image','shared-design');assert.ok(reserveFree(store,image,snapshot(clock,5000000)));
-  assert.equal(store.allowanceLedger().reservedUnits,95000000);
+  assert.equal(store.allowanceLedger().reservedUnits,initial+5000000);
+});
+
+test('raised lifetime workflow allowance cap is atomic across independent connections',t=>{
+  const {store,root,clock}=setup(t),lease=freeTask(store,'raised-cap');
+  const other=new OrgStore(join(root,'state'),{now:clock});t.after(()=>other.close());
+  reserveFree(store,lease,snapshot(clock,ALLOWANCE_LIMITS.workflowUnits-1));const before=JSON.stringify(store.ledger());
+  assert.throws(()=>other.reserve(lease.id,'allowance-worker',lease.fence,{...freeLimits,allowance:snapshot(clock,2)}),{code:'ALLOWANCE_LIMIT'});
+  assert.equal(JSON.stringify(store.ledger()),before);assert.equal(store.allowanceLedger().reservedUnits,ALLOWANCE_LIMITS.workflowUnits-1);
+});
+
+test('trusted synchronous dispatch hook commits its marker atomically with normal dispatch',t=>{
+  const {store}=setup(t),lease=freeTask(store,'hook-dispatch'),attempt=store.reserve(lease.id,'allowance-worker',lease.fence,freeLimits);
+  let calls=0;
+  store.dispatch(attempt,'allowance-worker',lease.fence,{beforeDispatch:binding=>{
+    calls++;assert.deepEqual(binding,{attemptId:attempt,taskId:lease.id,workflowId:lease.workflowId});
+    assert.equal(store.ledger().attempts[0].state,'reserved');store.event(lease.id,'protocol-probe-once',{attemptId:attempt});
+  }});
+  assert.equal(calls,1);assert.equal(store.ledger().attempts[0].state,'dispatched');
+  const events=store.events(lease.id);assert.ok(events.find(e=>e.kind==='protocol-probe-once').seq<events.find(e=>e.kind==='dispatched').seq);
+  assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,{beforeDispatch:()=>{calls++;}}),{code:'ATTEMPT_STATE'});assert.equal(calls,1);
+});
+
+test('dispatch hook throws roll back markers and both ledgers without consuming the reserved attempt',t=>{
+  const {store,clock}=setup(t),lease=freeTask(store,'hook-rollback'),attempt=reserveFree(store,lease,snapshot(clock,100));
+  const usdBefore=JSON.stringify(store.ledger()),allowanceBefore=JSON.stringify(store.allowanceLedger()),eventsBefore=JSON.stringify(store.events());
+  assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,{beforeDispatch:()=>{
+    store.event(lease.id,'must-not-survive',{attemptId:attempt});throw Object.assign(new Error('Probe already consumed'),{code:'PROBE_USED'});
+  }}),{code:'PROBE_USED'});
+  assert.equal(JSON.stringify(store.ledger()),usdBefore);assert.equal(JSON.stringify(store.allowanceLedger()),allowanceBefore);assert.equal(JSON.stringify(store.events()),eventsBefore);
+});
+
+test('stale leases, paused admission and stale snapshots cannot invoke a dispatch hook',t=>{
+  const {store,clock,advance}=setup(t),lease=freeTask(store,'hook-fenced'),attempt=reserveFree(store,lease,snapshot(clock,100));let calls=0;
+  const options={beforeDispatch:()=>{calls++;}};
+  store.setControl('paused');assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,options),{code:'PAUSED'});
+  store.setControl('running');advance(60001);assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,options),{code:'ALLOWANCE_SNAPSHOT_STALE'});
+  advance(60000);assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,options),{code:'STALE_LEASE'});assert.equal(calls,0);
+});
+
+test('dispatch hooks reject asynchronous/nonfunction callbacks and roll back thenable markers',t=>{
+  const {store}=setup(t),lease=freeTask(store,'hook-invalid'),attempt=store.reserve(lease.id,'allowance-worker',lease.fence,freeLimits);let called=false;
+  for(const hook of [null,true,'callback',async()=>{called=true;}])assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,{beforeDispatch:hook}),{code:'INVALID_DISPATCH_HOOK'});
+  assert.equal(called,false);
+  assert.throws(()=>store.dispatch(attempt,'allowance-worker',lease.fence,{beforeDispatch:()=>{store.event(lease.id,'async-marker');return {then(){}};}}),{code:'INVALID_DISPATCH_HOOK'});
+  assert.equal(store.events().some(e=>e.kind==='async-marker'),false);assert.equal(store.ledger().attempts[0].state,'reserved');
 });

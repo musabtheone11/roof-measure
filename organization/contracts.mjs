@@ -39,7 +39,7 @@ export function validateTask(task) {
   if(task.priorFindings!==undefined)strings(task.priorFindings,100,2000);
   if(task.constraints!==undefined) {
     keys(task.constraints,[],['maxAttempts','maxRuntimeMs','maxOutputTokens','maxRevisions','extension','actors','externalProcessingAuthorized','cycles','stageCount','previousTaskId','sourceHashes','requireMetricClaims','reviewTaskId']);
-    const maxima={maxAttempts:2,maxRuntimeMs:120000,maxOutputTokens:2000,maxRevisions:2};
+    const maxima={maxAttempts:2,maxRuntimeMs:120000,maxOutputTokens:8000,maxRevisions:2};
     for(const [k,v]of Object.entries(task.constraints))if(Object.hasOwn(maxima,k)&&(!Number.isInteger(v)||v<0||v>maxima[k]))fail('Invalid explicit task constraint');
     const c=task.constraints;
     if(c.extension!==undefined&&!['.txt','.pdf','.json'].includes(c.extension))fail('Invalid source extension');

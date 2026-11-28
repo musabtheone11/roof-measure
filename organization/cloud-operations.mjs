@@ -160,6 +160,16 @@ export async function packReports(directory,output) {
   return {path:resolve(output),sha256:digest(await readFile(output))};
 }
 const STATUS_BRANCH='roof-cloud-status',STATUS_FILE='latest-status.json';
+const QUALIFICATION_FILE='latest-qualification.json';
+const QUALIFICATION_PROFILES=new Set(['allowance-qualification','allowance-roster']);
+function qualificationProfile(cycle,env) {
+  const declared=env.ROOF_CLOUD_PUBLIC_PROFILE,actual=cycle?.executionProfile;
+  if(declared&&!['cycle','review-existing',...QUALIFICATION_PROFILES].includes(declared))fail('Unknown public operation profile');
+  if(actual&&!['all-models','text-fleet','two-role',...QUALIFICATION_PROFILES].includes(actual))fail('Unknown cycle execution profile');
+  if(QUALIFICATION_PROFILES.has(declared)&&cycle&&actual!==declared)fail('Public qualification profile conflicts with its cycle artifact');
+  if(declared&&!QUALIFICATION_PROFILES.has(declared)&&QUALIFICATION_PROFILES.has(actual))fail('A scoped qualification cannot replace the full journal');
+  return QUALIFICATION_PROFILES.has(actual)?actual:QUALIFICATION_PROFILES.has(declared)?declared:null;
+}
 const boundedCount=value=>Number.isSafeInteger(value)&&value>=0&&value<=1000000?value:null;
 const publicLabel=(value,max)=>typeof value==='string'&&value.length<=max&&!/[\x00-\x1f<>]/.test(value)?value:null;
 const publicModel=value=>typeof value==='string'&&/^[a-z0-9][a-z0-9/_.:-]{0,199}$/.test(value)?value:'unknown';
@@ -224,8 +234,21 @@ export function publicCloudStatus(cycle,{env=process.env,now=Date.now}={}) {
   if(Buffer.byteLength(JSON.stringify(status))>131072)fail('Public cloud status exceeds128KiB');
   return status;
 }
+export function publicQualificationStatus(cycle,{env=process.env,now=Date.now}={}) {
+  const executionProfile=qualificationProfile(cycle,env);
+  if(!QUALIFICATION_PROFILES.has(executionProfile))fail('A known subscription qualification profile is required');
+  const base=publicCloudStatus(cycle,{env,now});
+  if(base.models.some(row=>!row.model.startsWith('free/')))fail('A subscription qualification cannot include paid-model rows');
+  const models=base.models.map(({model,status,attempted,contributionValidated,reviewStatus,code})=>({model,status,attempted,contributionValidated,reviewStatus,code}));
+  return {schemaVersion:1,repository:base.repository,workflow:base.workflow,executionProfile,generatedAt:base.generatedAt,
+    sourceRevision:base.sourceRevision,run:base.run,reportArtifact:base.reportArtifact,models,
+    summary:{selectedCount:models.length,attemptedCount:models.filter(row=>row.attempted).length,
+      validCount:models.filter(row=>row.contributionValidated===true).length,reviewedCount:models.filter(row=>row.reviewStatus==='complete').length},
+    scope:'Selected subscription model results only; paid and image evidence remains in the separately dated full-roster journal. No field accuracy or production approval.'};
+}
 export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,now=Date.now}={}) {
-  const status=publicCloudStatus(cycle,{env,now}),token=env.GH_TOKEN||env.GITHUB_TOKEN;
+  const qualification=qualificationProfile(cycle,env)!==null;
+  const status=qualification?publicQualificationStatus(cycle,{env,now}):publicCloudStatus(cycle,{env,now}),statusFile=qualification?QUALIFICATION_FILE:STATUS_FILE,token=env.GH_TOKEN||env.GITHUB_TOKEN;
   if(!token)fail('GitHub status-publishing credential is unavailable');
   const base=`https://api.github.com/repos/${status.repository}`;
   async function request(path,{method='GET',body,allow404=false}={}) {
@@ -243,17 +266,17 @@ export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,
   status.run.startedAt=new Date(started).toISOString();
   const branch=await request(`/git/ref/heads/${STATUS_BRANCH}`,{allow404:true});
   if(!branch)await request('/git/refs',{method:'POST',body:{ref:`refs/heads/${STATUS_BRANCH}`,sha:status.sourceRevision}});
-  const previous=await request(`/contents/${STATUS_FILE}?ref=${STATUS_BRANCH}`,{allow404:true});
+  const previous=await request(`/contents/${statusFile}?ref=${STATUS_BRANCH}`,{allow404:true});
   if(previous) {
     if(previous.type!=='file'||!/^([a-f0-9]{40})$/.test(previous.sha||'')||previous.encoding!=='base64'||typeof previous.content!=='string'||previous.content.length>200000)fail('Existing public status has invalid content metadata; refusing replacement');
     let old;try{old=JSON.parse(Buffer.from(previous.content,'base64').toString('utf8'));}catch{fail('Existing public status is unreadable; refusing replacement');}
-    if(old.schemaVersion!==1||old.repository!==status.repository||old.workflow!==WORKFLOW||typeof old.run?.id!=='string'||!/^[1-9]\d*$/.test(old.run.id)||!Number.isInteger(old.run?.attempt)||old.run.attempt<1||!/^([a-f0-9]{40})$/.test(old.sourceRevision||'')||!Number.isFinite(Date.parse(old.run.startedAt||'')))fail('Existing public status provenance mismatch; refusing replacement');
+    if(old.schemaVersion!==1||old.repository!==status.repository||old.workflow!==WORKFLOW||(qualification&&!QUALIFICATION_PROFILES.has(old.executionProfile))||typeof old.run?.id!=='string'||!/^[1-9]\d*$/.test(old.run.id)||!Number.isInteger(old.run?.attempt)||old.run.attempt<1||!/^([a-f0-9]{40})$/.test(old.sourceRevision||'')||!Number.isFinite(Date.parse(old.run.startedAt||'')))fail('Existing public status provenance mismatch; refusing replacement');
     const oldStarted=Date.parse(old.run.startedAt);
     if(oldStarted>started||(oldStarted===started&&(old.run.id!==status.run.id||old.run.attempt!==status.run.attempt)))fail('A newer or chronologically ambiguous cloud status exists; refusing stale replacement');
   }
   const content=Buffer.from(JSON.stringify(status,null,2)+'\n').toString('base64');
-  const result=await request(`/contents/${STATUS_FILE}`,{method:'PUT',body:{message:`Record roof evaluation ${status.run.id}/${status.run.attempt}`,branch:STATUS_BRANCH,content,...(previous?{sha:previous.sha}:{})}});
-  return {statusURL:`https://github.com/${status.repository}/blob/${STATUS_BRANCH}/${STATUS_FILE}`,commit:result.commit?.sha||null,
+  const result=await request(`/contents/${statusFile}`,{method:'PUT',body:{message:`Record roof evaluation ${status.run.id}/${status.run.attempt}`,branch:STATUS_BRANCH,content,...(previous?{sha:previous.sha}:{})}});
+  return {statusURL:`https://github.com/${status.repository}/blob/${STATUS_BRANCH}/${statusFile}`,commit:result.commit?.sha||null,
     runURL:status.run.url,reportArtifactURL:status.reportArtifact.url};
 }
 async function main() {

@@ -14,7 +14,7 @@ const finite = (n, name) => { if (!Number.isFinite(n) || n < 0) fail('INVALID_LI
 const json = value => { const s = JSON.stringify(value); if (typeof s !== 'string' || Buffer.byteLength(s) > 1024 * 1024) fail('INVALID_DATA', 'JSON data exceeds the storage bound'); return s; };
 const stageLimit = row => { const task=JSON.parse(row.body); return Math.min(2, task.maxAttempts ?? 2, task.constraints?.maxAttempts ?? 2); };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-export const ALLOWANCE_LIMITS = Object.freeze({workflowUnits:100000000,dayUnits:250000000,weekUnits:1000000000});
+export const ALLOWANCE_LIMITS = Object.freeze({workflowUnits:500000000,dayUnits:1000000000,weekUnits:1000000000});
 const units = (value,name) => { if(!Number.isSafeInteger(value)||value<0)fail('INVALID_ALLOWANCE',`${name} must be a nonnegative safe integer`);return value; };
 const allowanceSnapshot = (value,now) => {
   if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!['reservedUnits','remainingUnits','observedAt','expiresAt','periodKey','unlimited'].includes(key)))fail('INVALID_ALLOWANCE','A bounded host-observed allowance snapshot is required');
@@ -319,7 +319,8 @@ export class OrgStore {
     if (!attempt || attempt.worker !== workerId || attempt.fence !== fence) fail('STALE_LEASE', 'Attempt does not belong to this worker/fence');
     this.requireLease(attempt.task_id, workerId, fence); return attempt;
   }
-  dispatch(attemptId, workerId, fence) {
+  dispatch(attemptId, workerId, fence, {beforeDispatch} = {}) {
+    if(beforeDispatch!==undefined&&(typeof beforeDispatch!=='function'||beforeDispatch.constructor?.name==='AsyncFunction'))fail('INVALID_DISPATCH_HOOK','The trusted beforeDispatch hook must be synchronous');
     return this.transaction(() => {
       const attempt = this.requireAttempt(attemptId, workerId, fence);
       if (this.getControl() !== 'running') fail('PAUSED', 'Admission is paused or stopped');
@@ -330,6 +331,12 @@ export class OrgStore {
         const snapshot=allowanceSnapshot({reservedUnits:storedAllowance.reserved_units,remainingUnits:storedAllowance.remaining_units,
           observedAt:storedAllowance.observed_at,expiresAt:storedAllowance.expires_at,periodKey:storedAllowance.period_key,unlimited:storedAllowance.unlimited===1},this.now());
         this.checkAllowance(attempt,snapshot,0);
+      }
+      // Trusted host-only coordination. Its marker and dispatch commit together;
+      // a failure rolls back both, before any external provider operation.
+      if(beforeDispatch){
+        const result=beforeDispatch({attemptId:attempt.id,taskId:attempt.task_id,workflowId:attempt.workflow_id});
+        if(result&&typeof result.then==='function')fail('INVALID_DISPATCH_HOOK','The trusted beforeDispatch hook cannot return asynchronous work');
       }
       this.db.prepare("UPDATE attempts SET state='dispatched',updated=? WHERE id=?").run(this.now(), attemptId);
       this.db.prepare("UPDATE attempt_allowances SET state='dispatched',updated=? WHERE attempt_id=? AND state='reserved'").run(this.now(),attemptId);
@@ -372,6 +379,8 @@ export class OrgStore {
     const sum=(items,key)=>items.reduce((total,row)=>total+(row[key]??0),0),unknown=rows.filter(row=>['dispatched','unknown'].includes(row.state));
     return {requests:rows.length,reservedUnits:sum(rows,'charged_units'),reportedUnits:sum(rows,'reported_units'),estimatedUnits:sum(rows,'estimated_units'),
       unknownAllowanceRequests:unknown.length,unknownUnits:sum(unknown,'charged_units'),pendingUnits:sum(rows.filter(row=>row.state==='reserved'),'charged_units'),
+      rollingDayUnits:sum(rows.filter(row=>row.created>=this.now()-86400000),'charged_units'),
+      rollingWeekUnits:sum(rows.filter(row=>row.created>=this.now()-7*86400000),'charged_units'),
       incident:this.db.prepare("SELECT value FROM settings WHERE key='allowanceIncident'").get().value==='true',limits:ALLOWANCE_LIMITS,attempts:rows};
   }
   backfillLegacyAllowance({attemptId,model,reservedUnits,evidence}={}) {
