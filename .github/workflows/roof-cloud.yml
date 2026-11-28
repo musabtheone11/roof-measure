@@ -4,6 +4,24 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Generate a new cycle or review retained results without regenerating them
+        type: choice
+        options: [cycle, review-existing]
+        default: cycle
+      review_run_id:
+        description: Completed laboratory run to review (review-existing only)
+        type: string
+        default: ''
+      review_run_attempt:
+        description: Retained artifact attempt number
+        type: string
+        default: '1'
+      generate_missing_designs:
+        description: One bounded new qualification per previously failed design model
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: c96c45cfb209a9dfa2d1d55119ccff7dc417768d
+          ref: 56d1629c1e039bf851f6d07f236aa67948061669
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -61,6 +79,14 @@ jobs:
         id: browser
         continue-on-error: true
         run: node tools/dev/source-review-delivery-test.mjs
+      - name: Download retained baseline for targeted review
+        if: inputs.operation == 'review-existing'
+        uses: actions/download-artifact@v4
+        with:
+          name: roof-cloud-reports-${{ inputs.review_run_id }}-${{ inputs.review_run_attempt }}
+          run-id: ${{ inputs.review_run_id }}
+          github-token: ${{ github.token }}
+          path: baseline-input
       - name: Generate cases, run the application and independently review reports
         id: cycle
         continue-on-error: true
@@ -69,7 +95,19 @@ jobs:
           ROOF_CLOUD_PAID_ALLOWED: ${{ steps.bootstrap.outputs.paid_allowed }}
           ROOF_CLOUD_BROWSER_STATUS: ${{ steps.browser.outcome }}
           ROOF_CLOUD_MODEL_MODE: all-models
-        run: node --use-env-proxy organization/cloud-cycle.mjs --state "$STATE_DIR" --output "$OUTPUT_DIR" --count 12 --seed "${{ github.run_number }}"
+          ROOF_CLOUD_OPERATION: ${{ inputs.operation || 'cycle' }}
+          ROOF_REVIEW_RUN_ID: ${{ inputs.review_run_id }}
+          ROOF_GENERATE_MISSING_DESIGNS: ${{ inputs.generate_missing_designs }}
+        run: |
+          if [ "$ROOF_CLOUD_OPERATION" = "review-existing" ]; then
+            review_args=()
+            if [ "$ROOF_GENERATE_MISSING_DESIGNS" = "true" ]; then
+              review_args+=(--generate-missing-designs)
+            fi
+            node --use-env-proxy organization/review-followup.mjs --state "$STATE_DIR" --baseline baseline-input/cloud-output --output "$OUTPUT_DIR" --baseline-run "$ROOF_REVIEW_RUN_ID" "${review_args[@]}"
+          else
+            node --use-env-proxy organization/cloud-cycle.mjs --state "$STATE_DIR" --output "$OUTPUT_DIR" --count 12 --seed "${{ github.run_number }}"
+          fi
       - name: Close and fingerprint cloud state
         if: always() && steps.bootstrap.outcome == 'success'
         run: node organization/cloud-operations.mjs checkpoint --state "$STATE_DIR"

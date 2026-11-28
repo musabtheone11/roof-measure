@@ -82,7 +82,7 @@
       if(row.reviewStatus)details.lastElementChild.append(make('span','secondary',`Recorded review status: ${title(typeof row.reviewStatus==='string'?row.reviewStatus:row.reviewStatus.status)||'Not reported'}`));
       card.append(top,heading,details);
       const code=text(row.code,100);
-      if(code) {const block=make('div','blocker',blockers[code]||`Recorded reason: ${title(code)}.`);block.append(make('code','',code));card.append(block);}
+      if(code) {const http=Number.isInteger(row.httpStatus)&&row.httpStatus>=100&&row.httpStatus<=599?` APINEX returned HTTP ${row.httpStatus}.`:'';const block=make('div','blocker',(blockers[code]||`Recorded reason: ${title(code)}.`)+http);block.append(make('code','',code));card.append(block);}
       const result=make('div','card-result');result.append(make('span','',row.decision?`Recommendation: ${title(row.decision)}`:'No recommendation recorded'));
       if(usd(row.reportedUsd)!==null)result.append(make('span','',`Reported $${row.reportedUsd.toFixed(4)}`));
       card.append(result);return card;
@@ -104,6 +104,7 @@
     if(available){$('evidence-link').href=artifactURL;$('evidence-link').target='_blank';$('evidence-link').rel='noopener noreferrer';}else $('evidence-link').removeAttribute('href');
     const evaluation=data.evaluation||{};
     $('evaluation').textContent=count(evaluation.attempted)!==null?`${evaluation.diagnosticPasses===null||count(evaluation.diagnosticPasses)===null?'?':evaluation.diagnosticPasses}/${evaluation.attempted} numerical checks passed · ${count(evaluation.generatedCustomerPDFs)===null?'?':evaluation.generatedCustomerPDFs} reports`:'Evaluation counts not reported';
+    if(evaluation.evidenceMode==='retained-baseline')$('evaluation').textContent=`Retained baseline: ${count(evaluation.diagnosticPasses)??'?'} / ${count(evaluation.attempted)??'?'} numerical checks passed · ${count(evaluation.retainedCustomerPDFs)??'?'} retained reports · 0 newly generated reports`;
     $('scope').textContent=`${text(data.scope,500)||'Generated synthetic monitoring only; no field accuracy certification or production code promotion.'} This page reads status only and does not start agents.`;
     const legacy=data.models.length>0&&data.models.some(row=>!row.team||!row.task||!row.reviewerModel);
     $('legacy').hidden=!legacy;$('legacy').textContent='This record omits some team, task or reviewer details. Missing metadata is identified below; models absent from this record are not counted.';

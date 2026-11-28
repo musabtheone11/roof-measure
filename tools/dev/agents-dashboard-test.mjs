@@ -100,6 +100,9 @@ try {
   assert.equal(await page.locator('.agent-card:not([data-status="blocked"])').count(),0);
   await page.selectOption('#status','');await loaded(page);
 
+  const retained={...fixture,evaluation:{...fixture.evaluation,evidenceMode:'retained-baseline',generatedCustomerPDFs:0,retainedCustomerPDFs:12}};
+  await refresh(page,{status:200,body:retained});await loaded(page,45);
+  assert.match(await page.locator('#evaluation').innerText(),/Retained baseline.*12 retained reports.*0 newly generated reports/);
   const legacy={...fixture,models:[{model:'gpt-6.2-astra',role:'critique',status:'complete',decision:'revise'},{model:'claude-opus-5.5',role:'ceo',status:'disabled'}]};delete legacy.fleet;
   await refresh(page,{status:200,body:legacy});await loaded(page,2);
   assert(await page.locator('#legacy').isVisible());
