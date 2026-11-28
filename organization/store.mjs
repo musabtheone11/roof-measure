@@ -226,10 +226,17 @@ export class OrgStore {
       return this.getTask(taskId);
     });
   }
-  cancel(taskId) {
+  cancel(taskId, { onlyUndispatchedPending = false } = {}) {
     return this.transaction(() => {
       const row = this.db.prepare('SELECT * FROM tasks WHERE id=?').get(id(taskId));
       if (!row) fail('TASK_MISSING', 'Task does not exist');
+      // Optional worker quarantine is a conditional mutation inside the same
+      // write transaction as cancellation; another connection cannot claim or
+      // dispatch between the eligibility check and the fence change.
+      if (onlyUndispatchedPending && (row.status !== 'pending' ||
+        this.db.prepare("SELECT count(*) AS n FROM attempts WHERE task_id=? AND state IN ('dispatched','unknown','settled')").get(taskId).n ||
+        this.db.prepare("SELECT count(*) AS n FROM events WHERE task_id=? AND kind='dispatched'").get(taskId).n ||
+        this.db.prepare("SELECT count(*) AS n FROM attempt_allowances WHERE task_id=? AND state IN ('dispatched','unknown','settled')").get(taskId).n)) return null;
       if (TERMINAL.has(row.status)) return this.getTask(taskId);
       this.db.prepare("UPDATE tasks SET status='cancelled',worker=NULL,lease_until=NULL,fence=fence+1,updated=? WHERE id=?").run(this.now(), taskId);
       this.releaseUndispatchedAllowance(taskId);

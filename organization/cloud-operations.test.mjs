@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,readFile,rm,readdir,cp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {previousExecution,selectStateArtifact,bootstrapCloud,checkpointCloud,verifyCheckpoint,packReports,publicCloudStatus,publicQualificationStatus,publishCloudStatus} from './cloud-operations.mjs';
+import {previousExecution,selectStateArtifact,bootstrapCloud,checkpointCloud,verifyCheckpoint,packReports,publicCloudStatus,publicQualificationStatus,publicWorkStatus,publishCloudStatus} from './cloud-operations.mjs';
 
 const stamped=r=>({updated_at:new Date(Number(r.id)*10000).toISOString(),...r});
 const env=(id,attempt=1)=>({GITHUB_REPOSITORY:'owner/roof',GITHUB_RUN_ID:String(id),GITHUB_RUN_ATTEMPT:String(attempt),GITHUB_REF_NAME:'work',GITHUB_SHA:'a'.repeat(40)});
@@ -168,6 +168,98 @@ test('failed subscription runs keep their scoped journal and mismatched profiles
  for(const [profile,actual]of [['allowance-roster','all-models'],['cycle','allowance-roster'],['allowance-qualification','allowance-roster']]) {
    let calls=0;await assert.rejects(publishCloudStatus({...cycle(),executionProfile:actual},{env:{...env(20),GITHUB_TOKEN:'token',ROOF_CLOUD_PUBLIC_PROFILE:profile},fetchImpl:async()=>{calls++;}}));assert.equal(calls,0);
  }
+});
+const workCycle=()=>({...cycle(),executionProfile:'allowance-work',caseWork:{protocol:'PRIVATE_PROTOCOL',planHash:'PRIVATE_PLAN_HASH',sourceRevision:'a'.repeat(40),
+  workItems:[{taskId:'PRIVATE_TASK_1',packet:{prompt:'PRIVATE_QUESTION_1'}},{taskId:'PRIVATE_TASK_2',packet:{prompt:'PRIVATE_QUESTION_2'}},{taskId:'PRIVATE_TASK_3',packet:{prompt:'PRIVATE_QUESTION_3'}}],
+  models:[{model:'free/qwen-3.8-max',taskCount:3,validatedTaskCount:2,prompt:'PRIVATE_MODEL_PROMPT'},
+    {model:'free/gpt-6-luna',taskCount:2,validatedTaskCount:2,remainingUnits:'PRIVATE_MODEL_BALANCE'}],
+  counts:{uniqueModels:2,workItems:3,authorTasks:3,reviewTasks:3,dispatchedTasks:5,validatedTasks:4,independentlyReviewed:1,awaitingIndependentReview:1,failed:1,completedFixes:999},
+  budget:{private:'PRIVATE_BUDGET'},allowance:{remainingUnits:'PRIVATE_ALLOWANCE',periodKey:'PRIVATE_PERIOD'},productionReleaseApproved:true}});
+function oldWorkContent(runId='19',{profile='allowance-work',repository='owner/roof'}={}) {
+ const old=oldContent(runId,repository),value=JSON.parse(Buffer.from(old.content,'base64'));if(profile)value.executionProfile=profile;
+ return {...old,content:Buffer.from(JSON.stringify(value)).toString('base64')};
+}
+test('productive work public summary distinguishes questions, tasks and unique models without exporting private packets',()=>{
+ const status=publicWorkStatus(workCycle(),{env:{...env(20),ROOF_CLOUD_GENERATION_RESULT:'success'},now:()=>0});
+ assert.equal(status.executionProfile,'allowance-work');assert.equal(status.sourceRevision,'a'.repeat(40));assert.equal(status.generatedAt,'1970-01-01T00:00:00.000Z');
+ assert.deepEqual(status.summary,{uniqueModels:2,workItems:3,authorTasks:3,reviewTasks:3,dispatchedTasks:5,validatedTasks:4,independentlyReviewed:1,awaitingIndependentReview:1,failed:1,completedFixes:0});
+ assert.deepEqual(status.models,[{model:'free/qwen-3.8-max',taskCount:3,validatedTaskCount:2},{model:'free/gpt-6-luna',taskCount:2,validatedTaskCount:2}]);
+ assert.deepEqual(Object.keys(status).sort(),['schemaVersion','repository','workflow','executionProfile','generatedAt','sourceRevision','run','reportArtifact','summary','models','scope'].sort());
+ for(const marker of ['PRIVATE_','DO_NOT_PUBLISH','RAW_SOURCE_CONTENT','remainingUnits','periodKey','taskId','planHash','productionReleaseApproved'])assert.equal(JSON.stringify(status).includes(marker),false,marker);
+ assert.match(status.scope,/not implemented or released fixes/);
+});
+test('productive work summary fails closed on malformed counts, duplicate models and source conflicts',()=>{
+ for(const mutate of [
+  data=>{data.caseWork.sourceRevision='b'.repeat(40);},
+  data=>{data.caseWork.counts.uniqueModels=3;},
+  data=>{data.caseWork.counts.workItems=4;},
+  data=>{data.caseWork.models[1].model=data.caseWork.models[0].model;},
+  data=>{data.caseWork.models[0].taskCount=0;},
+  data=>{data.caseWork.models[0].validatedTaskCount=4;},
+  data=>{data.caseWork.models[0].model='<private-model>';},
+  data=>{data.caseWork.counts.validatedTasks=NaN;},
+  data=>{data.caseWork.counts.failed=-1;},
+  data=>{data.caseWork.counts.dispatchedTasks=1000001;},
+  data=>{data.caseWork.counts.dispatchedTasks=6;},
+  data=>{data.caseWork.counts.validatedTasks=3;},
+  data=>{data.caseWork.counts.authorTasks=2;data.caseWork.counts.reviewTasks=2;},
+  data=>{data.caseWork.counts.validatedTasks=6;}
+ ]){const data=workCycle();mutate(data);assert.throws(()=>publicWorkStatus(data,{env:env(20)}));}
+});
+test('productive work preserves explicit zero dispatches or zero questions even when its pipeline succeeds',()=>{
+ const deferred=workCycle();deferred.caseWork.models=[];
+ deferred.caseWork.counts={uniqueModels:0,workItems:3,authorTasks:3,reviewTasks:0,dispatchedTasks:0,validatedTasks:0,independentlyReviewed:0,awaitingIndependentReview:0,failed:0};
+ const awaiting=publicWorkStatus(deferred,{env:{...env(20),ROOF_CLOUD_GENERATION_RESULT:'success'}});
+ assert.equal(awaiting.run.pipelineResult,'success');assert.equal(awaiting.summary.workItems,3);assert.equal(awaiting.summary.dispatchedTasks,0);assert.deepEqual(awaiting.models,[]);
+ const empty=workCycle();empty.caseWork.models=[];empty.caseWork.workItems=[];empty.caseWork.counts=Object.fromEntries(Object.keys(empty.caseWork.counts).map(key=>[key,0]));
+ const noQuestions=publicWorkStatus(empty,{env:{...env(20),ROOF_CLOUD_GENERATION_RESULT:'success'}});
+ assert.equal(noQuestions.run.pipelineResult,'success');assert.deepEqual(noQuestions.models,[]);assert.ok(Object.values(noQuestions.summary).every(value=>value===0));
+});
+test('failed productive work without cycle output requires its declared profile and publishes honest zero results',()=>{
+ for(const result of ['failure','unknown']) {
+  const status=publicWorkStatus(null,{env:{...env(20),ROOF_CLOUD_PUBLIC_PROFILE:'allowance-work',ROOF_CLOUD_GENERATION_RESULT:result}});
+  assert.equal(status.run.pipelineResult,result);assert.deepEqual(status.models,[]);assert.ok(Object.values(status.summary).every(value=>value===0));
+ }
+ assert.throws(()=>publicWorkStatus(null,{env:{...env(20),ROOF_CLOUD_PUBLIC_PROFILE:'allowance-work',ROOF_CLOUD_GENERATION_RESULT:'success'}}),/non-success/);
+ const missing=workCycle();delete missing.caseWork;
+ assert.throws(()=>publicWorkStatus(missing,{env:env(20)}),/declared non-success/);
+ assert.deepEqual(publicWorkStatus(missing,{env:{...env(20),ROOF_CLOUD_PUBLIC_PROFILE:'allowance-work',ROOF_CLOUD_GENERATION_RESULT:'failure'}}).models,[]);
+});
+test('productive work publication writes only its fixed journal with source provenance and CAS',async()=>{
+ const paths=[];let put;
+ const result=await publishCloudStatus(workCycle(),{env:{...env(20),GITHUB_TOKEN:'PRIVATE_TOKEN',ROOF_CLOUD_PUBLIC_PROFILE:'allowance-work'},fetchImpl:async(url,init)=>{
+  paths.push(url);if(url.includes('/attempts/'))return executionReply(url);if(url.includes('/git/ref/'))return reply({ref:'refs/heads/roof-cloud-status'});
+  if(init.method==='GET')return reply(oldWorkContent());put=JSON.parse(init.body);return reply({commit:{sha:'c'.repeat(40)}},201);
+ }});
+ assert.ok(paths.some(path=>path.includes('/contents/latest-work.json')));assert.ok(paths.every(path=>!path.includes('latest-status.json')&&!path.includes('latest-qualification.json')));
+ assert.match(result.statusURL,/roof-cloud-status\/latest-work.json$/);assert.equal(put.sha,'b'.repeat(40));assert.equal(put.branch,'roof-cloud-status');assert.equal(Object.hasOwn(put,'force'),false);
+ const published=JSON.parse(Buffer.from(put.content,'base64'));assert.equal(published.run.startedAt,'2026-11-28T12:00:00.000Z');assert.equal(published.summary.workItems,3);assert.equal(published.summary.uniqueModels,2);assert.equal(published.summary.completedFixes,0);
+ assert.equal(JSON.stringify(published).includes('PRIVATE_'),false);
+});
+test('failed productive work routes its empty publication separately and rejects cross-profile artifacts before network access',async()=>{
+ const paths=[];let published;
+ await publishCloudStatus(null,{env:{...env(20),GITHUB_TOKEN:'token',ROOF_CLOUD_PUBLIC_PROFILE:'allowance-work',ROOF_CLOUD_GENERATION_RESULT:'failure'},fetchImpl:async(url,init)=>{
+  paths.push(url);if(url.includes('/attempts/'))return executionReply(url);if(url.includes('/git/ref/'))return reply({});
+  if(init.method==='GET')return reply({},404);published=JSON.parse(Buffer.from(JSON.parse(init.body).content,'base64'));return reply({commit:{sha:'c'.repeat(40)}},201);
+ }});
+ assert.ok(paths.some(path=>path.includes('latest-work.json')));assert.ok(paths.every(path=>!path.includes('latest-status.json')&&!path.includes('latest-qualification.json')));assert.deepEqual(published.models,[]);
+ for(const [declared,actual]of [['allowance-work','all-models'],['allowance-work','allowance-roster'],['allowance-roster','allowance-work'],['allowance-qualification','allowance-work'],['cycle','allowance-work']]) {
+  let calls=0;await assert.rejects(publishCloudStatus({...workCycle(),executionProfile:actual},{env:{...env(20),GITHUB_TOKEN:'token',ROOF_CLOUD_PUBLIC_PROFILE:declared},fetchImpl:async()=>{calls++;}}));assert.equal(calls,0);
+ }
+});
+test('productive work journal refuses foreign scope, repository, newer execution and CAS conflicts',async()=>{
+ for(const previous of [oldWorkContent('19',{profile:'allowance-roster'}),oldWorkContent('19',{profile:null}),oldWorkContent('19',{repository:'another/roof'}),oldWorkContent('21')]) {
+  const requests=[];
+  await assert.rejects(publishCloudStatus(workCycle(),{env:{...env(20),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+   if(url.includes('/attempts/'))return executionReply(url);requests.push({url,method:init.method});return requests.length===1?reply({ref:'refs/heads/roof-cloud-status'}):reply(previous);
+  }}),/refusing/);
+  assert.equal(requests.some(request=>request.method==='PUT'),false);assert.ok(requests.every(request=>!request.url.includes('latest-status.json')&&!request.url.includes('latest-qualification.json')));
+ }
+ const requests=[];
+ await assert.rejects(publishCloudStatus(workCycle(),{env:{...env(20),GITHUB_TOKEN:'token'},fetchImpl:async(url,init)=>{
+  if(url.includes('/attempts/'))return executionReply(url);requests.push({url,init});return requests.length===1?reply({}):requests.length===2?reply(oldWorkContent()):reply({},409);
+ }}),/409/);
+ assert.equal(requests.filter(request=>request.init.method==='PUT').length,1);assert.equal(JSON.parse(requests.at(-1).init.body).sha,'b'.repeat(40));
 });
 test('status journal creates only its fixed branch from the checked-out revision and writes CAS content',async()=>{
   const calls=[];

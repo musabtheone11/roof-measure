@@ -162,13 +162,15 @@ export async function packReports(directory,output) {
 const STATUS_BRANCH='roof-cloud-status',STATUS_FILE='latest-status.json';
 const QUALIFICATION_FILE='latest-qualification.json';
 const QUALIFICATION_PROFILES=new Set(['allowance-qualification','allowance-roster']);
-function qualificationProfile(cycle,env) {
+const WORK_FILE='latest-work.json',WORK_PROFILE='allowance-work';
+const SCOPED_PROFILES=new Set([...QUALIFICATION_PROFILES,WORK_PROFILE]);
+function operationProfile(cycle,env) {
   const declared=env.ROOF_CLOUD_PUBLIC_PROFILE,actual=cycle?.executionProfile;
-  if(declared&&!['cycle','review-existing',...QUALIFICATION_PROFILES].includes(declared))fail('Unknown public operation profile');
-  if(actual&&!['all-models','text-fleet','two-role',...QUALIFICATION_PROFILES].includes(actual))fail('Unknown cycle execution profile');
-  if(QUALIFICATION_PROFILES.has(declared)&&cycle&&actual!==declared)fail('Public qualification profile conflicts with its cycle artifact');
-  if(declared&&!QUALIFICATION_PROFILES.has(declared)&&QUALIFICATION_PROFILES.has(actual))fail('A scoped qualification cannot replace the full journal');
-  return QUALIFICATION_PROFILES.has(actual)?actual:QUALIFICATION_PROFILES.has(declared)?declared:null;
+  if(declared&&!['cycle','review-existing',...SCOPED_PROFILES].includes(declared))fail('Unknown public operation profile');
+  if(actual&&!['all-models','text-fleet','two-role',...SCOPED_PROFILES].includes(actual))fail('Unknown cycle execution profile');
+  if(SCOPED_PROFILES.has(declared)&&cycle&&actual!==declared)fail('Public scoped profile conflicts with its cycle artifact');
+  if(declared&&!SCOPED_PROFILES.has(declared)&&SCOPED_PROFILES.has(actual))fail('A scoped operation cannot replace the full journal');
+  return SCOPED_PROFILES.has(actual)?actual:SCOPED_PROFILES.has(declared)?declared:null;
 }
 const boundedCount=value=>Number.isSafeInteger(value)&&value>=0&&value<=1000000?value:null;
 const publicLabel=(value,max)=>typeof value==='string'&&value.length<=max&&!/[\x00-\x1f<>]/.test(value)?value:null;
@@ -235,7 +237,7 @@ export function publicCloudStatus(cycle,{env=process.env,now=Date.now}={}) {
   return status;
 }
 export function publicQualificationStatus(cycle,{env=process.env,now=Date.now}={}) {
-  const executionProfile=qualificationProfile(cycle,env);
+  const executionProfile=operationProfile(cycle,env);
   if(!QUALIFICATION_PROFILES.has(executionProfile))fail('A known subscription qualification profile is required');
   const base=publicCloudStatus(cycle,{env,now});
   if(base.models.some(row=>!row.model.startsWith('free/')))fail('A subscription qualification cannot include paid-model rows');
@@ -246,9 +248,38 @@ export function publicQualificationStatus(cycle,{env=process.env,now=Date.now}={
       validCount:models.filter(row=>row.contributionValidated===true).length,reviewedCount:models.filter(row=>row.reviewStatus==='complete').length},
     scope:'Selected subscription model results only; paid and image evidence remains in the separately dated full-roster journal. No field accuracy or production approval.'};
 }
+export function publicWorkStatus(cycle,{env=process.env,now=Date.now}={}) {
+  if(operationProfile(cycle,env)!==WORK_PROFILE)fail('A known productive work profile is required');
+  const base=publicCloudStatus(cycle,{env,now}),work=cycle?.caseWork;
+  const countKeys=['uniqueModels','workItems','authorTasks','reviewTasks','dispatchedTasks','validatedTasks','independentlyReviewed','awaitingIndependentReview','failed'];
+  let models=[],summary=Object.fromEntries(countKeys.map(key=>[key,0]));
+  if(!work) {
+    if(env.ROOF_CLOUD_PUBLIC_PROFILE!==WORK_PROFILE||base.run.pipelineResult==='success')fail('Missing productive work results require a declared non-success work run');
+  }else {
+    if(typeof work!=='object'||Array.isArray(work)||work.sourceRevision!==base.sourceRevision)fail('Productive work source revision mismatch');
+    if(!Array.isArray(work.models)||work.models.length>256||!Array.isArray(work.workItems))fail('Invalid productive work model or question counts');
+    summary=Object.fromEntries(countKeys.map(key=>{
+      const value=boundedCount(work.counts?.[key]);if(value===null)fail('Invalid productive work count');return [key,value];
+    }));
+    models=work.models.map(row=>{
+      const model=publicModel(row?.model),taskCount=boundedCount(row?.taskCount),validatedTaskCount=boundedCount(row?.validatedTaskCount);
+      if(model==='unknown'||taskCount===null||taskCount<1||validatedTaskCount===null||validatedTaskCount>taskCount)fail('Invalid productive work model counts');
+      return {model,taskCount,validatedTaskCount};
+    });
+    if(new Set(models.map(row=>row.model)).size!==models.length||summary.uniqueModels!==models.length||summary.workItems!==work.workItems.length)fail('Productive work aggregate counts do not match its recorded models or questions');
+    const modelTasks=models.reduce((total,row)=>total+row.taskCount,0),validatedModelTasks=models.reduce((total,row)=>total+row.validatedTaskCount,0);
+    if(modelTasks!==summary.dispatchedTasks||validatedModelTasks!==summary.validatedTasks||summary.dispatchedTasks>summary.authorTasks+summary.reviewTasks||summary.validatedTasks>summary.dispatchedTasks)fail('Productive work aggregate task counts do not match its dispatched or validated tasks');
+  }
+  // Model answers and review records are proposals, not applied or released fixes.
+  summary.completedFixes=0;
+  return {schemaVersion:1,repository:base.repository,workflow:base.workflow,executionProfile:WORK_PROFILE,generatedAt:base.generatedAt,
+    sourceRevision:base.sourceRevision,run:base.run,reportArtifact:base.reportArtifact,summary,models,
+    scope:'Scoped productive engineering work; accepted proposals and reviews are not implemented or released fixes. No field accuracy or production approval.'};
+}
 export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,now=Date.now}={}) {
-  const qualification=qualificationProfile(cycle,env)!==null;
-  const status=qualification?publicQualificationStatus(cycle,{env,now}):publicCloudStatus(cycle,{env,now}),statusFile=qualification?QUALIFICATION_FILE:STATUS_FILE,token=env.GH_TOKEN||env.GITHUB_TOKEN;
+  const profile=operationProfile(cycle,env),qualification=QUALIFICATION_PROFILES.has(profile),productive=profile===WORK_PROFILE;
+  const status=productive?publicWorkStatus(cycle,{env,now}):qualification?publicQualificationStatus(cycle,{env,now}):publicCloudStatus(cycle,{env,now}),
+    statusFile=productive?WORK_FILE:qualification?QUALIFICATION_FILE:STATUS_FILE,token=env.GH_TOKEN||env.GITHUB_TOKEN;
   if(!token)fail('GitHub status-publishing credential is unavailable');
   const base=`https://api.github.com/repos/${status.repository}`;
   async function request(path,{method='GET',body,allow404=false}={}) {
@@ -270,7 +301,8 @@ export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,
   if(previous) {
     if(previous.type!=='file'||!/^([a-f0-9]{40})$/.test(previous.sha||'')||previous.encoding!=='base64'||typeof previous.content!=='string'||previous.content.length>200000)fail('Existing public status has invalid content metadata; refusing replacement');
     let old;try{old=JSON.parse(Buffer.from(previous.content,'base64').toString('utf8'));}catch{fail('Existing public status is unreadable; refusing replacement');}
-    if(old.schemaVersion!==1||old.repository!==status.repository||old.workflow!==WORKFLOW||(qualification&&!QUALIFICATION_PROFILES.has(old.executionProfile))||typeof old.run?.id!=='string'||!/^[1-9]\d*$/.test(old.run.id)||!Number.isInteger(old.run?.attempt)||old.run.attempt<1||!/^([a-f0-9]{40})$/.test(old.sourceRevision||'')||!Number.isFinite(Date.parse(old.run.startedAt||'')))fail('Existing public status provenance mismatch; refusing replacement');
+    const wrongProfile=productive?old.executionProfile!==WORK_PROFILE:qualification?!QUALIFICATION_PROFILES.has(old.executionProfile):SCOPED_PROFILES.has(old.executionProfile);
+    if(old.schemaVersion!==1||old.repository!==status.repository||old.workflow!==WORKFLOW||wrongProfile||typeof old.run?.id!=='string'||!/^[1-9]\d*$/.test(old.run.id)||!Number.isInteger(old.run?.attempt)||old.run.attempt<1||!/^([a-f0-9]{40})$/.test(old.sourceRevision||'')||!Number.isFinite(Date.parse(old.run.startedAt||'')))fail('Existing public status provenance mismatch; refusing replacement');
     const oldStarted=Date.parse(old.run.startedAt);
     if(oldStarted>started||(oldStarted===started&&(old.run.id!==status.run.id||old.run.attempt!==status.run.attempt)))fail('A newer or chronologically ambiguous cloud status exists; refusing stale replacement');
   }
