@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import { verifyRoster, requestOrganizationRole } from './provider.mjs';
 import {isDecisionModel,FREE_DREX_DECISION_MODEL,FREE_DREX_DECISION_PROTOCOL} from './decision-provider.mjs';
+import {POLICY,ALLOWANCE_QUOTE_URL} from './allowance-calculation.mjs';
+import {getModelCatalogEntry} from './model-catalog.mjs';
 
 const hash = 'a'.repeat(64);
 const task = { schemaVersion: 1, id: 'task1', role: 'engineering', actorId: 'engineer1', sourceRevision: 'commit1', datasetRevision: 'data1', candidateHash: hash, policyVersion: 'policy1', inputHashes: [hash] };
@@ -326,4 +328,110 @@ test('oversized JSON compatibility evidence has a bounded UTF-8 prefix and truth
   await assert.rejects(requestOrganizationRole(task,{...f.options,model,verifiedRoster:{ids:[model],checkedAt:new Date().toISOString()},onResponse:r=>{record=r;}}),{code:'OUTPUT_TOO_LARGE'});
   assert.ok(Buffer.byteLength(record.content)<=65536);assert.equal(record.content.includes('\ufffd'),false);assert.equal(record.contentTruncated,true);
   assert.equal(record.contentSha256,createHash('sha256').update(record.content).digest('hex'));assert.equal(record.originalContentSha256,createHash('sha256').update(original).digest('hex'));assert.equal(record.originalContentBytes,80000);
+});
+
+function calculationFixture({usage,finish='stop',returnedModel,quoteChange={},quoteUnavailable=false,onResponse,onDispatch,chat}={}){
+  const model='free/qwen-3.8-max',published=getModelCatalogEntry(model),records=[],order=[];
+  const body=JSON.stringify({models:[{id:model,provider:'Free',allowFree:true,dollarsPer1M:0,outputDollarsPer1M:0,
+    contextWindow:String(published.contextTokens),weight:published.allowanceWeight,...quoteChange}]});
+  const quote={schemaVersion:1,policy:POLICY,sourceUrl:ALLOWANCE_QUOTE_URL,observedAt:Date.now(),body,bodySha256:createHash('sha256').update(body).digest('hex')};
+  const f=fixture({roster:async()=>json({data:[{id:model}]}),chat:chat??(async()=>{order.push('post');return json({id:'request-calculation',model:returnedModel??model,
+    usage:usage??{prompt_tokens:20,completion_tokens:30,total_tokens:50,cost_tokens:0},choices:[{index:0,finish_reason:finish,message:{content:finish==='length'?'cut':JSON.stringify(output())}}]});}),
+    reserve:async value=>{order.push('reserve');records.push({kind:'reserve',value});return 'calculation-attempt';},
+    onDispatch:async attempt=>{order.push('dispatch');if(onDispatch)await onDispatch(attempt);},
+    onUsage:async(attempt,value)=>{order.push('usage');records.push({kind:'usage',attempt,value});}});
+  return {...f,model,quote,records,order,options:{...f.options,model,stream:false,calculateAllowance:true,
+    allowanceQuoteVerifier:async()=>{order.push('quote');return quoteUnavailable?{eligible:false,reason:'QUOTE_UNAVAILABLE'}:{quoteArtifact:quote};},
+    onAllowanceCalculationQuote:async value=>{order.push('quote-ack');records.push({kind:'quote',value});return {hash:'b'.repeat(64)};},
+    onResponse:async value=>{order.push('response-ack');records.push({kind:'response',value});return onResponse?onResponse(value):{hash:'c'.repeat(64)};}}};
+}
+
+test('prospective opt-in binds a fresh quote at reserve and durably persists attempt-bound original response before calculated settlement',async()=>{
+  const f=calculationFixture();await requestOrganizationRole(task,f.options);
+  assert.deepEqual(f.order,['quote','quote-ack','reserve','dispatch','post','response-ack','usage']);
+  const reserve=f.records.find(r=>r.kind==='reserve').value;
+  assert.deepEqual(reserve.allowanceCalculationReservation,{policy:POLICY,model:f.model,weight:getModelCatalogEntry(f.model).allowanceWeight,quoteArtifactHash:'b'.repeat(64)});
+  assert.equal(reserve.allowance.reservedUnits,getModelCatalogEntry(f.model).contextTokens*2*getModelCatalogEntry(f.model).allowanceWeight);
+  const raw=f.records.find(r=>r.kind==='response').value;
+  assert.deepEqual(raw.attemptBinding,{attemptId:'calculation-attempt',taskId:task.id,model:f.model,protocol:'chat/completions'});
+  assert.equal(raw.rawResponse.usage.total_tokens,50);assert.equal(raw.execution.transportComplete,true);
+  const settled=f.records.find(r=>r.kind==='usage').value;
+  assert.deepEqual(settled.allowanceCalculation,{policy:POLICY,quoteArtifactHash:'b'.repeat(64),responseArtifactHash:'c'.repeat(64)});
+  assert.equal(settled.reportedAllowanceUnits,null);assert.equal(Object.hasOwn(settled.allowanceCalculation,'units'),false,'Caller never submits a calculated charge.');
+});
+test('default callers never request calculation quotes or alter existing allowance settlement',async()=>{
+  const f=calculationFixture();await requestOrganizationRole(task,{...f.options,calculateAllowance:false});
+  assert.deepEqual(f.order,['reserve','dispatch','post','usage','response-ack']);
+  assert.equal(f.records.find(r=>r.kind==='reserve').value.allowanceCalculationReservation,undefined);
+  assert.equal(f.records.find(r=>r.kind==='usage').value.allowanceCalculation,undefined);
+  assert.equal(f.records.find(r=>r.kind==='response').value.attemptBinding,undefined);
+  await assert.rejects(requestOrganizationRole(task,{...f.options,calculateAllowance:'true'}),{code:'INVALID_LIMIT'});
+});
+test('affirmative public price, weight or context increase blocks before reservation and POST',async()=>{
+  for(const quoteChange of [{dollarsPer1M:.1},{outputDollarsPer1M:.1},{weight:9999},{contextWindow:'1024M'}]){
+    const f=calculationFixture({quoteChange});await assert.rejects(requestOrganizationRole(task,f.options),{code:'PRICING_CHANGED_REVERIFY'});
+    assert.equal(f.records.some(r=>r.kind==='reserve'),false);assert.equal(f.calls.some(c=>c.init.method==='POST'),false);
+  }
+});
+test('unavailable/malformed quote or unacknowledged quote preserves the entire conservative reservation without opting in',async()=>{
+  for(const options of [{quoteUnavailable:true},{quoteChange:{weight:'3'}},{}]){
+    const f=calculationFixture(options);
+    if(!Object.keys(options).length)f.options.onAllowanceCalculationQuote=async()=>undefined;
+    await requestOrganizationRole(task,f.options);
+    const r=f.records.find(r=>r.kind==='reserve').value,s=f.records.find(r=>r.kind==='usage').value;
+    assert.ok(r.allowance.reservedUnits>0);assert.equal(r.allowanceCalculationReservation,undefined);assert.equal(s.allowanceCalculation,undefined);assert.equal(s.reportedAllowanceUnits,null);
+  }
+});
+test('missing/failed durable response acknowledgement cannot produce a derived settlement or a successful task',async()=>{
+  for(const onResponse of [async()=>undefined,async()=>{throw Error('disk unavailable');}]){
+    const f=calculationFixture({onResponse});await assert.rejects(requestOrganizationRole(task,f.options),{code:'ALLOWANCE_RESPONSE_NOT_DURABLE'});
+    const usages=f.records.filter(r=>r.kind==='usage');assert.equal(usages.length,1);assert.equal(usages[0].value.allowanceCalculation,undefined);assert.equal(usages[0].value.reportedAllowanceUnits,null);
+  }
+});
+test('opted-in complete length output settles documented usage after raw acknowledgement even though role output is rejected',async()=>{
+  const f=calculationFixture({finish:'length'});await assert.rejects(requestOrganizationRole(task,f.options),{code:'INVALID_AGENT_OUTPUT'});
+  assert.equal(f.records.find(r=>r.kind==='usage').value.allowanceCalculation.policy,POLICY);
+  assert.ok(f.order.indexOf('response-ack')<f.order.indexOf('usage'));
+});
+test('model mismatch, partial counts and contradictory aliases keep a full hold after raw evidence acknowledgement',async()=>{
+  for(const options of [{returnedModel:'alias'}, {usage:{prompt_tokens:20,completion_tokens:30}},
+    {usage:{prompt_tokens:20,completion_tokens:30,total_tokens:50,input_tokens:21}},
+    {usage:{prompt_tokens:20,completion_tokens:30,total_tokens:50,cost_tokens:1}}]){
+    const f=calculationFixture(options);
+    if(options.returnedModel)await assert.rejects(requestOrganizationRole(task,f.options),{code:'MODEL_MISMATCH'});
+    else await requestOrganizationRole(task,f.options);
+    assert.equal(f.records.find(r=>r.kind==='usage').value.allowanceCalculation,undefined);assert.equal(f.records.filter(r=>r.kind==='usage').length,1);
+    assert.ok(f.order.indexOf('response-ack')<f.order.indexOf('usage'));
+  }
+});
+test('quote freshness is enforced again after durable dispatch callback before POST',async()=>{
+  const original=Date.now;let clock=original();
+  try{
+    Date.now=()=>clock;
+    const f=calculationFixture({onDispatch:async()=>{clock+=60001;}});
+    await assert.rejects(requestOrganizationRole(task,f.options),{code:'ALLOWANCE_CALCULATION_QUOTE_STALE'});
+    assert.equal(f.calls.some(c=>c.init.method==='POST'),false);assert.equal(f.records.find(r=>r.kind==='usage').value.allowanceCalculation,undefined);
+  }finally{Date.now=original;}
+});
+test('cancellation after raw acknowledgement retains an unknown hold and never calculates or resends',async()=>{
+  const controller=new AbortController(),f=calculationFixture({onResponse:async()=>{controller.abort();return {hash:'c'.repeat(64)};}});
+  await assert.rejects(requestOrganizationRole(task,{...f.options,signal:controller.signal}),{code:'CANCELLED'});
+  assert.equal(f.records.filter(r=>r.kind==='usage').length,1);assert.equal(f.records.find(r=>r.kind==='usage').value.allowanceCalculation,undefined);assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
+});
+test('prospective streaming calculation requires DONE; complete JSON compatibility uses its single existing response',async()=>{
+  const model='free/qwen-3.8-max',usage={prompt_tokens:20,completion_tokens:30,total_tokens:50,cost_tokens:0};
+  const complete=calculationFixture({chat:async()=>sseChat(model,JSON.stringify(output()),{usage})});
+  await requestOrganizationRole(task,{...complete.options,stream:true});
+  assert.equal(complete.records.find(r=>r.kind==='response').value.execution.streamEvidence.doneReceived,true);
+  assert.equal(complete.records.find(r=>r.kind==='usage').value.allowanceCalculation.policy,POLICY);
+  const partial=calculationFixture({chat:async()=>sseChat(model,'partial',{usage,done:false})});
+  await assert.rejects(requestOrganizationRole(task,{...partial.options,stream:true}),{code:'STREAM_INCOMPLETE'});
+  const original=partial.records.find(r=>r.kind==='response').value;
+  assert.equal(original.attemptBinding.attemptId,'calculation-attempt');assert.equal(original.execution.streamEvidence.complete,false);
+  assert.equal(partial.records.find(r=>r.kind==='usage').value.allowanceCalculation,undefined);
+  assert.ok(partial.order.indexOf('response-ack')<partial.order.indexOf('usage'));
+  const compatibility=calculationFixture();await requestOrganizationRole(task,{...compatibility.options,stream:true});
+  assert.equal(compatibility.records.find(r=>r.kind==='response').value.execution.transport,'json-response-to-stream-request');
+  assert.equal(compatibility.records.find(r=>r.kind==='usage').value.allowanceCalculation.policy,POLICY);
+  for(const f of [complete,partial,compatibility])assert.equal(f.calls.filter(c=>c.init.method==='POST').length,1);
 });

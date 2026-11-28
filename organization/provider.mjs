@@ -7,6 +7,7 @@ import {readProviderErrorDetails} from './provider-error.mjs';
 import {verifySubscriptionAllowance,buildAllowanceReservation,allowanceUsage} from './allowance.mjs';
 import {readChatStream} from './chat-stream.mjs';
 import {isPlainClassifier,buildPlainClassificationRequest,validatePlainClassificationResponse,PLAIN_CLASSIFIER_PROTOCOL} from './plain-classifier.mjs';
+import {POLICY,verifyAllowanceCalculationQuote,inspectAllowanceCalculationQuote,validateAllowanceCalculationReservation,calculateDocumentedAllowance} from './allowance-calculation.mjs';
 
 const API_ROOT = 'https://api.apinex.bond/v1';
 const MAX_BODY = 2 * 1024 * 1024;
@@ -139,6 +140,7 @@ export async function requestOrganizationRole(task, {
   apiKey = process.env.APINEX_API_KEY, fetchImpl = fetch, signal,
   model = MODEL_BY_ROLE[task?.role], context = {}, reserve, onDispatch, onUsage, onResponse,
   baseUrl = API_ROOT, timeoutMs, verifiedRoster, images = [],stream,authorizeDecisionRoute,
+  calculateAllowance=false,onAllowanceCalculationQuote,allowanceQuoteVerifier=verifyAllowanceCalculationQuote,
 } = {}) {
   validateTask(task);
   rootURL(baseUrl);
@@ -148,6 +150,10 @@ export async function requestOrganizationRole(task, {
   const price = getVerifiedModelPrice(model);
   if (!price) fail('PRICING_UNKNOWN', 'The selected model lacks verified conservative pricing');
   const typed=isDecisionModel(model),plain=!typed&&isPlainClassifier(model),free=price.billingTier==='free-allowance',streamingClaim=getModelCatalogEntry(model)?.capabilities?.streamingClaim===true;
+  if(typeof calculateAllowance!=='boolean')fail('INVALID_LIMIT','Allowance calculation opt-in must be an explicit boolean');
+  const calculationRequested=calculateAllowance&&free&&!typed&&!plain&&Array.isArray(images)&&images.length===0;
+  if(calculationRequested&&![onAllowanceCalculationQuote,onResponse,allowanceQuoteVerifier].every(callback=>typeof callback==='function'))
+    fail('ALLOWANCE_CALCULATION_DISABLED','Opted-in allowance calculation requires durable quote and response callbacks');
   const freeDecision=model===FREE_DREX_DECISION_MODEL;
   if(freeDecision&&(typeof authorizeDecisionRoute!=='function'||task.policyVersion!==FREE_DREX_DECISION_PROTOCOL))fail('ROUTE_MIGRATION_REQUIRED','The free Decisions route requires a host-verified durable migration dispatch and exact protocol binding');
   if(stream!==undefined&&typeof stream!=='boolean')fail('INVALID_LIMIT','Streaming configuration must be an explicit boolean');
@@ -206,15 +212,39 @@ export async function requestOrganizationRole(task, {
     allowance=buildAllowanceReservation(snapshot,{reservedUnits:textAllowanceReservationUnits(model,maxOutputTokens),
       subscriptionRequired:getModelCatalogEntry(model)?.requiresSubscription===true});
   }
-  const reservation = await reserve({ usd: price.contextTokens * price.maxRate / 1e6, model, ...(allowance?{allowance}:{}) });
+  let calculationAuthorization=null,calculationQuote=null;
+  if(calculationRequested){
+    let verified;try{verified=await allowanceQuoteVerifier({model,fetchImpl,signal:combined,timeoutMs:Math.min(timeoutMs,20000)});}catch{verified=null;}
+    const quote=verified?.quoteArtifact;
+    const inspected=inspectAllowanceCalculationQuote({model,quoteArtifact:quote,at:Date.now()});
+    if(inspected.blockDispatch)fail('PRICING_CHANGED_REVERIFY','The current exact-model quote exceeds the approved pricing or allowance bound');
+    if(inspected.eligible){
+      // No artifact acknowledgement means no authority to reduce the full hold.
+      let ack;try{ack=await onAllowanceCalculationQuote(quote);}catch{ack=null;}
+      const quoteArtifactHash=typeof ack==='string'?ack:ack?.hash;
+      if(/^[a-f0-9]{64}$/.test(quoteArtifactHash||'')){
+        calculationQuote=quote;calculationAuthorization={policy:POLICY,model,weight:inspected.weight,quoteArtifactHash};
+      }
+    }
+  }
+  const reservation = await reserve({ usd: price.contextTokens * price.maxRate / 1e6, model, ...(allowance?{allowance}:{}),
+    ...(calculationAuthorization?{allowanceCalculationReservation:calculationAuthorization}:{}) });
   if (reservation == null || reservation === false) fail('BUDGET_DISABLED', 'No durable request reservation was granted');
   let dispatched = false;
   let usageNotified = false;
   let routeMigration=null;
+  let calculationDispatchAt=null;
   try {
     checkSignal(combined);
+    if(calculationAuthorization){
+      const check=validateAllowanceCalculationReservation({authorization:calculationAuthorization,quoteArtifact:calculationQuote,at:Date.now()});
+      if(!check.eligible)fail(check.blockDispatch?'PRICING_CHANGED_REVERIFY':'ALLOWANCE_CALCULATION_QUOTE_STALE','The bound calculation quote is invalid or stale before dispatch');
+    }
     await onDispatch(reservation);
     dispatched = true;
+    calculationDispatchAt=Date.now();
+    if(calculationAuthorization&&!validateAllowanceCalculationReservation({authorization:calculationAuthorization,quoteArtifact:calculationQuote,at:calculationDispatchAt}).eligible)
+      fail('ALLOWANCE_CALCULATION_QUOTE_STALE','The bound quote expired during durable dispatch; no model POST was sent');
     checkSignal(combined);
     if(freeDecision){
       routeMigration=await authorizeDecisionRoute({taskId:task.id,model,protocol:FREE_DREX_DECISION_PROTOCOL,attemptId:reservation});
@@ -234,6 +264,7 @@ export async function requestOrganizationRole(task, {
         {route:'chat/completions',protocol:PLAIN_CLASSIFIER_PROTOCOL,requestOutputTokenLimit:null,responseFormat:'literal-enum',clientOutputByteLimit:MAX_OUTPUT,stream:false}:
         {route:'chat/completions',maxOutputTokens,responseFormat:'json_object',stream:streaming,...(streaming?{streamOptions:{includeUsage:true}}:{})},
       transport:streaming?(response.streamEvidence?'sse':response.streamTransport):'json',
+      ...(calculationAuthorization?{transportComplete:true}:{}),
       ...(streaming&&response.streamEvidence?{streamEvidence:Object.fromEntries(Object.entries(response.streamEvidence).filter(([key])=>!['content','usage'].includes(key)))}:{}),
       requestedModel: model,
       returnedModel: typeof response?.model === 'string' ? response.model.slice(0, 200) : null,
@@ -252,12 +283,28 @@ export async function requestOrganizationRole(task, {
       ...(routeMigration?{routeMigration}:{}),
       ...(allowance?{allowanceReservedUnits:allowance.reservedUnits,...allowanceUsage(response?.usage,{weight:price.allowanceWeight})}:{}),
     };
-    usageNotified = true;
-    await onUsage(reservation, { ...execution });
-    if (typeof onResponse === 'function') await onResponse({execution,
+    const rawRecord={execution,
       ...originalContentRecord(typed?JSON.stringify(response):response?.choices?.[0]?.message?.content),
-      ...(streaming||plain?{usage:response.usage??null}:{}),
-      contributionKind:typed?'typed-decision':plain?'plain-classification':'role-proposal'});
+      ...(streaming||plain||calculationAuthorization?{usage:response.usage??null}:{}),
+      ...(calculationAuthorization?{attemptBinding:{attemptId:reservation,taskId:task.id,model,protocol:'chat/completions'},rawResponse:response}:{}),
+      contributionKind:typed?'typed-decision':plain?'plain-classification':'role-proposal'};
+    if(calculationAuthorization){
+      let ack=null;
+      // Persist the original evidence before notifying the host of any derived settlement.
+      try{ack=await onResponse(rawRecord);}catch{}
+      checkSignal(combined);
+      const responseArtifactHash=typeof ack==='string'?ack:ack?.hash;
+      const calculation=calculateDocumentedAllowance({authorization:calculationAuthorization,quoteArtifact:calculationQuote,responseArtifact:rawRecord,
+        dispatchAt:calculationDispatchAt,attemptId:reservation,taskId:task.id});
+      usageNotified=true;
+      await onUsage(reservation,{...execution,...(calculation.eligible&&/^[a-f0-9]{64}$/.test(responseArtifactHash||'')?
+        {allowanceCalculation:{policy:POLICY,quoteArtifactHash:calculationAuthorization.quoteArtifactHash,responseArtifactHash}}:{})});
+      if(!/^[a-f0-9]{64}$/.test(responseArtifactHash||''))fail('ALLOWANCE_RESPONSE_NOT_DURABLE','Raw response storage was not acknowledged; the full allowance hold remains');
+    }else{
+      usageNotified = true;
+      await onUsage(reservation, { ...execution });
+      if(typeof onResponse==='function')await onResponse(rawRecord);
+    }
     checkSignal(combined);
     if (execution.returnedModel !== model) fail('MODEL_MISMATCH', 'API NEX did not return the exact requested model identifier; explicit review is required');
     if(typed)return {...validateDecisionResponse(response,context,{model}),execution};
@@ -283,19 +330,24 @@ export async function requestOrganizationRole(task, {
     return { result, execution, handoff };
   } catch (error) {
     let settlementFailure=null,evidenceFailure=null;
-    if (dispatched && !usageNotified) {
-      usageNotified = true;
-      try{await onUsage(reservation, { reportedUsd: null, billingStatus: 'unknown', requestedModel: model });}
-      catch(failure){settlementFailure=failure;}
-    }
+    const retainUnknownHold=async()=>{
+      if(dispatched&&!usageNotified){
+        usageNotified=true;
+        try{await onUsage(reservation,{reportedUsd:null,billingStatus:'unknown',requestedModel:model});}
+        catch(failure){settlementFailure=failure;}
+      }
+    };
+    if(!calculationAuthorization)await retainUnknownHold();
     if(error.streamEvidence&&typeof onResponse==='function'){
       const {content,usage,...transport}=error.streamEvidence;
       try{await onResponse({execution:{requestedModel:model,returnedModel:transport.model,requestId:transport.id,finishReason:transport.finishReason,
         billingStatus:'unknown',reportedUsd:null,transport:'sse',settings:{route:'chat/completions',maxOutputTokens,responseFormat:'json_object',stream:streaming},streamEvidence:transport},
         content,contentSha256:transport.contentSha256,usage,streamErrorCode:error.code,
-        failureCode:signal?.aborted?'CANCELLED':combined.aborted?'TIMEOUT':error.code,contributionKind:'role-proposal'});}
+        failureCode:signal?.aborted?'CANCELLED':combined.aborted?'TIMEOUT':error.code,
+        ...(calculationAuthorization?{attemptBinding:{attemptId:reservation,taskId:task.id,model,protocol:'chat/completions'}}:{}),contributionKind:'role-proposal'});}
       catch(failure){evidenceFailure=failure;}
     }
+    if(calculationAuthorization)await retainUnknownHold();
     if(settlementFailure)throw settlementFailure;
     if(evidenceFailure)throw evidenceFailure;
     if (signal?.aborted) fail('CANCELLED', 'Organization request cancelled', { retryable: false });

@@ -105,3 +105,24 @@ The targeted results use `latest-recovery.json`, separate from the 23-model
 qualification, full-roster and productive-work journals. The exact run/source
 and original artifacts are required before any candidate can be described as
 recovered. This protocol description alone does not claim successful recovery.
+
+## Targeted hosted result — 2026-11-28
+
+[Run 46164311066](https://github.com/musabtheone11/roof-measure/actions/runs/46164311066)
+used `3eff070d1b7ab8230e8bc0ecb941499caf199b14`. All three primary
+contributions validated: free Drex returned its original grounded typed routing
+choice, and Hydrogen/HY4 returned complete strict role JSON with exact metric
+facts. A later Hydrogen critique received HTTP 502; independent review count
+remained zero, with no repeated failed review request.
+
+Thus all 23 subscription text IDs have produced validated primary contributions
+across the separately retained roster and targeted recovery runs. Together with
+the earlier paid/design evidence, 41 distinct models have contributed. This is
+historical capability evidence, not a simultaneous availability guarantee or
+independent approval of every proposal.
+
+All prior 125 dollar and 71 allowance rows remained unchanged. Four new calls
+added zero wallet charge and 25,434,112 conservative held units. The raw route
+migration qualified exactly once after successful fenced completion. Twelve PDF
+readbacks and the browser workflow passed. The full, 23-model and productive-work
+journals remained unchanged; the targeted run has its own recovery journal.

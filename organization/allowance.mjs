@@ -80,8 +80,10 @@ export function buildAllowanceReservation(snapshot,{reservedUnits,subscriptionRe
     expiresAt:snapshot.expiresAt,periodKey:snapshot.periodKey,unlimited:snapshot.unlimited};
 }
 
-/** Published billing formula gives estimates, not a documented exact debit field.
- * usage.allowance_tokens is currently undocumented, so it cannot release a hold. */
+/** Legacy/default telemetry remains an estimate, never a directly reported debit.
+ * New prospective calculation authorizations use allowance-calculation.mjs and
+ * durable raw evidence; this function cannot release an allowance hold.
+ * usage.allowance_tokens remains undocumented and is never a direct receipt. */
 export function allowanceUsage(usage,{weight,flatUnits}={}){
   let estimate=null;
   if(units(flatUnits))estimate=flatUnits;
