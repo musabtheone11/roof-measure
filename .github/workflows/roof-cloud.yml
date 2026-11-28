@@ -11,6 +11,11 @@ on:
         type: choice
         options: [cycle, review-existing, allowance-qualification, allowance-roster, allowance-work, allowance-recovery]
         default: cycle
+      work_items:
+        description: Maximum new case questions, 1 to 8 (allowance-work only)
+        type: choice
+        options: ['2', '8']
+        default: '8'
       review_run_id:
         description: Completed laboratory run to review (review-existing only)
         type: string
@@ -49,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 3eff070d1b7ab8230e8bc0ecb941499caf199b14
+          ref: db45e8fdc2955ec9972e4a5de13b5e50d2648ec7
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -105,6 +110,8 @@ jobs:
         env:
           APINEX_API_KEY: ${{ secrets.ROOF_ORG_APINEX_API_KEY || secrets.APINEX_API_KEY }}
           ROOF_CLOUD_PAID_ALLOWED: ${{ steps.bootstrap.outputs.paid_allowed }}
+          ROOF_CLOUD_CALCULATE_ALLOWANCE: 'true'
+          ROOF_CLOUD_WORK_ITEMS: ${{ inputs.work_items || '8' }}
           ROOF_CLOUD_BROWSER_STATUS: ${{ steps.browser.outcome }}
           ROOF_CLOUD_MODEL_MODE: ${{ steps.operation.outputs.operation == 'allowance-recovery' && 'allowance-recovery' || steps.operation.outputs.operation == 'allowance-work' && 'allowance-work' || steps.operation.outputs.operation == 'allowance-roster' && 'allowance-roster' || steps.operation.outputs.operation == 'allowance-qualification' && 'allowance-qualification' || 'all-models' }}
           ROOF_CLOUD_OPERATION: ${{ steps.operation.outputs.operation }}
@@ -118,7 +125,7 @@ jobs:
             fi
             node --use-env-proxy organization/review-followup.mjs --state "$STATE_DIR" --baseline baseline-input/cloud-output --output "$OUTPUT_DIR" --baseline-run "$ROOF_REVIEW_RUN_ID" "${review_args[@]}"
           else
-            node --use-env-proxy organization/cloud-cycle.mjs --state "$STATE_DIR" --output "$OUTPUT_DIR" --count 12 --seed "${{ github.run_number }}"
+            node --use-env-proxy organization/cloud-cycle.mjs --state "$STATE_DIR" --output "$OUTPUT_DIR" --count 12 --work-items "$ROOF_CLOUD_WORK_ITEMS" --seed "${{ github.run_number }}"
           fi
       - name: Close and fingerprint cloud state
         if: always() && steps.bootstrap.outcome == 'success'
