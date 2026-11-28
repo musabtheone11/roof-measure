@@ -48,7 +48,7 @@ async function pdfBytes(p, fn, arg) {
 }
 const toB64 = `const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s);`;
 async function openJob(ctx) {
-  const p = await ctx.newPage(); const errors = []; p.on('pageerror', (e) => errors.push(e.message));
+  const p = await ctx.newPage(); const errors = []; p.on('pageerror', (e) => errors.push(e.message)); p.on('crash', () => errors.push('the browser page crashed'));
   // one clock for every build: the estimate prints the time it was entered, and two builds a minute apart differ
   await p.clock.setFixedTime(new Date('2026-11-27T10:00:00'));
   await p.goto('http://localhost:8198/'); await p.evaluate(() => { initMap(); const n = document.getElementById('nokey'); if (n) n.hidden = true; });
@@ -116,6 +116,6 @@ try {
   if (!/Diversity Roofing &amp; Sons/i.test(kept.html)) fail('the estimate does not print the typed business name');
   if (o2.errors.length) fail('page errors: ' + o2.errors.join(' | '));
   console.log(`estimate text: ${pages} pages and ${cPages - first + 1} estimate pages in the Report + estimate PDF searchable and on the printed words; pages render identically with and without the layer; accented insured name findable; old default replaced, typed name kept`);
-} catch (e) { console.error('FAIL ' + e.message); code = 1; }
-finally { await browser.close(); if (srv && srv.close) srv.close(); }
+} catch (e) { console.error('FAIL ' + e.message.split('\n')[0]); code = 1; }
+finally { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]); if (srv && srv.close) srv.close(); }   // a crashed browser can hang on close
 process.exit(code);
