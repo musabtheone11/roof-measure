@@ -163,7 +163,9 @@ const STATUS_BRANCH='roof-cloud-status',STATUS_FILE='latest-status.json';
 const QUALIFICATION_FILE='latest-qualification.json';
 const QUALIFICATION_PROFILES=new Set(['allowance-qualification','allowance-roster']);
 const WORK_FILE='latest-work.json',WORK_PROFILE='allowance-work';
-const SCOPED_PROFILES=new Set([...QUALIFICATION_PROFILES,WORK_PROFILE]);
+const RECOVERY_FILE='latest-recovery.json',RECOVERY_PROFILE='allowance-recovery';
+const RECOVERY_MODELS=new Set(['free/drex-v2.0','free/gemini-4-hydrogen','free/hy4-flash']);
+const SCOPED_PROFILES=new Set([...QUALIFICATION_PROFILES,WORK_PROFILE,RECOVERY_PROFILE]);
 function operationProfile(cycle,env) {
   const declared=env.ROOF_CLOUD_PUBLIC_PROFILE,actual=cycle?.executionProfile;
   if(declared&&!['cycle','review-existing',...SCOPED_PROFILES].includes(declared))fail('Unknown public operation profile');
@@ -248,6 +250,23 @@ export function publicQualificationStatus(cycle,{env=process.env,now=Date.now}={
       validCount:models.filter(row=>row.contributionValidated===true).length,reviewedCount:models.filter(row=>row.reviewStatus==='complete').length},
     scope:'Selected subscription model results only; paid and image evidence remains in the separately dated full-roster journal. No field accuracy or production approval.'};
 }
+export function publicRecoveryStatus(cycle,{env=process.env,now=Date.now}={}) {
+  if(operationProfile(cycle,env)!==RECOVERY_PROFILE)fail('A known route recovery profile is required');
+  const base=publicCloudStatus(cycle,{env,now}),rows=cycle?.reviews;
+  if(!Array.isArray(rows)) {
+    if(rows!=null)fail('Invalid recovery model records');
+    if(env.ROOF_CLOUD_PUBLIC_PROFILE!==RECOVERY_PROFILE||!['failure','unknown'].includes(base.run.pipelineResult))fail('Missing recovery results require a declared failed or unknown recovery run');
+  }
+  const recorded=rows||[];
+  if(recorded.length>RECOVERY_MODELS.size||recorded.some(row=>!row||typeof row!=='object'||!RECOVERY_MODELS.has(row.model))||new Set(recorded.map(row=>row.model)).size!==recorded.length)fail('Recovery qualification contains an unselected route or duplicate model record');
+  if(base.run.pipelineResult==='success'&&recorded.length!==RECOVERY_MODELS.size)fail('A successful recovery run requires all three selected route records');
+  const models=base.models.map(({model,status,attempted,contributionValidated,reviewStatus,code})=>({model,status,attempted,contributionValidated,reviewStatus,code}));
+  return {schemaVersion:1,repository:base.repository,workflow:base.workflow,executionProfile:RECOVERY_PROFILE,generatedAt:base.generatedAt,
+    sourceRevision:base.sourceRevision,run:base.run,reportArtifact:base.reportArtifact,models,
+    summary:{selectedCount:models.length,attemptedCount:models.filter(row=>row.attempted).length,
+      validCount:models.filter(row=>row.contributionValidated===true).length,reviewedCount:models.filter(row=>row.reviewStatus==='complete').length},
+    scope:'Recovery journal for three selected subscription routes; counts cover only the model records published by this run. Broad subscription, full-roster and productive-work journals remain separately dated. No field accuracy or production approval.'};
+}
 export function publicWorkStatus(cycle,{env=process.env,now=Date.now}={}) {
   if(operationProfile(cycle,env)!==WORK_PROFILE)fail('A known productive work profile is required');
   const base=publicCloudStatus(cycle,{env,now}),work=cycle?.caseWork;
@@ -277,9 +296,9 @@ export function publicWorkStatus(cycle,{env=process.env,now=Date.now}={}) {
     scope:'Scoped productive engineering work; accepted proposals and reviews are not implemented or released fixes. No field accuracy or production approval.'};
 }
 export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,now=Date.now}={}) {
-  const profile=operationProfile(cycle,env),qualification=QUALIFICATION_PROFILES.has(profile),productive=profile===WORK_PROFILE;
-  const status=productive?publicWorkStatus(cycle,{env,now}):qualification?publicQualificationStatus(cycle,{env,now}):publicCloudStatus(cycle,{env,now}),
-    statusFile=productive?WORK_FILE:qualification?QUALIFICATION_FILE:STATUS_FILE,token=env.GH_TOKEN||env.GITHUB_TOKEN;
+  const profile=operationProfile(cycle,env),qualification=QUALIFICATION_PROFILES.has(profile),productive=profile===WORK_PROFILE,recovery=profile===RECOVERY_PROFILE;
+  const status=recovery?publicRecoveryStatus(cycle,{env,now}):productive?publicWorkStatus(cycle,{env,now}):qualification?publicQualificationStatus(cycle,{env,now}):publicCloudStatus(cycle,{env,now}),
+    statusFile=recovery?RECOVERY_FILE:productive?WORK_FILE:qualification?QUALIFICATION_FILE:STATUS_FILE,token=env.GH_TOKEN||env.GITHUB_TOKEN;
   if(!token)fail('GitHub status-publishing credential is unavailable');
   const base=`https://api.github.com/repos/${status.repository}`;
   async function request(path,{method='GET',body,allow404=false}={}) {
@@ -301,7 +320,7 @@ export async function publishCloudStatus(cycle,{env=process.env,fetchImpl=fetch,
   if(previous) {
     if(previous.type!=='file'||!/^([a-f0-9]{40})$/.test(previous.sha||'')||previous.encoding!=='base64'||typeof previous.content!=='string'||previous.content.length>200000)fail('Existing public status has invalid content metadata; refusing replacement');
     let old;try{old=JSON.parse(Buffer.from(previous.content,'base64').toString('utf8'));}catch{fail('Existing public status is unreadable; refusing replacement');}
-    const wrongProfile=productive?old.executionProfile!==WORK_PROFILE:qualification?!QUALIFICATION_PROFILES.has(old.executionProfile):SCOPED_PROFILES.has(old.executionProfile);
+    const wrongProfile=recovery?old.executionProfile!==RECOVERY_PROFILE:productive?old.executionProfile!==WORK_PROFILE:qualification?!QUALIFICATION_PROFILES.has(old.executionProfile):SCOPED_PROFILES.has(old.executionProfile);
     if(old.schemaVersion!==1||old.repository!==status.repository||old.workflow!==WORKFLOW||wrongProfile||typeof old.run?.id!=='string'||!/^[1-9]\d*$/.test(old.run.id)||!Number.isInteger(old.run?.attempt)||old.run.attempt<1||!/^([a-f0-9]{40})$/.test(old.sourceRevision||'')||!Number.isFinite(Date.parse(old.run.startedAt||'')))fail('Existing public status provenance mismatch; refusing replacement');
     const oldStarted=Date.parse(old.run.startedAt);
     if(oldStarted>started||(oldStarted===started&&(old.run.id!==status.run.id||old.run.attempt!==status.run.attempt)))fail('A newer or chronologically ambiguous cloud status exists; refusing stale replacement');

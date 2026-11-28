@@ -8,6 +8,7 @@
 |---|---|---|
 | `allowance-qualification` | Small compatibility screen | Three selected free text models; six-request ceiling. |
 | `allowance-roster` | Refresh the free-model qualification record | All 23 registered free text IDs are assigned; 48-request ceiling and a 60-minute model phase. Availability, permanent circuits, remaining allowance and valid output determine actual coverage. |
+| `allowance-recovery` | Manual focused capability recovery | Three confirmed failed free routes, one development counterexample, preserved specialist roles, six-call ceiling and fifteen-minute phase; separately published recovery evidence. |
 | `allowance-work` | Investigate confirmed development-case failures | Generate 12 synthetic cases, create development-only packets, and select up to eight distinct case/question work items. A qualified author proposes a regression and an independently qualified reviewer challenges it. Prior safely undispatched backlog has priority; the combined batch is capped at 24 work items. The cycle has a 48-request ceiling and a 60-minute work phase; the current two-stage graph ordinarily needs at most 16 new stage calls for eight items. |
 
 Qualification counts unique model IDs and validated role contributions. Productive work counts case/question items, author tasks, review tasks and proposals with independent review separately. A valid `needs-human` response is a contribution, not a transport failure or measurement approval. These counts must not be reported interchangeably.
@@ -37,3 +38,21 @@ A demonstrably undispatched transient admission failure can receive one final ac
 The GitHub Actions schedule is configured to run `allowance-work` daily at **03:17 UTC** and `allowance-roster` weekly on **Sunday at 04:17 UTC**. Manual `workflow_dispatch` selections take priority; its default remains `cycle`, preserving the existing all-models behavior for an explicitly selected normal cycle. Runtime mode and the public journal profile derive from the same resolved operation, so subscription results stay in their scoped journal.
 
 The global concurrency group serializes all branches, restores the latest verified checkpoint, and never cancels a possibly billed predecessor. State and report artifacts are retained under the existing policy. Hosted acceptance requires a complete case-work run, exact source pin, checkpoint continuity, zero paid/image dispatches, distinct work identities, independent review and truthful public counts. The run artifact and public work journal provide this evidence; this design document alone is not a claim of current service health.
+
+## First hosted work evidence
+
+[Run 46162398482](https://github.com/musabtheone11/roof-measure/actions/runs/46162398482)
+used runtime `052a370812b966f3f44113a98c1ac08395fc5ff1` and restored the completed
+23-model qualification checkpoint. Seven distinct case/question pairs across
+four development cases and two question families produced fourteen validated
+stages: four Deepseek engineering calls, three Qwen engineering calls and seven
+Claude critique calls. All seven received independent critique: three `revise`
+and four `needs-human`, with zero accepted proposals or implemented fixes.
+
+All previous 111 dollar rows and 57 allowance rows remained unchanged. The
+fourteen new calls reserved zero wallet dollars and retained 88,080,384 weighted
+allowance units as conservative holds, not reported consumption. The checkpoint
+had no pending or leased tasks. Original role proofs, output hashes, numeric
+claims, citations and author-result/family bindings were independently replayed.
+Twelve PDF readbacks and the actual application browser workflow passed. This
+validates the workflow execution, not roof measurement accuracy.

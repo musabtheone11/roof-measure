@@ -1,7 +1,7 @@
 import { validateTask, validateResult, MODEL_BY_ROLE, ROLE_PAYLOAD_CONTRACTS } from './contracts.mjs';
 import {normalizeAgentJSON} from '../server/contracts.mjs';
 import {getVerifiedModelPrice,getModelCatalogEntry,CATALOG_METADATA,textAllowanceReservationUnits} from './model-catalog.mjs';
-import {isDecisionModel,buildDecisionRequest,validateDecisionResponse} from './decision-provider.mjs';
+import {isDecisionModel,buildDecisionRequest,validateDecisionResponse,FREE_DREX_DECISION_MODEL,FREE_DREX_DECISION_PROTOCOL} from './decision-provider.mjs';
 import {createHash} from 'node:crypto';
 import {readProviderErrorDetails} from './provider-error.mjs';
 import {verifySubscriptionAllowance,buildAllowanceReservation,allowanceUsage} from './allowance.mjs';
@@ -138,7 +138,7 @@ export async function verifyRoster({ apiKey = process.env.APINEX_API_KEY, fetchI
 export async function requestOrganizationRole(task, {
   apiKey = process.env.APINEX_API_KEY, fetchImpl = fetch, signal,
   model = MODEL_BY_ROLE[task?.role], context = {}, reserve, onDispatch, onUsage, onResponse,
-  baseUrl = API_ROOT, timeoutMs, verifiedRoster, images = [],stream,
+  baseUrl = API_ROOT, timeoutMs, verifiedRoster, images = [],stream,authorizeDecisionRoute,
 } = {}) {
   validateTask(task);
   rootURL(baseUrl);
@@ -147,7 +147,9 @@ export async function requestOrganizationRole(task, {
   if (task.constraints?.maxOutputTokens === 0 || task.constraints?.maxRuntimeMs === 0 || task.constraints?.maxAttempts === 0) fail('BUDGET_DISABLED', 'An explicit task limit disables model processing');
   const price = getVerifiedModelPrice(model);
   if (!price) fail('PRICING_UNKNOWN', 'The selected model lacks verified conservative pricing');
-  const typed=isDecisionModel(model),plain=isPlainClassifier(model),free=price.billingTier==='free-allowance',streamingClaim=getModelCatalogEntry(model)?.capabilities?.streamingClaim===true;
+  const typed=isDecisionModel(model),plain=!typed&&isPlainClassifier(model),free=price.billingTier==='free-allowance',streamingClaim=getModelCatalogEntry(model)?.capabilities?.streamingClaim===true;
+  const freeDecision=model===FREE_DREX_DECISION_MODEL;
+  if(freeDecision&&(typeof authorizeDecisionRoute!=='function'||task.policyVersion!==FREE_DREX_DECISION_PROTOCOL))fail('ROUTE_MIGRATION_REQUIRED','The free Decisions route requires a host-verified durable migration dispatch and exact protocol binding');
   if(stream!==undefined&&typeof stream!=='boolean')fail('INVALID_LIMIT','Streaming configuration must be an explicit boolean');
   const streaming=stream??(free&&!typed&&!plain&&streamingClaim);
   if(streaming&&(typed||plain||!streamingClaim))fail('STREAM_UNSUPPORTED','The exact model route has no verified streaming claim for this protocol');
@@ -208,18 +210,27 @@ export async function requestOrganizationRole(task, {
   if (reservation == null || reservation === false) fail('BUDGET_DISABLED', 'No durable request reservation was granted');
   let dispatched = false;
   let usageNotified = false;
+  let routeMigration=null;
   try {
     checkSignal(combined);
     await onDispatch(reservation);
     dispatched = true;
     checkSignal(combined);
+    if(freeDecision){
+      routeMigration=await authorizeDecisionRoute({taskId:task.id,model,protocol:FREE_DREX_DECISION_PROTOCOL,attemptId:reservation});
+      if(routeMigration?.model!==model||routeMigration.protocol!==FREE_DREX_DECISION_PROTOCOL||routeMigration.taskId!==task.id||
+        routeMigration.attemptId!==reservation||!/^([a-f0-9]{64})$/.test(routeMigration.evidenceHash||'')||!task.inputHashes.includes(routeMigration.evidenceHash))
+        fail('ROUTE_MIGRATION_REQUIRED','The exact committed migration receipt is missing or inconsistent');
+      routeMigration=Object.fromEntries(['model','protocol','taskId','attemptId','evidenceHash','failedTaskId','failedAttemptId'].filter(key=>routeMigration[key]!==undefined).map(key=>[key,routeMigration[key]]));
+      checkSignal(combined);
+    }
     const response = await fetchJSON(`${baseUrl}/${typed?'decisions':'chat/completions'}`, { method: 'POST', body }, { fetchImpl, apiKey, signal: combined,stream:streaming,model });
     const cost = response?.usage?.cost_tokens ?? response?.cost_tokens;
     const reportedUsd = Number.isSafeInteger(cost) && cost >= 0 ? cost / 1e6 : null;
     const execution = {
-      promptVersion: typed?'organization-decision-v1':plain?PLAIN_CLASSIFIER_PROTOCOL:streaming?'organization-v3-bounded-stream':'organization-v2-compact',
+      promptVersion: freeDecision?FREE_DREX_DECISION_PROTOCOL:typed?'organization-decision-v1':plain?PLAIN_CLASSIFIER_PROTOCOL:streaming?'organization-v3-bounded-stream':'organization-v2-compact',
       finishReason:typeof response?.choices?.[0]?.finish_reason==='string'?response.choices[0].finish_reason.slice(0,80):null,
-      settings:typed?{route:'decisions',questionType:'choice',questionNames:['review_queue'],requestOutputTokenLimit:null,responseFormat:'typed-decision'}:plain?
+      settings:typed?{route:'decisions',...(freeDecision?{protocol:FREE_DREX_DECISION_PROTOCOL}:{}),questionType:'choice',questionNames:['review_queue'],requestOutputTokenLimit:null,responseFormat:'typed-decision'}:plain?
         {route:'chat/completions',protocol:PLAIN_CLASSIFIER_PROTOCOL,requestOutputTokenLimit:null,responseFormat:'literal-enum',clientOutputByteLimit:MAX_OUTPUT,stream:false}:
         {route:'chat/completions',maxOutputTokens,responseFormat:'json_object',stream:streaming,...(streaming?{streamOptions:{includeUsage:true}}:{})},
       transport:streaming?(response.streamEvidence?'sse':response.streamTransport):'json',
@@ -238,6 +249,7 @@ export async function requestOrganizationRole(task, {
         outputTokens:Number.isSafeInteger(response?.usage?.output_tokens)&&response.usage.output_tokens>=0?response.usage.output_tokens:null,
         totalTokens:Number.isSafeInteger(response?.usage?.total_tokens)&&response.usage.total_tokens>=0?response.usage.total_tokens:null},
       allowanceWeight:price.allowanceWeight,
+      ...(routeMigration?{routeMigration}:{}),
       ...(allowance?{allowanceReservedUnits:allowance.reservedUnits,...allowanceUsage(response?.usage,{weight:price.allowanceWeight})}:{}),
     };
     usageNotified = true;
@@ -248,7 +260,7 @@ export async function requestOrganizationRole(task, {
       contributionKind:typed?'typed-decision':plain?'plain-classification':'role-proposal'});
     checkSignal(combined);
     if (execution.returnedModel !== model) fail('MODEL_MISMATCH', 'API NEX did not return the exact requested model identifier; explicit review is required');
-    if(typed)return {...validateDecisionResponse(response,context),execution};
+    if(typed)return {...validateDecisionResponse(response,context,{model}),execution};
     const choice = response?.choices?.[0];
     const message=choice?.message;
     if (!Array.isArray(response?.choices)||response.choices.length!==1||!choice||(choice.index!==undefined&&choice.index!==0)||choice.finish_reason!=='stop'||typeof message?.content!=='string'||

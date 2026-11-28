@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import{mkdtempSync,rmSync,writeFileSync,readFileSync}from'node:fs';import{tmpdir}from'node:os';import{join}from'node:path';
-import{runCloudCycle,monitoringDecision,cloudModelProfile,ALLOWANCE_QUALIFICATION_MODELS,ALLOWANCE_ROSTER_MODELS}from'./cloud-cycle.mjs';import{renderCustomerPDF}from'./customer-report.mjs';
+import{runCloudCycle,monitoringDecision,cloudModelProfile,ALLOWANCE_QUALIFICATION_MODELS,ALLOWANCE_ROSTER_MODELS,ALLOWANCE_RECOVERY_MODELS}from'./cloud-cycle.mjs';import{renderCustomerPDF}from'./customer-report.mjs';
 import{MODEL_CATALOG}from'./model-catalog.mjs';
 function setup(t){const dir=mkdtempSync(join(tmpdir(),'roof-cloud-cycle-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return{stateDir:join(dir,'state'),outputDir:join(dir,'output'),seed:123,count:3,sourceRevision:'fixture-source',browserStatus:'passed'};}
 async function casesRunner({outputDir}){const cases=[];for(const [i,split]of['development','validation','holdout'].entries()){
@@ -89,10 +89,10 @@ test('allowance qualification forces the selected three-model zero-USD fleet and
  assert.equal(r.decision.productionReleaseApproved,false);assert.match(r.scope,/Three selected free models only/);
 });
 test('CLI model-mode mapping isolates allowance qualification without changing the all-model profile',()=>{
- assert.deepEqual(cloudModelProfile('allowance-qualification'),{allowanceQualification:true,allowanceRoster:false,allowanceWork:false,fleetMode:true,designMode:false});
- assert.deepEqual(cloudModelProfile('all-models'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,fleetMode:true,designMode:true});
- assert.deepEqual(cloudModelProfile(undefined),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,fleetMode:false,designMode:false});
- assert.deepEqual(cloudModelProfile('allowance-roster'),{allowanceQualification:false,allowanceRoster:true,allowanceWork:false,fleetMode:true,designMode:false});
+ assert.deepEqual(cloudModelProfile('allowance-qualification'),{allowanceQualification:true,allowanceRoster:false,allowanceWork:false,allowanceRecovery:false,fleetMode:true,designMode:false});
+ assert.deepEqual(cloudModelProfile('all-models'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,allowanceRecovery:false,fleetMode:true,designMode:true});
+ assert.deepEqual(cloudModelProfile(undefined),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,allowanceRecovery:false,fleetMode:false,designMode:false});
+ assert.deepEqual(cloudModelProfile('allowance-roster'),{allowanceQualification:false,allowanceRoster:true,allowanceWork:false,allowanceRecovery:false,fleetMode:true,designMode:false});
 });
 test('allowance roster selects every verified free model within zero USD,48requests and60minutes without image calls',async t=>{
  const opts=setup(t);let received,images=0;
@@ -121,5 +121,17 @@ test('productive case mode uses restored store, dev packets, zeroUSD and no qual
    fleetRunner:async()=>{throw new Error('No fleet rerun');},requestRole:async()=>{throw new Error('No paid fallback');},designRunner:async()=>{throw new Error('No designs');}});
  assert.equal(r.executionProfile,'allowance-work');assert.equal(r.fleet,null);assert.deepEqual(received.limits,{requestLimit:48,maxUsd:0});assert.equal(received.runtimeMs,3600000);
  assert.equal(r.budget.maxUsd,0);assert.equal(r.budget.requestLimit,48);assert.equal(r.caseWork.planHash,'e'.repeat(64));assert.ok(r.decision.reasons.includes('CASE_WORK_IS_ADVISORY_NO_IMPLEMENTED_FIX'));assert.equal(r.decision.productionReleaseApproved,false);
- assert.deepEqual(cloudModelProfile('allowance-work'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:true,fleetMode:false,designMode:false});
+ assert.deepEqual(cloudModelProfile('allowance-work'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:true,allowanceRecovery:false,fleetMode:false,designMode:false});
+});
+
+test('targeted recovery uses one existing development case, preserved specialist roles and no paid/design route',async t=>{
+ const opts=setup(t);let input;
+ const r=await runCloudCycle({...opts,casesRunner,apiKey:'mock',paidAllowed:true,allowanceRecovery:true,designMode:true,
+  catalogAuditor:async()=>({status:'verified',hash:'c'.repeat(64),issuesByModel:{}}),
+  fleetRunner:async value=>{input=value;return{catalog:{rosterCount:3},coverage:{},budget:{maxUsd:0},agents:value.selectedModelIds.map(model=>({model,role:'verification',status:'failed',attempted:true,primaryValidated:false,reviewStatus:'pending'}))};},
+  designRunner:async()=>{throw new Error('No design call');},requestRole:async()=>{throw new Error('No paid fallback');}});
+ assert.deepEqual(input.selectedModelIds,[...ALLOWANCE_RECOVERY_MODELS]);assert.equal(input.preserveCatalogRoles,true);assert.equal(input.deferPrimaryPeerReview,true);assert.match(input.developmentContext.qualificationQuestion,/single supplied/);assert.equal(input.runtimeMs,900000);assert.deepEqual(input.limits,{requestLimit:6,maxUsd:0});
+ assert.equal(input.developmentContext.developmentCases.length,1);assert.equal(input.developmentContext.developmentCases[0].id,'case0');assert.equal(input.developmentContext.metrics.attempted,1);assert.equal(input.developmentContext.pdfReview.checked,1);
+ assert.equal(input.developmentContext.metrics.splits,undefined);assert.equal(r.executionProfile,'allowance-recovery');assert.equal(r.budget.maxUsd,0);assert.equal(r.budget.requestLimit,6);assert.equal(r.fleet.design,undefined);assert.equal(r.decision.productionReleaseApproved,false);
+ assert.deepEqual(cloudModelProfile('allowance-recovery'),{allowanceQualification:false,allowanceRoster:false,allowanceWork:false,allowanceRecovery:true,fleetMode:true,designMode:false});
 });
